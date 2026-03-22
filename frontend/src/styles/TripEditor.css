@@ -1,0 +1,188 @@
+/* Timeline & Waypoints */
+.segments-container {
+  margin-top: 25px;
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+.segment-row {
+  display: flex;
+  flex-direction: column;
+}
+.waypoint-row {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Toolbox */
+.segment-toolbox {
+  position: absolute;
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 33px;
+}
+.segment-title-wrapper {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.segment-title-textarea {
+  font-size: 0.75rem;
+  font-weight: bold;
+  margin-bottom: 4px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0 4px;
+  word-break: break-word;
+  line-height: 1.2;
+  height: 2.4em;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  align-content: center;
+}
+.segment-title-textarea:hover {
+  background: #f5f5f5 !important;
+}
+
+.segment-title-textarea:focus {
+  background: white !important;
+  box-shadow: 0 0 0 2px #007bff !important;
+  outline: none;
+}
+.segment-tools-row {
+  display: flex;
+  gap: 4px;
+}
+.segment-tools-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  z-index: 2;
+}
+.segment-waypoints {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: 80px;
+}
+
+/* Timeline Line */
+.timeline-col {
+  width: 30px;
+  position: relative;
+  flex-shrink: 0;
+}
+.timeline-line {
+  position: absolute;
+  left: 14px;
+  width: 2px;
+}
+.timeline-line.top {
+  top: 0;
+  bottom: 50%;
+}
+.timeline-line.bottom {
+  top: 50%;
+  bottom: 0;
+}
+.timeline-plus {
+  position: absolute;
+  left: 15px;
+  z-index: 3;
+  background: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+.timeline-plus.top-pos {
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+.timeline-plus.bottom-pos {
+  bottom: 0;
+  transform: translate(-50%, 50%);
+}
+.timeline-plus .material-symbols-rounded {
+  color: #666;
+  font-size: 14px;
+}
+.timeline-dot {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+/* Waypoint View */
+.waypoint-content {
+  flex: 1;
+  padding: 8px 0;
+}
+.waypoint-card {
+  background: white;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.waypoint-tools {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.waypoint-title-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 4px;
+  margin-left: -4px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  outline: none;
+  color: inherit;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.waypoint-title-input:hover {
+  background: #f5f5f5;
+}
+
+.waypoint-title-input:focus {
+  background: white;
+  box-shadow: 0 0 0 2px #007bff;
+}

@@ -1,0 +1,35 @@
+body, html, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 380px;
+  background-color: #fcfcfc;
+  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+  transition: transform 0.3s ease;
+}
+
+#map {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}

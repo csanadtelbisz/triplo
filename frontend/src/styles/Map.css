@@ -1,0 +1,80 @@
+.mapy-logo-overlay {
+  cursor: pointer;
+  position: absolute;
+  bottom: 10px;
+  left: 390px;
+  z-index: 1000;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  pointer-events: auto;
+}
+
+.mapy-logo-overlay img {
+  height: 24px;
+}
+
+.layer-control-container {
+  position: absolute;
+  bottom: 40px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+}
+
+.layer-button {
+  background-color: white;
+  border: 2px solid rgba(0,0,0,0.2);
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layer-selector-dropdown {
+  background-color: white;
+  margin-bottom: 8px;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.layer-option {
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.hover-tooltip {
+  position: fixed;
+  background: rgba(0,0,0,0.8);
+  padding: 6px 10px;
+  z-index: 1000;
+  border-radius: 4px;
+  font-size: 13px;
+  color: white;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+}
