@@ -1,4 +1,4 @@
-export const getPOIEmoji = (cls?: string, sub?: string): string => {
+﻿export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string => {
   const emojiMap: Record<string, string> = {
     peak: '⛰️',
     water: '💧',
@@ -32,8 +32,14 @@ export const getPOIEmoji = (cls?: string, sub?: string): string => {
     rock: '🪨',
     natural: '🍃',
     stone: '🪨',
-    saddle: '⛰️'
+    saddle: '⛰️',
+    place_of_worship: '⛪',
+    church: '⛪',
+    mosque: '🕌',
+    synagogue: '🕍',
+    hindu_temple: '🛕'
   };
 
+  if ((cls === 'peak' || sub === 'peak') && (!name || name.trim() === '')) return emojiMap['rock'];
   return (sub && emojiMap[sub]) || (cls && emojiMap[cls]) || '📍';
 };

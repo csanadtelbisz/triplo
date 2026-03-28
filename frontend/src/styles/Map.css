@@ -17,35 +17,44 @@
   height: 24px;
 }
 
-.layer-control-container {
+.top-left-controls {
   position: absolute;
-  bottom: 40px;
-  right: 10px;
+  top: 10px;
+  left: 10px;
   z-index: 1000;
   display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
 }
 
-.layer-button {
+.map-control-button {
   background-color: white;
-  border: 2px solid rgba(0,0,0,0.2);
-  padding: 8px;
+  border: 1px solid rgba(0,0,0,0.2);
+  padding: 6px;
   border-radius: 4px;
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.map-control-button .material-symbols-rounded {
+  font-size: 20px;
+}
+
 .layer-selector-dropdown {
   background-color: white;
-  margin-bottom: 8px;
+  margin-top: 4px;
+  position: absolute;
+  top: 100%;
+  left: 0;
   padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   border: 1px solid rgba(0,0,0,0.1);
+  white-space: nowrap;
 }
 
 .layer-option {

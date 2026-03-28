@@ -4,15 +4,18 @@ import './styles/Shared.css';
 import './styles/TripManager.css';
 import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
+import './styles/StatusPanel.css';
 import type { Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
-import { route } from './routing';
+import { route } from './routing/RoutingService';
 
 import { TripManager } from './components/TripManager';
 import { TripEditor } from './components/TripEditor';
 import { SegmentInfo } from './components/SegmentInfo';
 import { WaypointInfo } from './components/WaypointInfo';
 import { POIInfo } from './components/POIInfo';
+import { SearchPanel } from './components/SearchPanel';
+import { StatusPanel } from './components/StatusPanel';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 
@@ -23,6 +26,8 @@ export default function App() {
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
@@ -72,7 +77,7 @@ export default function App() {
         if (seg.source === 'router') {
             const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates);
             if (validCoords.length >= 2) {
-               seg.geometry = await route(validCoords, seg.routingMode);
+               seg.geometry = await route(validCoords as [number, number][], seg.routingService, seg.routingProfile);
             }
         }
         newSegments[i] = seg;
@@ -166,7 +171,8 @@ export default function App() {
         {
           id: `seg_${Math.random().toString(36).substring(2, 9)}`,
           detailedMode: 'car',
-          routingMode: 'car',
+          routingService: 'GraphHopper Router',
+          routingProfile: 'car',
           source: 'router',
           geometry: { type: 'LineString', coordinates: [] },
           waypoints: [
@@ -300,7 +306,30 @@ export default function App() {
   return (
     <div className="layout">
       <div className="sidebar">
-        {selectedPOI ? (
+        {isStatusOpen ? (
+          <StatusPanel onGoBack={() => setIsStatusOpen(false)} />
+        ) : isSearchOpen ? (
+          <SearchPanel 
+            onGoBack={() => setIsSearchOpen(false)}
+            onResultClick={(result) => {
+              if (Array.isArray(result)) {
+                mapComponentRef.current?.flyTo(result[0], result[1]);
+              } else {
+                mapComponentRef.current?.flyTo(parseFloat(result.lon), parseFloat(result.lat));
+                const newPoi = {
+                  id: `search-${result.osm_type}-${result.osm_id}`,
+                  name: result.name || result.display_name.split(',')[0],
+                  class: result.class,
+                  subclass: result.type,
+                  coordinates: [parseFloat(result.lon), parseFloat(result.lat)],
+                  properties: { name: result.name || result.display_name.split(',')[0] }
+                };
+                setSelectedPOI(newPoi);
+                setIsSearchOpen(false);
+              }
+            }}
+          />
+        ) : selectedPOI ? (
           <POIInfo
             poi={selectedPOI}
             trip={selectedTrip}
@@ -331,6 +360,7 @@ export default function App() {
             unsavedTripIds={unsavedTripIds}
             onSaveAll={handleSaveAllUnsaved}
             onCreateTrip={handleCreateTrip}
+            onOpenStatus={() => setIsStatusOpen(true)}
           />
         ) : (
           <TripEditor 
@@ -367,7 +397,9 @@ export default function App() {
         setSelectedWaypointId={setSelectedWaypointId}
         setHighlightedWaypointId={setHighlightedWaypointId}
         setSelectedSegmentId={setSelectedSegmentId}
+        selectedPOI={selectedPOI}
         setSelectedPOI={setSelectedPOI}
+        onSearchClick={() => setIsSearchOpen(true)}
       />
     </div>
   );

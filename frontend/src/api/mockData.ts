@@ -13,7 +13,8 @@ export const mockTrips: Trip[] = [
       {
         id: 'seg-1',
         detailedMode: 'car',
-        routingMode: 'car',
+        routingService: 'GraphHopper Router',
+        routingProfile: 'car',
         source: 'router',
         waypoints: [
           { id: 'wp-1', coordinates: [11.3933, 47.2692], importance: 'normal', name: 'Innsbruck Hbf' },
@@ -38,7 +39,8 @@ export const mockTrips: Trip[] = [
         id: 'seg-2',
         name: 'Patscherkofel Hike',
         detailedMode: 'hike',
-        routingMode: 'foot',
+        routingService: 'GraphHopper Router',
+        routingProfile: 'foot',
         source: 'router',
         waypoints: [
           { id: 'wp-2', coordinates: [11.3945, 47.1950], importance: 'normal', name: 'Patscherkofelbahn Bottom' },
@@ -69,8 +71,9 @@ export const mockTrips: Trip[] = [
     segments: [
       {
         id: 'seg-m1',
-        detailedMode: 'train',
-        routingMode: 'rail',
+        detailedMode: 'rail',
+        routingService: 'Straight Line Router',
+        routingProfile: 'straight',
         source: 'router',
         waypoints: [
           { id: 'wp-m1', coordinates: [11.5583, 48.1408], importance: 'normal', name: 'Munich Hbf' },
@@ -91,7 +94,8 @@ export const mockTrips: Trip[] = [
         id: 'seg-m2',
         name: 'English Garden Run',
         detailedMode: 'run',
-        routingMode: 'foot',
+        routingService: 'GraphHopper Router',
+        routingProfile: 'foot',
         source: 'router',
         waypoints: [
           { id: 'wp-m2', coordinates: [11.5912, 48.1500], importance: 'normal', name: 'Lehel Station' },
@@ -124,7 +128,8 @@ export const mockTrips: Trip[] = [
       {
         id: 'seg-fly-alps',
         detailedMode: 'flight',
-        routingMode: 'flight',
+        routingService: 'Flight Router',
+        routingProfile: 'flight',
         source: 'router',
         waypoints: [
           { id: 'wp-muc', coordinates: [11.7861, 48.3538], importance: 'normal', name: 'Munich Airport (MUC)' },
@@ -143,7 +148,8 @@ export const mockTrips: Trip[] = [
       {
         id: 'seg-car-ita',
         detailedMode: 'car',
-        routingMode: 'car',
+        routingService: 'GraphHopper Router',
+        routingProfile: 'car',
         source: 'router',
         waypoints: [
           { id: 'wp-bgy-2', coordinates: [9.7042, 45.6739], importance: 'normal', name: 'Milan Bergamo (BGY)' },

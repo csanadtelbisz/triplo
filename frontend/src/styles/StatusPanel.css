@@ -1,0 +1,127 @@
+.status-panel-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.status-panel-header-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.status-panel-header-spacer {
+  width: 28px;
+}
+
+.status-panel-content {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.status-panel-section-title {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.status-panel-section-title.first {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.status-panel-section-title.second {
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+.status-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-panel-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.status-panel-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-panel-card-header.with-margin {
+  margin-bottom: 8px;
+}
+
+.status-panel-card-header.no-margin {
+  margin-bottom: 0;
+}
+
+.status-panel-card-title-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-panel-card-title {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status-panel-badge {
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.status-panel-badge.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-panel-badge.unavailable {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.status-panel-badge.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-panel-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-panel-icon.success {
+  color: #28a745;
+}
+
+.status-panel-icon.unavailable {
+  color: #6c757d;
+}
+
+.status-panel-icon.error {
+  color: #dc3545;
+}
+
+.status-panel-icon.pending {
+  color: #ffc107;
+}
+
+.status-panel-attribution {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-left: 32px;
+}
+
+.status-panel-attribution a {
+  color: #007bff;
+  text-decoration: none;
+}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Trip, Segment } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/POIInfo.css';
-import { route } from '../routing';
+import { route } from '../routing/RoutingService';
 import { getPOIEmoji } from '../utils/poiUtils';
 
 interface POIInfoProps {
@@ -84,7 +84,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: PO
       
     if (validCoords.length >= 2 && lastSegment.source === 'router') {
       try {
-        const geom = await route(validCoords, lastSegment.routingMode);
+        const geom = await route(validCoords, lastSegment.routingService, lastSegment.routingProfile);
         newSegments[newSegments.length - 1] = { ...updatedSegment, geometry: geom };
         onUpdateTrip({ ...trip, segments: [...newSegments] });
       } catch (err) {
@@ -115,7 +115,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: PO
             <div className="form-group">
                 <label className="form-label">Type</label>
                 <div className="form-text-value" style={{ textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>{getPOIEmoji(poi.class, poi.subclass)}</span> <span>{[poi.class, poi.subclass].filter(Boolean).join(' - ').replace(/_/g, ' ')}</span>
+                    <span>{getPOIEmoji(poi.class, poi.subclass, poi.name)}</span> <span>{[poi.class, poi.subclass].filter(Boolean).join(' - ').replace(/_/g, ' ')}</span>
                 </div>
             </div>
         )}

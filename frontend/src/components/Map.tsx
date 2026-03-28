@@ -3,15 +3,45 @@ import type { Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '../styles/Map.css';
-import { route } from '../routing';
+import { route } from '../routing/RoutingService';
 import { ModeThemes } from '../themes/config';
 import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS } from '../config/mapStyles';
 import { getPOIEmoji } from '../utils/poiUtils';
 
+
+function getRenderGeometry(seg: any) {
+    if (seg.detailedMode === 'flight' && seg.waypoints && seg.waypoints.length >= 2) {
+        let coords: any[] = [];
+        for (let i = 0; i < seg.waypoints.length - 1; i++) {
+            const w1 = seg.waypoints[i].coordinates;
+            const w2 = seg.waypoints[i+1].coordinates;
+            if (w1 && w2 && w1.length >= 2 && w2.length >= 2) {
+                try {
+                    const arc = turf.greatCircle(turf.point(w1), turf.point(w2));
+                    const arcCoords = arc.geometry.coordinates;
+                    if (coords.length > 0 && arcCoords.length > 0) {
+                        coords.push(...arcCoords.slice(1));
+                    } else {
+                        coords.push(...arcCoords);
+                    }
+                } catch(e) {
+                    if (coords.length > 0) coords.push(w2);
+                    else coords.push(w1, w2);
+                }
+            }
+        }
+        if (coords.length > 1) {
+            return { type: 'LineString', coordinates: coords };
+        }
+    }
+    return seg.geometry;
+}
+
 export interface MapRef {
     zoomToTrip: (trip: Trip) => void;
     handleJumpToWaypoint: (waypointId: string) => void;
+    flyTo: (lon: number, lat: number) => void;
 }
 
 export interface MapProps {
@@ -25,30 +55,36 @@ export interface MapProps {
     setSelectedWaypointId: (id: string | null) => void;
     setHighlightedWaypointId: (id: string | null) => void;
     setSelectedSegmentId: (id: string | null) => void;
+    selectedPOI: any | null;
     setSelectedPOI: (poi: any | null) => void;
+    onSearchClick: () => void;
 }
 
-export const Map = forwardRef<MapRef, MapProps>(({ 
-    trips, 
-    selectedTrip, 
-    waitingWaypointId, 
+export const Map = forwardRef<MapRef, MapProps>(({
+    trips,
+    selectedTrip,
+    waitingWaypointId,
     waitingWaypointIdRef,
-    setWaitingWaypointId, 
+    setWaitingWaypointId,
     updateTripState,
     handleCoordinateChange,
     setSelectedWaypointId,
     setHighlightedWaypointId,
     setSelectedSegmentId,
-    setSelectedPOI
+    selectedPOI,
+    setSelectedPOI,
+    onSearchClick
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
+  const selectedPoiMarkerRef = useRef<Marker | null>(null);
   const ghostMarkerRef = useRef<Marker | null>(null);
   const ghostMarkerDataRef = useRef<{ segmentId: string, originalWaypoints: any[], insertIndex: number } | null>(null);
   const isDraggingGhostRef = useRef(false);
   const isHoveringWaypointRef = useRef(false);
+  const layerSelectorRef = useRef<HTMLDivElement>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [activeMapStyle, setActiveMapStyle] = useState<string>('openfreemap');
@@ -151,9 +187,18 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
+  const flyTo = (lon: number, lat: number) => {
+    mapRef.current?.flyTo({
+      center: [lon, lat],
+      zoom: 14,
+      essential: true
+    });
+  };
+
   useImperativeHandle(ref, () => ({
     zoomToTrip,
-    handleJumpToWaypoint
+    handleJumpToWaypoint,
+    flyTo
   }));
 
   useEffect(() => {
@@ -176,15 +221,17 @@ export const Map = forwardRef<MapRef, MapProps>(({
         const parts = id.split('-');
         const cls = parts[1];
         const sub = parts[2];
-        emoji = getPOIEmoji(cls, sub);
-      }
+          // Pass a dummy name string "sprite" so getPOIEmoji understands 
+          // this is not a nameless POI evaluation, but a generic icon request
+          emoji = getPOIEmoji(cls, sub, 'sprite');
+        }
 
-      if (emoji) {
-        const size = 32;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+        if (emoji) {
+          const size = 32;
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
         if (ctx) {
           // Draw subtle halo circle
           ctx.beginPath();
@@ -368,7 +415,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
                                 const validCoords = newSegments[segIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
                                 if (validCoords.length >= 2) {
-                                    route(validCoords, targetSeg.routingMode).then(geom => {
+                                    route(validCoords, targetSeg.routingService, targetSeg.routingProfile).then((geom: any) => {
                                         newSegments[segIndex] = { ...newSegments[segIndex], geometry: geom };
                                         hotkeyRefs.current.updateTripState(targetTrip.id, { ...targetTrip, segments: [...newSegments] }, true);
                                     });
@@ -452,7 +499,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 if (seg.source === 'router') {
                     const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
                     if (validCoords.length >= 2) {
-                       seg.geometry = await route(validCoords, seg.routingMode);
+                       seg.geometry = await route(validCoords, seg.routingService, seg.routingProfile);
                     }
                 }
                 newSegments[i] = seg;
@@ -538,7 +585,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
              allFeatures.push({
                type: 'Feature',
                properties: { segmentId: seg.id, mode: seg.detailedMode, color: ModeThemes[seg.detailedMode]?.color || '#007bff' },
-               geometry: seg.geometry as any
+               geometry: getRenderGeometry(seg) as any
              });
            });
         });
@@ -550,7 +597,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
         const features: GeoJSON.Feature[] = selectedTrip.segments.map(seg => ({
           type: 'Feature',
           properties: { segmentId: seg.id, mode: seg.detailedMode, color: ModeThemes[seg.detailedMode]?.color || '#007bff' },
-          geometry: seg.geometry as any
+          geometry: getRenderGeometry(seg) as any
         }));
         source.setData({
           type: 'FeatureCollection',
@@ -683,6 +730,40 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [contextMenu, mapLoaded]);
 
   useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
+    
+    if (selectedPOI && selectedPOI.coordinates) {
+      if (!selectedPoiMarkerRef.current) {
+        selectedPoiMarkerRef.current = new Marker({ color: '#e74c3c' })
+          .setLngLat(selectedPOI.coordinates)
+          .addTo(mapRef.current);
+      } else {
+        selectedPoiMarkerRef.current.setLngLat(selectedPOI.coordinates);
+      }
+    } else {
+      if (selectedPoiMarkerRef.current) {
+        selectedPoiMarkerRef.current.remove();
+        selectedPoiMarkerRef.current = null;
+      }
+    }
+  }, [selectedPOI, mapLoaded]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (layerSelectorRef.current && !layerSelectorRef.current.contains(event.target as Node)) {
+        setShowLayerSelector(false);
+      }
+    };
+
+    if (showLayerSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLayerSelector]);
+
+  useEffect(() => {
     if (mapRef.current && mapLoaded) {
       const styleConfig = MAP_STYLES[activeMapStyle].url;
       mapRef.current.setStyle(styleConfig);
@@ -690,8 +771,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [activeMapStyle, mapLoaded]);
 
   return (
-    <>
-      <div ref={mapContainer} id="map"></div>
+    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+      <div ref={mapContainer} id="map" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}></div>
 
       {activeMapStyle === 'mapy_outdoor' && (
         <div 
@@ -709,36 +790,46 @@ export const Map = forwardRef<MapRef, MapProps>(({
         </div>
       )}
 
-      {/* Map Layer Control */}
-      <div className="layer-control-container">
-        <button
-          className="layer-button"
-          onClick={() => setShowLayerSelector(!showLayerSelector)}
-          title="Select map layer"
-        >
-          <span className="material-symbols-rounded">layers</span>
-        </button>
+{/* Top Left Controls */}
+        <div className="top-left-controls">
+          <button
+            className="map-control-button"
+            onClick={onSearchClick}
+            title="Search POI or Coordinates"
+          >
+            <span className="material-symbols-rounded">search</span>
+          </button>
+          
+          <div ref={layerSelectorRef} style={{ position: 'relative' }}>
+            <button
+              className="map-control-button"
+              onClick={() => setShowLayerSelector(!showLayerSelector)}
+              title="Select map layer"
+            >
+              <span className="material-symbols-rounded">layers</span>
+            </button>
 
-        {showLayerSelector && (
-          <div className="layer-selector-dropdown">
-            {Object.entries(MAP_STYLES).map(([key, style]) => (
-              <div
-                key={key}
-                className="layer-option"
-                style={{
-                  backgroundColor: activeMapStyle === key ? '#f0f0f0' : 'transparent',
-                  fontWeight: activeMapStyle === key ? 'bold' : 'normal'
-                }}
-                onClick={() => {
-                  setActiveMapStyle(key);
-                  setShowLayerSelector(false);
-                }}
-              >
-                {style.name}
+            {showLayerSelector && (
+              <div className="layer-selector-dropdown">
+                {Object.entries(MAP_STYLES).map(([key, style]) => (
+                  <div
+                    key={key}
+                    className="layer-option"
+                    style={{
+                      backgroundColor: activeMapStyle === key ? '#f0f0f0' : 'transparent',
+                      fontWeight: activeMapStyle === key ? 'bold' : 'normal'
+                    }}
+                    onClick={() => {
+                      setActiveMapStyle(key);
+                      setShowLayerSelector(false);
+                    }}
+                  >
+                    {style.name}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
       </div>
       
       {hoverInfo && !isDraggingGhostRef.current && (
@@ -789,7 +880,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
               
               const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
               if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                  route(validCoords, lastSegment.routingMode).then(geom => {
+                  route(validCoords, lastSegment.routingService, lastSegment.routingProfile).then((geom: any) => {
                       newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
                       hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
                   });
@@ -801,7 +892,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
           Add to trip
         </div>
       )}
-    </>
+    </div>
   );
 });
 

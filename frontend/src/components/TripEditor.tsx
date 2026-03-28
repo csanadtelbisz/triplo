@@ -1,9 +1,10 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { Trip, Segment, Waypoint } from '../../../shared/types';
+import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
-import { route } from '../routing';
+import { route } from '../routing/RoutingService';
+import { getDistanceStats, getTripDistanceSummary } from '../utils/distance';
 
 interface TripEditorProps {
   trip: Trip;
@@ -31,6 +32,34 @@ export function TripEditor({
 }: TripEditorProps) {
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [focusedWaypointWithoutCoords, setFocusedWaypointWithoutCoords] = useState<string | null>(null);
+  const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
+  const [wpSearchResults, setWpSearchResults] = useState<any[]>([]);
+  const [isWpSearching, setIsWpSearching] = useState(false);
+
+  useEffect(() => {
+    if (!wpSearchState) {
+      setWpSearchResults([]);
+      return;
+    }
+    const { query } = wpSearchState;
+    if (!query.trim()) {
+      setWpSearchResults([]);
+      return;
+    }
+    const timerId = setTimeout(async () => {
+      setIsWpSearching(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        setWpSearchResults(data);
+      } catch (err) {
+        console.error('Error fetching results', err);
+      } finally {
+        setIsWpSearching(false);
+      }
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [wpSearchState]);
 
   useEffect(() => {
     if (highlightedWaypointId && waypointRefs.current[highlightedWaypointId]) {
@@ -217,9 +246,12 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
   const updateSegmentRoute = async (segment: Segment): Promise<Segment> => {
     if (segment.source === 'router') {
         const coords = segment.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-        if (coords.length < 2) return segment;
-        const geometry = await route(coords, segment.routingMode);
+        if (coords.length < 2) return { ...segment, geometry: undefined as any };
+        const geometry = await route(coords as [number, number][], segment.routingService, segment.routingProfile);
         return { ...segment, geometry };
+      }
+      if (segment.waypoints.length < 2) {
+          return { ...segment, geometry: undefined as any };
       }
       return segment;
     };
@@ -307,12 +339,14 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
     onUpdateTrip({ ...trip, segments: newSegments });
   }, [trip, onUpdateTrip]);
 
+  const tripSummary = getTripDistanceSummary(trip);
+
   return (
     <>
       <div className="toolbar">
         <button className="iconButton" onClick={onGoBack}><MaterialIcon name="arrow_back" size={20} /></button>
-        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Edit Trip</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <h2 className="toolbar-title">Edit Trip</h2>
+        <div className="toolbar-actions">
            <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>
            <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="zoom_out_map" size={20} /></button>
@@ -359,218 +393,261 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
              />
            </div>
          </div>
-         <div className="segments-container">
+         
+         <table className="trip-table">
+           <tbody>
+             {trip.segments.length > 0 && trip.segments[0].waypoints.length > 0 && (
+               <tr className="gap-row">
+                 <td className="segment-col"></td>
+                 <td className="timeline-col gap-col">
+                   <div className="timeline-line bottom" style={{ background: ModeThemes[trip.segments[0].detailedMode]?.color || '#007bff' }}></div>
+                   <div 
+                     className="timeline-plus" 
+                     title="Add Waypoint Here"
+                     onClick={() => handleInsertWaypoint(trip.segments[0].waypoints[0].id, 'before')}
+                   >
+                     <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
+                   </div>
+                 </td>
+                 <td className="waypoint-col gap-col"></td>
+               </tr>
+             )}
+
              {trip.segments.map((seg, segIndex) => {
                const baseGlobalIndex = segmentStartGlobalIndices[segIndex];
-               return (
-               <div key={seg.id} className="segment-row" style={{ flexDirection: 'row', position: 'relative' }}>
-                 {/* Segment Toolbox */}
-                 <div className="segment-toolbox">
-                   <textarea 
-                     key={`seg-${seg.id}-${seg.name || seg.detailedMode}`}
-                     className="segment-title-textarea"
-                     defaultValue={seg.name || seg.detailedMode}
-                     onKeyDown={handleSegmentTitleKeyDown}
-                     onBlur={(e) => {
-                       if (e.target.value !== (seg.name || seg.detailedMode) && e.target.value !== seg.name) {
-                         const newSegments = [...trip.segments];
-                         newSegments[segIndex] = { ...seg, name: e.target.value };
-                         onUpdateTrip({ ...trip, segments: newSegments });
-                       }
-                     }}
-                   />
-                   <div className="segment-tools-row">
-                      <button 
-                        className="iconButton" 
-                        style={{ padding: '4px', color: ModeThemes[seg.detailedMode]?.color || '#007bff' }} 
-                        title={`Switch mode: ${seg.detailedMode}`}
-                        onClick={() => {
-                          const modes = ['walk', 'hike', 'run', 'car', 'flight', 'train', 'light_rail', 'tram', 'ferry', 'waterway'] as const;
-                          const currentIndex = modes.indexOf(seg.detailedMode);
-                          const nextMode = modes[(currentIndex + 1) % modes.length];
-                          const newSegments = [...trip.segments];
-                          newSegments[segIndex] = { ...seg, detailedMode: nextMode };
-                          onUpdateTrip({ ...trip, segments: newSegments });
-                        }}
-                      >
-                       {getModeIcon(seg.detailedMode, 18)}
-                     </button>
-                     <button className="iconButton" style={{ padding: '4px' }} title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
-                       <MaterialIcon name="info" size={18} />
-                     </button>
-                   </div>
-                   <div className="segment-tools-grid">
-                     <button 
-                       className="iconButton" 
-                       style={{ padding: '4px' }} 
-                       title="Start earlier" 
-                       disabled={segIndex === 0 || trip.segments[segIndex - 1].waypoints.length <= 2}
-                       onClick={() => handleStartEarlier(segIndex)}
-                     >
-                       <MaterialIcon name="arrow_upward" size={16} />
-                     </button>
-                     <button 
-                       className="iconButton" 
-                       style={{ padding: '4px' }} 
-                       title="Start later" 
-                       disabled={segIndex === 0 || seg.waypoints.length <= 2}
-                       onClick={() => handleStartLater(segIndex)}
-                     >
-                       <MaterialIcon name="arrow_downward" size={16} />
-                     </button>
-                     <button 
-                       className="iconButton" 
-                       style={{ padding: '4px' }} 
-                       title="Delete segment" 
-                       disabled={segIndex === 0}
-                       onClick={() => handleDeleteSegment(segIndex)}
-                     >
-                       <MaterialIcon name="delete" size={16} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
-                     </button>
-                   </div>
-                 </div>
+               const isLastSegment = segIndex === trip.segments.length - 1;
+               const renderedWaypoints = isLastSegment ? seg.waypoints : seg.waypoints.slice(0, -1);
+               
+               const currSegColor = ModeThemes[seg.detailedMode]?.color || '#007bff';
 
-                 {/* Waypoints for this segment */}
-                 <div className="segment-waypoints">
-                   {seg.waypoints.map((wp, wpIndex) => {
-                     const isLastInSeg = wpIndex === seg.waypoints.length - 1;
-                     const isLastSegment = segIndex === trip.segments.length - 1;
-                     
-                     // Do not render the last waypoint of a segment unless it's the very last segment of the trip
-                     if (isLastInSeg && !isLastSegment) {
-                       return null; // Let the next segment render this shared waypoint
-                     }
+               return renderedWaypoints.map((wp, wpIndex) => {
+                 const isFirstInSeg = wpIndex === 0;
 
-                     const isLastTripWaypoint = isLastSegment && isLastInSeg;
-                     
-                     const isFirstInSeg = wpIndex === 0;
-                     const currSegColor = ModeThemes[seg.detailedMode]?.color || '#007bff';
-                     const prevSegColor = segIndex > 0 ? (ModeThemes[trip.segments[segIndex - 1].detailedMode]?.color || '#007bff') : currSegColor;
-                     
-                     const globalIndex = baseGlobalIndex + wpIndex;
-                     const canMoveEarlier = globalIndex > 0 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex - 1]?.id));
-                     const canMoveLater = globalIndex >= 0 && globalIndex < globalWaypoints.length - 1 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id));
-                     const canRemove = !(isFirstInSeg && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id)) && !(isLastTripWaypoint && isFirstInSeg);
-                     
-                     const topLineColor = (isFirstInSeg && segIndex > 0) ? prevSegColor : currSegColor;
-                     const bottomLineColor = currSegColor;
-                     
-                     return (
-                       <div 
-                         key={`${seg.id}-${wp.id}`} 
-                         className={`waypoint-row ${highlightedWaypointId === wp.id ? 'selected' : ''}`}
-                         ref={(el) => { waypointRefs.current[wp.id] = el; }}
-                       >
-                         
-                         {/* Timeline Column (Continuous) */}
-                         <div className="timeline-col">
-                           {/* Top Half Line */}
-                           <div className="timeline-line top" style={{ background: topLineColor }}></div>
-                           {/* Bottom Half Line */}
-                           <div className="timeline-line bottom" style={{ background: bottomLineColor }}></div>
-                           
-                           {/* Plus Button (Top boundary) */}
-                           <div 
-                             className="timeline-plus top-pos" 
-                             title="Add Waypoint Here"
-                             onClick={() => handleInsertWaypoint(wp.id, 'before')}
-                           >
-                             <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
-                           </div>
+                 const isLastInSegRender = wpIndex === renderedWaypoints.length - 1;
+                 const isLastOfTrip = isLastSegment && isLastInSegRender;
 
-                           {/* Plus Button (Bottom boundary - only for last point) */}
-                           {isLastTripWaypoint && (
-                             <div 
-                               className="timeline-plus bottom-pos" 
-                               title="Add Waypoint Here"
-                               onClick={() => handleInsertWaypoint(wp.id, 'after')}
-                             >
-                               <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
-                             </div>
-                           )}
+                 const prevSegColor = segIndex > 0 ? (ModeThemes[trip.segments[segIndex - 1].detailedMode]?.color || '#007bff') : currSegColor;
+                 const topLineColor = (isFirstInSeg && segIndex > 0) ? prevSegColor : currSegColor;
+                 const bottomLineColor = currSegColor;
 
-                           {/* Dot */}
-                           <div className="timeline-dot" style={{ 
-                             background: wp.importance === 'hidden' 
-                               ? 'white'
-                               : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor), 
-                             border: wp.importance === 'hidden' ? `3px solid ${currSegColor}` : 'none'
-                           }}>
-                           </div>
-                         </div>
+                 const globalIndex = baseGlobalIndex + wpIndex;
+                 const canMoveEarlier = globalIndex > 0 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex - 1]?.id));
+                 const canMoveLater = globalIndex >= 0 && globalIndex < globalWaypoints.length - 1 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id));
+                 const canRemove = !(isFirstInSeg && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id)) && !(isLastOfTrip && isFirstInSeg);
 
-                         {/* Waypoint Content */}
-                         <div className="waypoint-content">
-                           <div className="waypoint-card">
-                             <input
-                                 key={`wpt-${wp.id}-${wp.name}`}
-                                 type="text"
-                                 defaultValue={wp.name || ''}
-                                 placeholder={(!wp.coordinates || (wp.coordinates as any).length < 2) ? (focusedWaypointWithoutCoords === wp.id ? "Select a point on the map" : "Focus to set coordinates") : `${wp.coordinates[1].toFixed(5)}, ${wp.coordinates[0].toFixed(5)}`}
-                                 className="waypoint-title-input"
-                                 data-wpid={wp.id}
-                                 onFocus={() => {
-                                   if (!wp.coordinates || (wp.coordinates as any).length < 2) {
-                                     setFocusedWaypointWithoutCoords(wp.id);
-                                     onWaitingForCoords(wp.id);
-                                   } else if (focusedWaypointWithoutCoords) {
-                                     setFocusedWaypointWithoutCoords(null);
-                                     onWaitingForCoords(null);
-                                   }
-                                 }}
-                                 onKeyDown={handleTitleKeyDown}
-                                 onBlur={(e) => {
-                                   if (e.target.value !== wp.name && !(e.target.value === '' && !wp.name)) {
-                                     const newSegments = trip.segments.map(s => ({
-                                       ...s,
-                                       waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, name: e.target.value } : w)
-                                     }));
-                                     onUpdateTrip({ ...trip, segments: newSegments });
-                                   }
-                                 }}
+                 const hasValidCoords = (w?: Waypoint) => w && w.coordinates && (w.coordinates as any).length >= 2;
+                 const distanceStats = (wpIndex < seg.waypoints.length - 1 && hasValidCoords(wp) && hasValidCoords(seg.waypoints[wpIndex + 1]))
+                   ? getDistanceStats(wp, seg.waypoints[wpIndex + 1], seg.geometry as any)
+                    : null;
+
+                 return (
+                   <Fragment key={`${seg.id}-${wp.id}`}>
+                     <tr className={`waypoint-row-tr ${highlightedWaypointId === wp.id ? 'selected' : ''}`} ref={(el) => { waypointRefs.current[wp.id] = el; }}>
+                       {isFirstInSeg ? (
+                        <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)}>
+                           <div className="segment-toolbox">
+                             <textarea 
+                               className="segment-title-textarea"
+                               defaultValue={seg.name || seg.detailedMode}
+                               onKeyDown={handleSegmentTitleKeyDown}
+                               onBlur={(e) => {
+                                 if (e.target.value !== (seg.name || seg.detailedMode) && e.target.value !== seg.name) {
+                                   const newSegments = [...trip.segments];
+                                   newSegments[segIndex] = { ...seg, name: e.target.value };
+                                   onUpdateTrip({ ...trip, segments: newSegments });
+                                 }
+                               }}
                              />
-                             
-                             <div className="waypoint-tools">
+                             <div className="segment-tools-row">
                                <button 
-                                 className="iconButton" 
-                                 style={{ padding: '4px' }} 
-                                 title={wp.importance === 'hidden' ? 'Make Normal' : 'Make Hidden'}
+                                 className="iconButton small" 
+                                 style={{ color: currSegColor }} 
+                                 title={`Switch mode: ${seg.detailedMode}`}
                                  onClick={() => {
-                                   const newImportance: 'normal' | 'hidden' = wp.importance === 'hidden' ? 'normal' : 'hidden';
-                                   const newSegments = trip.segments.map(s => ({
-                                     ...s,
-                                     waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, importance: newImportance } : w)
-                                   }));
+                                   const currentIndex = TRANSPORT_MODES.indexOf(seg.detailedMode);
+                                   const nextMode = TRANSPORT_MODES[(currentIndex + 1) % TRANSPORT_MODES.length];
+                                   const newSegments = [...trip.segments];
+                                   newSegments[segIndex] = { ...seg, detailedMode: nextMode as any };
                                    onUpdateTrip({ ...trip, segments: newSegments });
                                  }}
                                >
-                                 <MaterialIcon name={wp.importance === 'hidden' ? 'visibility_off' : 'visibility'} size={16} />
+                                 {getModeIcon(seg.detailedMode, 18)}
                                </button>
-                               <button className="iconButton" style={{ padding: '4px' }} title="Jump to point" onClick={() => onJumpToWaypoint(wp.id)}><MaterialIcon name="my_location" size={16} /></button>
-                                 <button 
-                                   className="iconButton" 
-                                   style={{ padding: '4px' }} 
-                                   title="Split segment"
-                                   disabled={wpIndex === 0 || wpIndex === seg.waypoints.length - 1}
-                                   onClick={() => handleSplitSegment(segIndex, wpIndex)}
-                                 >
-                                   <MaterialIcon name="content_cut" size={16} />
-                                 </button>
-                               <button className="iconButton" style={{ padding: '4px' }} title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>
-                               <button className="iconButton" style={{ padding: '4px' }} title="Move Later" disabled={!canMoveLater} onClick={() => handleMoveWaypointLater(wp.id)}><MaterialIcon name="arrow_downward" size={16} /></button>
-                               <button className="iconButton" style={{ padding: '4px' }} title="Remove waypoint" disabled={!canRemove} onClick={() => handleRemoveWaypoint(wp.id)}><MaterialIcon name="delete" size={16} style={{ color: canRemove ? '#d9534f' : 'inherit' }} /></button>
-                               <button className="iconButton" style={{ padding: '4px' }} title="Waypoint Info" onClick={() => onSelectWaypoint(wp.id)}><MaterialIcon name="info" size={16} /></button>
+                               <button className="iconButton small" title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
+                                 <MaterialIcon name="info" size={18} />
+                               </button>
+                             </div>
+                             <div className="segment-tools-grid">
+                               <button className="iconButton small" title="Start earlier" disabled={segIndex === 0 || trip.segments[segIndex - 1].waypoints.length <= 2} onClick={() => handleStartEarlier(segIndex)}>
+                                 <MaterialIcon name="arrow_upward" size={16} />
+                               </button>
+                               <button className="iconButton small" title="Start later" disabled={segIndex === 0 || seg.waypoints.length <= 2} onClick={() => handleStartLater(segIndex)}>
+                                 <MaterialIcon name="arrow_downward" size={16} />
+                               </button>
+                               <button className="iconButton small" title="Delete segment" disabled={segIndex === 0} onClick={() => handleDeleteSegment(segIndex)}>
+                                 <MaterialIcon name="delete" size={16} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
+                               </button>
                              </div>
                            </div>
+                         </td>
+                       ) : (
+                         isLastOfTrip && <td className="segment-col"></td>
+                       )}
+                       <td className="timeline-col">
+                         <div className="timeline-line top" style={{ background: topLineColor }}></div>
+                         <div className="timeline-line bottom" style={{ background: bottomLineColor }}></div>
+                         <div className="timeline-dot" style={{ 
+                           background: wp.importance === 'hidden' ? 'white' : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor), 
+                           border: wp.importance === 'hidden' ? `3px solid ${currSegColor}` : 'none'
+                         }}></div>
+                       </td>
+                       <td className="waypoint-col">
+                         <div className="waypoint-card">
+                           <div style={{ position: 'relative' }}>
+                             <input
+                               key={`wpt-${wp.id}-${wp.name}`}
+                               type="text"
+                               defaultValue={wp.name || ''}
+                               placeholder={(!wp.coordinates || (wp.coordinates as any).length < 2) ? (focusedWaypointWithoutCoords === wp.id ? "Select on map or type to search" : "Focus to set coordinates") : `${wp.coordinates[1].toFixed(5)}, ${wp.coordinates[0].toFixed(5)}`}
+                               className="waypoint-title-input"
+                               data-wpid={wp.id}
+                               onChange={(e) => {
+                                 if (!wp.coordinates || (wp.coordinates as any).length < 2) {
+                                   setWpSearchState({ wpId: wp.id, query: e.target.value });
+                                 }
+                               }}
+                               onFocus={() => {
+                                 if (!wp.coordinates || (wp.coordinates as any).length < 2) {
+                                   setFocusedWaypointWithoutCoords(wp.id);
+                                   onWaitingForCoords(wp.id);
+                                 } else if (focusedWaypointWithoutCoords) {
+                                   setFocusedWaypointWithoutCoords(null);
+                                   onWaitingForCoords(null);
+                                 }
+                               }}
+                               onKeyDown={handleTitleKeyDown}
+                               onBlur={(e) => {
+                                 setTimeout(() => {
+                                   if (wpSearchState?.wpId === wp.id) {
+                                     setWpSearchState(null);
+                                   }
+                                 }, 200);
+                                 if (e.target.value !== wp.name && !(e.target.value === '' && !wp.name)) {
+                                   const newSegments = trip.segments.map(s => ({
+                                     ...s,
+                                     waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, name: e.target.value } : w)
+                                   }));
+                                   onUpdateTrip({ ...trip, segments: newSegments });
+                                 }
+                               }}
+                             />
+                             {wpSearchState?.wpId === wp.id && (wpSearchResults.length > 0 || isWpSearching) && (
+                               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                                 {isWpSearching && <div style={{ padding: '8px', fontSize: '0.85rem', color: '#666' }}>Searching...</div>}
+                                 {!isWpSearching && wpSearchResults.map(res => (
+                                   <div key={res.place_id} style={{ padding: '8px', fontSize: '0.85rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        onClick={() => {
+                                            const newSegments = trip.segments.map(s => ({
+                                              ...s,
+                                              waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, name: res.name || res.display_name.split(',')[0], coordinates: [parseFloat(res.lon), parseFloat(res.lat)] as [number, number] } : w)
+                                            }));
+                                            setWpSearchState(null);
+                                            onUpdateTrip({ ...trip, segments: newSegments });
+                                        }}>
+                                     <strong>{res.name || res.display_name.split(',')[0]}</strong>
+                                     <div style={{ fontSize: '0.75rem', color: '#666' }}>{res.display_name}</div>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                           </div>
+                           <div className="waypoint-tools">
+                             <button className="iconButton small" title={wp.importance === 'hidden' ? 'Make Normal' : 'Make Hidden'} onClick={() => {
+                               const newImportance: 'normal' | 'hidden' = wp.importance === 'hidden' ? 'normal' : 'hidden';
+                               const newSegments = trip.segments.map(s => ({ ...s, waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, importance: newImportance } : w) }));
+                               onUpdateTrip({ ...trip, segments: newSegments });
+                             }}>
+                               <MaterialIcon name={wp.importance === 'hidden' ? 'visibility_off' : 'visibility'} size={16} />
+                             </button>
+                             <button className="iconButton small" title="Jump to point" onClick={() => onJumpToWaypoint(wp.id)}><MaterialIcon name="my_location" size={16} /></button>
+                             <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || wpIndex === seg.waypoints.length - 1} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
+                             <button className="iconButton small" title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>
+                             <button className="iconButton small" title="Move Later" disabled={!canMoveLater} onClick={() => handleMoveWaypointLater(wp.id)}><MaterialIcon name="arrow_downward" size={16} /></button>
+                             <button className="iconButton small" title="Remove waypoint" disabled={!canRemove} onClick={() => handleRemoveWaypoint(wp.id)}><MaterialIcon name="delete" size={16} style={{ color: canRemove ? '#d9534f' : 'inherit' }} /></button>
+                             <button className="iconButton small" title="Waypoint Info" onClick={() => onSelectWaypoint(wp.id)}><MaterialIcon name="info" size={16} /></button>
+                           </div>
                          </div>
-
-                       </div>
-                     );
-                   })}
-                 </div>
-               </div>
-             );
+                       </td>
+                     </tr>
+                     <tr className="gap-row">
+                       {isLastOfTrip && <td className="segment-col"></td>}
+                       <td className="timeline-col gap-col">
+                         <div className={`timeline-line ${isLastOfTrip ? 'top' : 'full'}`} style={{ background: bottomLineColor }}></div>
+                           <div 
+                             className="timeline-plus" 
+                             title="Add Waypoint Here"
+                             onClick={() => handleInsertWaypoint(wp.id, 'after')}
+                           >
+                             <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
+                           </div>
+                       </td>
+                       <td className="waypoint-col gap-col">
+                         {!isLastOfTrip && distanceStats ? (
+                           <div className="distance-content">
+                             <span className="distance-stat"><MaterialIcon name="straighten" size={14} /> {(distanceStats.distanceKm).toFixed(1)} km</span>
+                             {distanceStats.hasElevation && (
+                               <>
+                                 {Math.round(distanceStats.elevationUp) > 0 && <span className="distance-stat"><MaterialIcon name="trending_up" size={14} /> {Math.round(distanceStats.elevationUp)} m</span>}
+                                 {Math.round(distanceStats.elevationDown) > 0 && <span className="distance-stat"><MaterialIcon name="trending_down" size={14} /> {Math.round(distanceStats.elevationDown)} m</span>}
+                               </>
+                             )}
+                           </div>
+                         ) : null}
+                       </td>
+                     </tr>
+                   </Fragment>
+                 );
+               });
              })}
+           </tbody>
+         </table>
+         <div className="trip-summary">
+           <h3 className="trip-summary-title">
+             <MaterialIcon name="analytics" size={18} /> Trip Summary
+           </h3>
+           <div className="trip-summary-total">
+             <strong>Total Distance:</strong> {tripSummary.totalDistance.toFixed(1)} km
+           </div>
+           
+           {Object.keys(tripSummary.distanceByMode).length > 0 && (
+             <table className="trip-summary-table">
+               <thead>
+                 <tr style={{ borderBottom: '1px solid #dee2e6', textAlign: 'left' }}>
+                   <th style={{ padding: '4px 8px 4px 0' }}>Mode</th>
+                   <th style={{ padding: '4px 0', textAlign: 'right' }}>Distance (km)</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {Object.entries(tripSummary.distanceByMode)
+                   .sort(([, a], [, b]) => b - a)
+                   .map(([mode, dist]) => (
+                   <tr key={mode} className="trip-summary-row">
+                     <td className="trip-summary-td">
+                       <span style={{ color: ModeThemes[mode as keyof typeof ModeThemes]?.color || '#666' }}>
+                         {getModeIcon(mode as any, 16)}
+                       </span>
+                       {mode.replace('_', ' ')}
+                     </td>
+                     <td className="trip-summary-td right">
+                       {(dist as number).toFixed(1)}
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           )}
          </div>
       </div>
     </>

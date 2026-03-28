@@ -11,7 +11,7 @@ export const POI_LAYERS: any[] = [
     minzoom: 10,
     layout: {
       'text-field': ['get', 'name'],
-      'icon-image': 'poi-peak-peak',
+      'icon-image': ['case', ['!', ['has', 'name']], 'poi-natural-rock', ['==', ['get', 'name'], ''], 'poi-natural-rock', 'poi-peak-peak'],
       'text-font': ['Noto Sans Regular'],
       'text-size': 11,
       'text-offset': [0, 0.6],
@@ -100,7 +100,7 @@ export const POI_LAYERS: any[] = [
   }
 ];
 
-export const MAP_STYLES: Record<string, { name: string, url: any }> = {
+export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: string }> = {
   mapy_outdoor: {
     name: 'Mapy.com',
     url: {
@@ -124,7 +124,8 @@ export const MAP_STYLES: Record<string, { name: string, url: any }> = {
   },
   openfreemap: {
     name: 'OpenFreeMap',
-    url: 'https://tiles.openfreemap.org/styles/liberty'
+    url: 'https://tiles.openfreemap.org/styles/liberty',
+    attribution: '<a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
   },
   osm: {
     name: 'OpenStreetMap',

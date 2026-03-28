@@ -10,9 +10,10 @@ interface TripManagerProps {
   unsavedTripIds: Set<string>;
   onSaveAll: () => void;
   onCreateTrip: () => void;
+  onOpenStatus: () => void;
 }
 
-export function TripManager({ trips, onSelectTrip, onDeleteTrip, unsavedTripIds, onSaveAll, onCreateTrip }: TripManagerProps) {
+export function TripManager({ trips, onSelectTrip, onDeleteTrip, unsavedTripIds, onSaveAll, onCreateTrip, onOpenStatus }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
   const confirmDelete = () => {
@@ -27,6 +28,7 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, unsavedTripIds,
       <div className="toolbar">
         <h1>Triplo Manager</h1>
         <div className="toolbar-actions">
+           <button className="iconButton" title="Status" onClick={onOpenStatus}><MaterialIcon name="info" size={20} /></button>
            <button 
              className="iconButton" 
              title="Save All Unsaved Trips" 

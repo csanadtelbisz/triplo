@@ -1,38 +1,37 @@
-/* Timeline & Waypoints */
-.segments-container {
+﻿/* Timeline & Waypoints */
+.trip-table {
+  width: 100%;
+  border-collapse: collapse;
   margin-top: 25px;
-  margin-bottom: 15px;
-  display: flex;
-  flex-direction: column;
+  margin-bottom: 25px;
 }
-.segment-row {
-  display: flex;
-  flex-direction: column;
+.trip-table td {
+  padding: 0;
+  vertical-align: top;
 }
-.waypoint-row {
-  display: flex;
-  align-items: stretch;
+.segment-col {
+  width: 80px;
+  position: relative;
+}
+.timeline-col {
+  position: relative;
+  width: 30px;
+}
+.waypoint-col {
+  padding: 8px 0;
+}
+.gap-col {
+  padding: 4px 0;
+  height: 28px;
 }
 
 /* Toolbox */
 .segment-toolbox {
-  position: absolute;
-  width: 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex-shrink: 0;
-  padding-top: 33px;
-}
-.segment-title-wrapper {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: sticky;
+  top: 16px;
 }
 .segment-title-textarea {
   font-size: 0.75rem;
@@ -77,19 +76,8 @@
   gap: 4px;
   z-index: 2;
 }
-.segment-waypoints {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  margin-left: 80px;
-}
 
 /* Timeline Line */
-.timeline-col {
-  width: 30px;
-  position: relative;
-  flex-shrink: 0;
-}
 .timeline-line {
   position: absolute;
   left: 14px;
@@ -103,9 +91,15 @@
   top: 50%;
   bottom: 0;
 }
+.timeline-line.full {
+  top: 0;
+  bottom: 0;
+}
 .timeline-plus {
   position: absolute;
   left: 15px;
+  top: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3;
   background: white;
   border-radius: 50%;
@@ -117,14 +111,6 @@
   justify-content: center;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   cursor: pointer;
-}
-.timeline-plus.top-pos {
-  top: 0;
-  transform: translate(-50%, -50%);
-}
-.timeline-plus.bottom-pos {
-  bottom: 0;
-  transform: translate(-50%, 50%);
 }
 .timeline-plus .material-symbols-rounded {
   color: #666;
@@ -145,10 +131,6 @@
 }
 
 /* Waypoint View */
-.waypoint-content {
-  flex: 1;
-  padding: 8px 0;
-}
 .waypoint-card {
   background: white;
   padding: 12px;
@@ -185,4 +167,89 @@
 .waypoint-title-input:focus {
   background: white;
   box-shadow: 0 0 0 2px #007bff;
+}
+
+
+/* Overrides and Additions */
+.toolbar-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+.iconButton.small {
+  padding: 4px;
+}
+.gap-row td {
+  vertical-align: middle;
+  height: 24px;
+}
+.trip-table td.gap-col {
+  padding: 4px;
+  height: 24px;
+}
+.distance-content {
+  font-size: 0.85rem;
+  color: #666;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.distance-stat {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.trip-summary {
+  padding: 16px;
+  background: #f3f4f5;
+  border-radius: 8px;
+  margin-top: 16px;
+  margin-bottom: 32px;
+}
+.trip-summary-title {
+  margin: 0 0 12px 0;
+  font-size: 1.0rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trip-summary-total {
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+.trip-summary-table {
+  width: 100%;
+  font-size: 0.85rem;
+  border-collapse: collapse;
+}
+.trip-summary-th {
+  border-bottom: 1px solid #dee2e6;
+  text-align: left;
+  padding: 4px 8px 4px 0;
+}
+.trip-summary-th.right {
+  text-align: right;
+  padding: 4px 0;
+}
+.trip-summary-row {
+  border-bottom: 1px solid #f1f3f5;
+}
+.trip-summary-td {
+  padding: 6px 8px 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: capitalize;
+}
+.trip-summary-td * {
+  vertical-align: middle;
+}
+.trip-summary-td.right {
+  padding: 6px 0;
+  text-align: right;
+  font-weight: 500;
+  display: table-cell;
 }

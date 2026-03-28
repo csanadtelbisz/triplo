@@ -1,7 +1,8 @@
 // shared/types.ts
 
-export type TransportMode = 'walk' | 'hike' | 'run' | 'car' | 'flight' | 'train' | 'light_rail' | 'tram' | 'ferry' | 'waterway';
-export type RoutingMode = 'foot' | 'car' | 'flight' | 'rail' | 'ferry' | 'water';
+export type TransportMode = 'walk' | 'hike' | 'run' | 'bike' | 'car' | 'flight' | 'rail' | 'ferry' | 'waterway';
+
+export const TRANSPORT_MODES: TransportMode[] = ['walk', 'hike', 'run', 'bike', 'car', 'flight', 'rail', 'ferry', 'waterway'];
 
 export interface Coordinates {
   lon: number;
@@ -29,9 +30,9 @@ export interface Waypoint {
 export interface Segment {
   id: string; // UUID
   detailedMode: TransportMode;
-  routingMode: RoutingMode;
+  routingProfile: string;
   source: 'router' | 'recorded_track' | 'manual';
-  routerService?: string;
+  routingService: string;
   geometry: GeoJSON.LineString;
   waypoints: Waypoint[];
   name?: string;

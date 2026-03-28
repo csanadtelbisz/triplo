@@ -129,7 +129,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
               <div className="form-group">
                 <label className="form-label">Type</label>
                 <div style={{ textTransform: 'capitalize', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>{getPOIEmoji(wp.poi.type, wp.poi.details?.type || wp.poi.details?.extratags?.poi_subclass)}</span> <span>{wp.poi.type.replace(/_/g, ' ')}</span>
+                  <span>{getPOIEmoji(wp.poi.type, wp.poi.details?.type || wp.poi.details?.extratags?.poi_subclass, wp.poi.name)}</span> <span>{wp.poi.type.replace(/_/g, ' ')}</span>
                 </div>
               </div>
             )}
