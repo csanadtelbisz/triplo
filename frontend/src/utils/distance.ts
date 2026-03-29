@@ -77,7 +77,7 @@ export function getTripDistanceSummary(trip: Trip) {
     }
 
     totalDistance += segDist;
-    distanceByMode[seg.detailedMode] = (distanceByMode[seg.detailedMode] || 0) + segDist;
+    distanceByMode[seg.transportMode] = (distanceByMode[seg.transportMode] || 0) + segDist;
   }
 
   return { totalDistance, distanceByMode };

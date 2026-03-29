@@ -7,7 +7,8 @@ import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
 import type { Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
-import { route } from './routing/RoutingService';
+// Imports removed or used
+import { optimizeSegmentRoute } from './routing/routeOptimizer';
 
 import { TripManager } from './components/TripManager';
 import { TripEditor } from './components/TripEditor';
@@ -29,6 +30,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
+  const [hoveredCoordinate, setHoveredCoordinate] = useState<{ lon: number; lat: number; ele?: number } | null>(null);
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
 
@@ -77,7 +79,7 @@ export default function App() {
         if (seg.source === 'router') {
             const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates);
             if (validCoords.length >= 2) {
-               seg.geometry = await route(validCoords as [number, number][], seg.routingService, seg.routingProfile);
+               seg.geometry = await optimizeSegmentRoute(seg, trip.segments[i]) as any;
             }
         }
         newSegments[i] = seg;
@@ -170,7 +172,7 @@ export default function App() {
       segments: [
         {
           id: `seg_${Math.random().toString(36).substring(2, 9)}`,
-          detailedMode: 'car',
+          transportMode: 'car',
           routingService: 'GraphHopper Router',
           routingProfile: 'car',
           source: 'router',
@@ -344,6 +346,8 @@ export default function App() {
             trip={selectedTrip} 
             onGoBack={handleGoBackSegment} 
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
+            hoveredCoordinate={hoveredCoordinate}
+            onHoverCoordinate={setHoveredCoordinate}
           />
         ) : selectedWaypointId && selectedTrip ? (
           <WaypointInfo 
@@ -399,6 +403,8 @@ export default function App() {
         setSelectedSegmentId={setSelectedSegmentId}
         selectedPOI={selectedPOI}
         setSelectedPOI={setSelectedPOI}
+        hoveredCoordinate={hoveredCoordinate}
+        onHoverCoordinate={setHoveredCoordinate}
         onSearchClick={() => setIsSearchOpen(true)}
       />
     </div>

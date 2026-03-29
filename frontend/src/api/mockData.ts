@@ -12,7 +12,7 @@ export const mockTrips: Trip[] = [
     segments: [
       {
         id: 'seg-1',
-        detailedMode: 'car',
+        transportMode: 'car',
         routingService: 'GraphHopper Router',
         routingProfile: 'car',
         source: 'router',
@@ -38,7 +38,7 @@ export const mockTrips: Trip[] = [
       {
         id: 'seg-2',
         name: 'Patscherkofel Hike',
-        detailedMode: 'hike',
+        transportMode: 'hike',
         routingService: 'GraphHopper Router',
         routingProfile: 'foot',
         source: 'router',
@@ -71,7 +71,7 @@ export const mockTrips: Trip[] = [
     segments: [
       {
         id: 'seg-m1',
-        detailedMode: 'rail',
+        transportMode: 'rail',
         routingService: 'Straight Line Router',
         routingProfile: 'straight',
         source: 'router',
@@ -93,7 +93,7 @@ export const mockTrips: Trip[] = [
       {
         id: 'seg-m2',
         name: 'English Garden Run',
-        detailedMode: 'run',
+        transportMode: 'run',
         routingService: 'GraphHopper Router',
         routingProfile: 'foot',
         source: 'router',
@@ -127,7 +127,7 @@ export const mockTrips: Trip[] = [
     segments: [
       {
         id: 'seg-fly-alps',
-        detailedMode: 'flight',
+        transportMode: 'flight',
         routingService: 'Flight Router',
         routingProfile: 'flight',
         source: 'router',
@@ -147,7 +147,7 @@ export const mockTrips: Trip[] = [
       },
       {
         id: 'seg-car-ita',
-        detailedMode: 'car',
+        transportMode: 'car',
         routingService: 'GraphHopper Router',
         routingProfile: 'car',
         source: 'router',

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import type { Trip, Segment } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/POIInfo.css';
-import { route } from '../routing/RoutingService';
+// Removed unused route import
+import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getPOIEmoji } from '../utils/poiUtils';
 
 interface POIInfoProps {
@@ -84,7 +85,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: PO
       
     if (validCoords.length >= 2 && lastSegment.source === 'router') {
       try {
-        const geom = await route(validCoords, lastSegment.routingService, lastSegment.routingProfile);
+        const geom = await optimizeSegmentRoute(updatedSegment, lastSegment) as any;
         newSegments[newSegments.length - 1] = { ...updatedSegment, geometry: geom };
         onUpdateTrip({ ...trip, segments: [...newSegments] });
       } catch (err) {

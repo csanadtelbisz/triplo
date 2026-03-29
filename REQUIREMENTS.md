@@ -29,7 +29,7 @@ with support for manual route planning between waypoints per transport mode.
 | Ferry | Ferry | GraphHopper (`ferry` profile) | Follows OSM ferry lines; falls back to water direct path |
 | Waterway (non-ferry) | Water | GraphHopper or shortest water path | Follow waterway if OSM data available |
 
-The `detailedMode` field (see Data Model below) stores the user-facing label,
+The `transportMode` field (see Data Model below) stores the user-facing label,
 while `routingMode` determines which engine and profile to call.
 
 ### Waypoints
@@ -54,7 +54,7 @@ Each segment connects two or more waypoints and supports:
 | Property | Type | Notes |
 |---|---|---|
 | `id` | UUID | Auto-generated |
-| `detailedMode` | string | User-facing label: `walk`, `hike`, `run`, `car`, `train`, `tram`, `light_rail`, `ferry`, `flight`, `waterway`, etc. Extensible. |
+| `transportMode` | string | User-facing label: `walk`, `hike`, `run`, `bike`, `car`, `flight`, `rail`, `ferry`, `waterway`, etc. Extensible. |
 | `routingMode` | string | Internal: which engine+profile was used |
 | `source` | `"router"` \| `"recorded_track"` \| `"manual"` | Whether geometry came from a routing engine, an imported GPX track, or was drawn manually |
 | `routerService` | string (optional) | e.g. `"graphhopper_api"`, `"graphhopper_self_hosted"`, `"openrailrouting"` |
@@ -174,7 +174,7 @@ Suggested: **Node.js + Fastify** or **Python + FastAPI**. Stateless, single bina
 ## Non-Functional Requirements
 
 - **Open source preferred** throughout the stack.
-- **Extensible data model:** `detailedMode` and properties on waypoints/segments are open strings/objects to allow adding new modes and metadata fields without schema changes.
+- **Extensible data model:** `transportMode` and properties on waypoints/segments are open strings/objects to allow adding new modes and metadata fields without schema changes.
 - **Style customisability:** All visual styling of routes, waypoints, and icons is driven by a config file, not hardcoded.
 
 ---

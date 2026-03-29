@@ -3,7 +3,8 @@ import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
-import { route } from '../routing/RoutingService';
+import { routingManager } from '../routing/RoutingService';
+import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getDistanceStats, getTripDistanceSummary } from '../utils/distance';
 
 interface TripEditorProps {
@@ -243,11 +244,11 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
     }, 100);
   };
 
-  const updateSegmentRoute = async (segment: Segment): Promise<Segment> => {
+  const updateSegmentRoute = async (segment: Segment, oldSegState?: Segment): Promise<Segment> => {
     if (segment.source === 'router') {
-        const coords = segment.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-        if (coords.length < 2) return { ...segment, geometry: undefined as any };
-        const geometry = await route(coords as [number, number][], segment.routingService, segment.routingProfile);
+        const oldSegment = oldSegState || trip.segments.find(s => s.id === segment.id);
+        const geometry = await optimizeSegmentRoute(segment, oldSegment);
+        if (!geometry) return { ...segment, geometry: undefined as any };
         return { ...segment, geometry };
       }
       if (segment.waypoints.length < 2) {
@@ -400,7 +401,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                <tr className="gap-row">
                  <td className="segment-col"></td>
                  <td className="timeline-col gap-col">
-                   <div className="timeline-line bottom" style={{ background: ModeThemes[trip.segments[0].detailedMode]?.color || '#007bff' }}></div>
+                   <div className="timeline-line bottom" style={{ background: ModeThemes[trip.segments[0].transportMode]?.color || '#007bff' }}></div>
                    <div 
                      className="timeline-plus" 
                      title="Add Waypoint Here"
@@ -418,7 +419,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                const isLastSegment = segIndex === trip.segments.length - 1;
                const renderedWaypoints = isLastSegment ? seg.waypoints : seg.waypoints.slice(0, -1);
                
-               const currSegColor = ModeThemes[seg.detailedMode]?.color || '#007bff';
+               const currSegColor = ModeThemes[seg.transportMode]?.color || '#007bff';
 
                return renderedWaypoints.map((wp, wpIndex) => {
                  const isFirstInSeg = wpIndex === 0;
@@ -426,7 +427,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                  const isLastInSegRender = wpIndex === renderedWaypoints.length - 1;
                  const isLastOfTrip = isLastSegment && isLastInSegRender;
 
-                 const prevSegColor = segIndex > 0 ? (ModeThemes[trip.segments[segIndex - 1].detailedMode]?.color || '#007bff') : currSegColor;
+                 const prevSegColor = segIndex > 0 ? (ModeThemes[trip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
                  const topLineColor = (isFirstInSeg && segIndex > 0) ? prevSegColor : currSegColor;
                  const bottomLineColor = currSegColor;
 
@@ -448,10 +449,10 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                            <div className="segment-toolbox">
                              <textarea 
                                className="segment-title-textarea"
-                               defaultValue={seg.name || seg.detailedMode}
+                               defaultValue={seg.name || seg.transportMode}
                                onKeyDown={handleSegmentTitleKeyDown}
                                onBlur={(e) => {
-                                 if (e.target.value !== (seg.name || seg.detailedMode) && e.target.value !== seg.name) {
+                                 if (e.target.value !== (seg.name || seg.transportMode) && e.target.value !== seg.name) {
                                    const newSegments = [...trip.segments];
                                    newSegments[segIndex] = { ...seg, name: e.target.value };
                                    onUpdateTrip({ ...trip, segments: newSegments });
@@ -462,16 +463,22 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                <button 
                                  className="iconButton small" 
                                  style={{ color: currSegColor }} 
-                                 title={`Switch mode: ${seg.detailedMode}`}
-                                 onClick={() => {
-                                   const currentIndex = TRANSPORT_MODES.indexOf(seg.detailedMode);
+                                 title={`Switch mode: ${seg.transportMode}`}
+                                 onClick={async () => {
+                                   const currentIndex = TRANSPORT_MODES.indexOf(seg.transportMode);
                                    const nextMode = TRANSPORT_MODES[(currentIndex + 1) % TRANSPORT_MODES.length];
                                    const newSegments = [...trip.segments];
-                                   newSegments[segIndex] = { ...seg, detailedMode: nextMode as any };
+                                   const defRouter = routingManager.getDefaultRouter(nextMode as any);
+                                   newSegments[segIndex] = await updateSegmentRoute({ 
+                                     ...seg, 
+                                     transportMode: nextMode as any,
+                                     routingService: defRouter.serviceName,
+                                     routingProfile: defRouter.profile
+                                   });
                                    onUpdateTrip({ ...trip, segments: newSegments });
                                  }}
                                >
-                                 {getModeIcon(seg.detailedMode, 18)}
+                                 {getModeIcon(seg.transportMode, 18)}
                                </button>
                                <button className="iconButton small" title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
                                  <MaterialIcon name="info" size={18} />

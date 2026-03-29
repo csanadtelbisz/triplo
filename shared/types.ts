@@ -29,7 +29,7 @@ export interface Waypoint {
 
 export interface Segment {
   id: string; // UUID
-  detailedMode: TransportMode;
+  transportMode: TransportMode;
   routingProfile: string;
   source: 'router' | 'recorded_track' | 'manual';
   routingService: string;

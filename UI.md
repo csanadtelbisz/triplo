@@ -36,7 +36,7 @@ This is the main panel that is displayed in the side panel on startup.
 - The trip editor lists all waypoints of all segments along a (vertical) line. Waypoints can be characterized by either an icon (simple flag or icon based on the point type if OSM data is available) or a picture (if an image link is provided for the waypoint).
 - Trip segments are displayed in a way that visually groups the waypoints belonging to the segment.
 - Left of the waypoint line, the segment name is displayed along with a toolbox below it. Icon buttons are included in the toolbox:
-  - Some icons can quickly edit certain segment properties (e.g., for `detailedMode`, an icon for the mode is displayed and clicking on it iterates to the next mode);
+  - Some icons can quickly edit certain segment properties (e.g., for `transportMode`, an icon for the mode is displayed and clicking on it iterates to the next mode);
   - Perform some actions (such as move segment before or after the previous or next segment, or combine segment with the previous or next segment);
   - Open the segment information panel.
 - Right of the waypoint line, the waypoint names are displayed along with a toolbox. The toolbox contains the following icons:

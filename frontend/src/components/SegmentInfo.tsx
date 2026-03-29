@@ -2,16 +2,19 @@ import { TRANSPORT_MODES, type Trip } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
 import { getSegmentDistanceSummary } from '../utils/distance';
-import { routingManager } from '../routing/RoutingService';
+import { routingManager, route } from '../routing/RoutingService';
+import { ElevationProfile } from './ElevationProfile';
 
 interface SegmentInfoProps {
   segmentId: string;
   trip: Trip;
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
+  hoveredCoordinate?: { lon: number; lat: number; ele?: number } | null;
+  onHoverCoordinate?: (coord: { lon: number; lat: number; ele?: number } | null) => void;
 }
 
-export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip }: SegmentInfoProps) {
+export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
   if (!seg) return null;
 
@@ -47,11 +50,11 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip }: Segment
            />
         </div>
         <div className="form-group">
-           <label className="form-label">Detailed Mode</label>
+           <label className="form-label">Transport Mode</label>
            <div className="mode-selector">
               {TRANSPORT_MODES.map(m => {
                 const theme = ModeThemes[m];
-                const isSelected = seg.detailedMode === m;
+                const isSelected = seg.transportMode === m;
                 return (
                   <button
                     key={m}
@@ -61,11 +64,23 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip }: Segment
                       border: isSelected ? `2px solid ${theme?.color || '#007bff'}` : '1px solid #ddd',
                       background: isSelected ? `${theme?.color || '#007bff'}22` : 'white',
                     }}
-                    onClick={() => {
+                    onClick={async () => {
                       if (!isSelected) {
-                        const newSegments = trip.segments.map(s =>
-                          s.id === segmentId ? { ...s, detailedMode: m } : s
-                        );
+                        const defRouter = routingManager.getDefaultRouter(m);
+                        const newSegments = [...trip.segments];
+                        const segIndex = newSegments.findIndex(s => s.id === segmentId);
+                        const updatedSeg = { ...newSegments[segIndex], transportMode: m, routingService: defRouter.serviceName, routingProfile: defRouter.profile };
+                        
+                        if (updatedSeg.source === 'router') {
+                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
+                          if (coords.length >= 2) {
+                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
+                          } else {
+                            delete (updatedSeg as any).geometry;
+                          }
+                        }
+                        
+                        newSegments[segIndex] = updatedSeg;
                         onUpdateTrip({ ...trip, segments: newSegments });
                       }
                     }}
@@ -81,22 +96,36 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip }: Segment
            <select 
              className="form-input" 
              value={`${seg.routingService}|${seg.routingProfile}`}
-             onChange={(e) => {
+             onChange={async (e) => {
                const [service, profile] = e.target.value.split('|');
-               const newSegments = trip.segments.map(s => 
-                 s.id === segmentId ? { ...s, routingService: service, routingProfile: profile } : s
-               );
+               const newSegments = [...trip.segments];
+               const segIndex = newSegments.findIndex(s => s.id === segmentId);
+               const updatedSeg = { ...newSegments[segIndex], routingService: service, routingProfile: profile };
+               if (updatedSeg.source === 'router') {
+                 const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
+                 if (coords.length >= 2) {
+                   updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
+                 } else {
+                   delete (updatedSeg as any).geometry;
+                 }
+               }
+               newSegments[segIndex] = updatedSeg;
                onUpdateTrip({ ...trip, segments: newSegments });
              }}
            >
-             {seg.detailedMode && routingManager.getServices().flatMap(svc => 
-                 svc.getRoutingProfiles(seg.detailedMode).map(profile => (
+             {seg.transportMode && routingManager.getServices().flatMap(svc => 
+                 svc.getRoutingProfiles(seg.transportMode).map(profile => (
                    <option key={`${svc.name}|${profile}`} value={`${svc.name}|${profile}`}>
                      {svc.name.replace(' Router', '')} [{profile}]
                    </option>
                  ))
              )}
            </select>
+           {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && (
+             <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
+               This routing service is currently unavailable. Routes will default to straight lines.
+             </div>
+           )}
         </div>
         <div className="form-group">
            <label className="form-label">Source (Read-only)</label>
@@ -119,6 +148,9 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip }: Segment
                  <MaterialIcon name="trending_down" size={16} /> -{Math.round(getSegmentDistanceSummary(seg).elevationDown)} m
                </span>
              </div>
+           )}
+           {seg.geometry && getSegmentDistanceSummary(seg).hasElevation && (
+             <ElevationProfile geometry={seg.geometry} hoveredCoordinate={hoveredCoordinate} onHoverCoordinate={onHoverCoordinate} />
            )}
         </div>
       </div>

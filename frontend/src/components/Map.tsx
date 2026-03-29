@@ -3,7 +3,8 @@ import type { Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '../styles/Map.css';
-import { route } from '../routing/RoutingService';
+// Removed unused route import
+import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { ModeThemes } from '../themes/config';
 import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS } from '../config/mapStyles';
@@ -11,7 +12,7 @@ import { getPOIEmoji } from '../utils/poiUtils';
 
 
 function getRenderGeometry(seg: any) {
-    if (seg.detailedMode === 'flight' && seg.waypoints && seg.waypoints.length >= 2) {
+    if (seg.transportMode === 'flight' && seg.waypoints && seg.waypoints.length >= 2) {
         let coords: any[] = [];
         for (let i = 0; i < seg.waypoints.length - 1; i++) {
             const w1 = seg.waypoints[i].coordinates;
@@ -57,6 +58,8 @@ export interface MapProps {
     setSelectedSegmentId: (id: string | null) => void;
     selectedPOI: any | null;
     setSelectedPOI: (poi: any | null) => void;
+    hoveredCoordinate: { lon: number; lat: number; ele?: number } | null;
+    onHoverCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
     onSearchClick: () => void;
 }
 
@@ -73,12 +76,15 @@ export const Map = forwardRef<MapRef, MapProps>(({
     setSelectedSegmentId,
     selectedPOI,
     setSelectedPOI,
+    hoveredCoordinate,
+    onHoverCoordinate,
     onSearchClick
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
+  const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
   const ghostMarkerRef = useRef<Marker | null>(null);
   const ghostMarkerDataRef = useRef<{ segmentId: string, originalWaypoints: any[], insertIndex: number } | null>(null);
@@ -94,6 +100,31 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
 
   const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI });
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (hoveredCoordinate) {
+      if (!hoverCoordMarkerRef.current) {
+        const el = document.createElement('div');
+        el.style.width = '12px';
+        el.style.height = '12px';
+        el.style.backgroundColor = 'red';
+        el.style.border = '2px solid white';
+        el.style.borderRadius = '50%';
+        el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.4)';
+        el.style.pointerEvents = 'none';
+
+        hoverCoordMarkerRef.current = new Marker({ element: el });
+      }
+      hoverCoordMarkerRef.current.setLngLat([hoveredCoordinate.lon, hoveredCoordinate.lat]).addTo(mapRef.current);
+    } else {
+      if (hoverCoordMarkerRef.current) {
+        hoverCoordMarkerRef.current.remove();
+        hoverCoordMarkerRef.current = null;
+      }
+    }
+  }, [hoveredCoordinate]);
 
   useEffect(() => {
     waitingWaypointIdRef.current = waitingWaypointId;
@@ -335,6 +366,26 @@ export const Map = forwardRef<MapRef, MapProps>(({
               const mousePoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
               const snapped = turf.nearestPointOnLine(line, mousePoint);
               
+              if (onHoverCoordinate && snapped && snapped.geometry) {
+                const snappedCoords = snapped.geometry.coordinates;
+                const origCoords = segInfo.geometry.coordinates;
+                // Find index of nearest original coord to get elevation
+                let minIdx = 0;
+                let minDist = Infinity;
+                for (let i = 0; i < origCoords.length; i++) {
+                  const dist = Math.pow(origCoords[i][0] - snappedCoords[0], 2) + Math.pow(origCoords[i][1] - snappedCoords[1], 2);
+                  if (dist < minDist) {
+                    minDist = dist;
+                    minIdx = i;
+                  }
+                }
+                onHoverCoordinate({
+                  lon: snappedCoords[0],
+                  lat: snappedCoords[1],
+                  ele: origCoords[minIdx][2]
+                });
+              }
+
               let snappedDist = snapped.properties?.location as number;
               if (snappedDist === undefined) {
                   snappedDist = turf.length(turf.lineSlice(turf.point(line.geometry.coordinates[0] as [number, number]), snapped, line));
@@ -374,9 +425,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 const el = document.createElement('div');
                 el.style.width = '12px';
                 el.style.height = '12px';
-                el.style.backgroundColor = 'white';
-                el.style.border = '2px solid #555';
+                el.style.backgroundColor = 'red';
+                el.style.border = '2px solid white';
                 el.style.borderRadius = '50%';
+                el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.4)';
                 el.style.cursor = 'pointer';
                 
                 ghostMarkerRef.current = new Marker({ element: el, draggable: true })
@@ -415,7 +467,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
                                 const validCoords = newSegments[segIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
                                 if (validCoords.length >= 2) {
-                                    route(validCoords, targetSeg.routingService, targetSeg.routingProfile).then((geom: any) => {
+                                    optimizeSegmentRoute(newSegments[segIndex], targetSeg).then((geom: any) => {
                                         newSegments[segIndex] = { ...newSegments[segIndex], geometry: geom };
                                         hotkeyRefs.current.updateTripState(targetTrip.id, { ...targetTrip, segments: [...newSegments] }, true);
                                     });
@@ -437,6 +489,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
           } else if (poiFeatures.length > 0) {
             mapRef.current!.getCanvas().style.cursor = 'pointer';
             setHoverInfo(null);
+            if (onHoverCoordinate) {
+              onHoverCoordinate(null);
+            }
 
             if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
                 ghostMarkerRef.current.getElement().style.display = 'none';
@@ -444,13 +499,22 @@ export const Map = forwardRef<MapRef, MapProps>(({
           } else {
             setHoverInfo(null);
             mapRef.current!.getCanvas().style.cursor = '';
-
+            
             if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
                 const markerEl = ghostMarkerRef.current.getElement();
                 if (e.originalEvent.target !== markerEl && !markerEl.contains(e.originalEvent.target as Node)) {
                     markerEl.style.display = 'none';
                 }
             }
+            if (onHoverCoordinate) {
+              onHoverCoordinate(null);
+            }
+          }
+        });
+
+        mapRef.current.on('mouseout', () => {
+          if (onHoverCoordinate) {
+            onHoverCoordinate(null);
           }
         });
 
@@ -499,7 +563,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 if (seg.source === 'router') {
                     const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
                     if (validCoords.length >= 2) {
-                       seg.geometry = await route(validCoords, seg.routingService, seg.routingProfile);
+                       seg.geometry = await optimizeSegmentRoute(seg, currentTrip.segments[i]) as any;
                     }
                 }
                 newSegments[i] = seg;
@@ -584,7 +648,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
            trip.segments.forEach(seg => {
              allFeatures.push({
                type: 'Feature',
-               properties: { segmentId: seg.id, mode: seg.detailedMode, color: ModeThemes[seg.detailedMode]?.color || '#007bff' },
+               properties: { segmentId: seg.id, mode: seg.transportMode, color: ModeThemes[seg.transportMode]?.color || '#007bff' },
                geometry: getRenderGeometry(seg) as any
              });
            });
@@ -596,7 +660,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
       } else {
         const features: GeoJSON.Feature[] = selectedTrip.segments.map(seg => ({
           type: 'Feature',
-          properties: { segmentId: seg.id, mode: seg.detailedMode, color: ModeThemes[seg.detailedMode]?.color || '#007bff' },
+          properties: { segmentId: seg.id, mode: seg.transportMode, color: ModeThemes[seg.transportMode]?.color || '#007bff' },
           geometry: getRenderGeometry(seg) as any
         }));
         source.setData({
@@ -606,7 +670,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
         // Add markers
         selectedTrip.segments.forEach((seg, segIndex) => {
-          const currSegColor = ModeThemes[seg.detailedMode]?.color || '#007bff';
+          const currSegColor = ModeThemes[seg.transportMode]?.color || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {          if (!wp.coordinates || wp.coordinates.length < 2) return;
                       const isLastInSeg = wpIndex === seg.waypoints.length - 1;
             const isLastSegment = segIndex === selectedTrip.segments.length - 1;
@@ -622,7 +686,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
             el.style.height = wp.importance === 'hidden' ? '10px' : '14px';
             el.style.borderRadius = '50%';
             
-            const prevSegColor = isBordering ? (ModeThemes[selectedTrip.segments[segIndex - 1].detailedMode]?.color || '#007bff') : currSegColor;
+            const prevSegColor = isBordering ? (ModeThemes[selectedTrip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
             const backgroundStyle = isBordering 
               ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)`
               : currSegColor;
@@ -880,7 +944,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
               
               const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
               if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                  route(validCoords, lastSegment.routingService, lastSegment.routingProfile).then((geom: any) => {
+                  optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
                       newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
                       hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
                   });

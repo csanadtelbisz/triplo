@@ -21,15 +21,16 @@ export class GraphHopperRouter implements IRoutingService {
   }
 
   getRoutingProfiles(mode: TransportMode): string[] {
+    // only car, foot, and bike are supported by the GraphHopper free tier
     switch (mode) {
       case 'walk':
       case 'hike':
       case 'run':
-        return ['foot', 'hike'];
+        return ['foot'];
       case 'bike':
-        return ['bike', 'mtb', 'racingbike'];
+        return ['bike'];
       case 'car':
-        return ['car', 'small_truck'];
+        return ['car'];
       default:
         return [];
     }

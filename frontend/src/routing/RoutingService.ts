@@ -2,6 +2,8 @@ import type { TransportMode } from '../../../shared/types';
 import { FlightRouter } from './FlightRouter';
 import { StraightLineRouter } from './StraightLineRouter';
 import { GraphHopperRouter } from './GraphHopperRouter';
+import { RailRouter } from './RailRouter';
+import { MapyRouter } from './MapyRouter';
 
 export interface IRoutingService {
   name: string;
@@ -17,28 +19,33 @@ export interface DefaultRouter {
 }
 
 class RoutingServiceManager {
-  private services: IRoutingService[] = [];
-  private defaultRouters: Record<TransportMode, DefaultRouter>;
+  private graphHopper = new GraphHopperRouter();
+  private mapy = new MapyRouter();
+  private flight = new FlightRouter();
+  private straightLine = new StraightLineRouter();
+  private rail = new RailRouter();
 
-  constructor() {
-    const graphHopper = new GraphHopperRouter();
-    const flight = new FlightRouter();
-    const straightLine = new StraightLineRouter();
-    
-    this.services = [graphHopper, flight, straightLine];
+  private services: IRoutingService[] = [
+    this.graphHopper,
+    this.mapy,
+    this.flight,
+    this.rail,
+    this.straightLine
+  ];
 
-    this.defaultRouters = {
-      walk: { serviceName: graphHopper.name, profile: 'foot' },
-      hike: { serviceName: graphHopper.name, profile: 'hike' },
-      run: { serviceName: graphHopper.name, profile: 'foot' },
-      bike: { serviceName: graphHopper.name, profile: 'bike' },
-      car: { serviceName: graphHopper.name, profile: 'car' },
-      flight: { serviceName: flight.name, profile: 'flight' },
-      rail: { serviceName: straightLine.name, profile: 'straight' },
-      ferry: { serviceName: straightLine.name, profile: 'straight' },
-      waterway: { serviceName: straightLine.name, profile: 'straight' }
+  private defaultRouters: Record<TransportMode, DefaultRouter> = {
+      walk: { serviceName: this.graphHopper.name, profile: 'foot' },
+      hike: { serviceName: this.graphHopper.name, profile: 'hike' },
+      run: { serviceName: this.graphHopper.name, profile: 'foot' },
+      bike: { serviceName: this.graphHopper.name, profile: 'bike' },
+      car: { serviceName: this.graphHopper.name, profile: 'car' },
+      flight: { serviceName: this.flight.name, profile: 'flight' },
+      rail: { serviceName: this.rail.name, profile: 'rail' },
+      ferry: { serviceName: this.straightLine.name, profile: 'straight' },
+      waterway: { serviceName: this.straightLine.name, profile: 'straight' }
     };
-  }
+
+  constructor() {}
 
   public getService(name: string): IRoutingService | undefined {
     return this.services.find(s => s.name === name);
@@ -49,9 +56,9 @@ class RoutingServiceManager {
       return { type: 'LineString', coordinates: waypoints };
     }
 
-    const service = this.getService(serviceName) || this.getService('Straight Line Router')!;
+    const service = this.getService(serviceName) || this.straightLine;
     if (!service.isAvailable()) {
-       return this.getService('Straight Line Router')!.route(waypoints, 'straight');
+       return this.straightLine.route(waypoints, 'straight');
     }
     return service.route(waypoints, profile);
   }
