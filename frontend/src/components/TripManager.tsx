@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
-import { Dialog } from './Dialog';
+import { ConfirmDialog } from './Dialog';
 
 interface TripManagerProps {
   trips: Trip[];
@@ -78,27 +78,21 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, unsavedTripIds,
         {trips.length === 0 && <p className="empty-state">Loading trips...</p>}
       </div>
 
-      <Dialog
+      <ConfirmDialog
         isOpen={tripToDelete !== null}
         title="Delete Trip"
-        onClose={() => setTripToDelete(null)}
-        actions={
-          <>
-            <button className="dialog-btn dialog-btn-cancel" onClick={() => setTripToDelete(null)}>
-              Cancel
-            </button>
-            <button className="dialog-btn dialog-btn-confirm" onClick={confirmDelete}>
-              Delete
-            </button>
-          </>
+        message={
+          <p style={{ margin: 0 }}>
+            Are you sure you want to delete the trip <strong>{tripToDelete?.name}</strong>?
+            <br /><br />
+            This action cannot be undone.
+          </p>
         }
-      >
-        <p>
-          Are you sure you want to delete the trip <strong>{tripToDelete?.name}</strong>?
-          <br /><br />
-          This action cannot be undone.
-        </p>
-      </Dialog>
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setTripToDelete(null)}
+      />
     </>
   );
 }

@@ -31,11 +31,23 @@ export interface Segment {
   id: string; // UUID
   transportMode: TransportMode;
   routingProfile: string;
-  source: 'router' | 'recorded_track' | 'manual';
+  source: 'router' | 'gpx' | 'manual';
   routingService: string;
   geometry: GeoJSON.LineString;
   waypoints: Waypoint[];
   name?: string;
+  distanceStats?: {
+    totalDistance: number;
+    hasElevation: boolean;
+    elevationUp: number;
+    elevationDown: number;
+  };
+  waypointDistances?: {
+    distanceKm: number;
+    hasElevation: boolean;
+    elevationUp: number;
+    elevationDown: number;
+  }[];
 }
 
 export interface Trip {
@@ -47,4 +59,8 @@ export interface Trip {
   segments: Segment[];
   createdAt: string;
   updatedAt: string;
+  tripDistanceSummary?: {
+    totalDistance: number;
+    distanceByMode: Record<string, number>;
+  };
 }

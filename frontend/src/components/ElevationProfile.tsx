@@ -16,7 +16,7 @@ export function ElevationProfile({ geometry, hoveredCoordinate, onHoverCoordinat
   }
 
   // Check if we have elevation data (third coordinate)
-  const hasElevation = geometry.coordinates.some(c => c.length > 2 && c[2] !== undefined);
+  const hasElevation = geometry.coordinates.some(c => c.length > 2 && c[2] !== undefined && c[2] !== 0);
   if (!hasElevation) {
     return null;
   }

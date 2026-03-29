@@ -340,7 +340,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
     onUpdateTrip({ ...trip, segments: newSegments });
   }, [trip, onUpdateTrip]);
 
-  const tripSummary = getTripDistanceSummary(trip);
+  const tripSummary = trip.tripDistanceSummary || { totalDistance: 0, distanceByMode: {} };
 
   return (
     <>
@@ -352,7 +352,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
            <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="zoom_out_map" size={20} /></button>
            <button className="iconButton" title="Save" onClick={onSave} disabled={!canSave} style={{ color: canSave ? '#007bff' : 'inherit' }}><MaterialIcon name="save" size={20} /></button>
-           <button className="iconButton" title="Export GPX"><MaterialIcon name="ios_share" size={20} /></button>
+           <button className="iconButton" title="Export GPX"><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>
       <div className="content">
@@ -437,9 +437,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                  const canRemove = !(isFirstInSeg && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id)) && !(isLastOfTrip && isFirstInSeg);
 
                  const hasValidCoords = (w?: Waypoint) => w && w.coordinates && (w.coordinates as any).length >= 2;
-                 const distanceStats = (wpIndex < seg.waypoints.length - 1 && hasValidCoords(wp) && hasValidCoords(seg.waypoints[wpIndex + 1]))
-                   ? getDistanceStats(wp, seg.waypoints[wpIndex + 1], seg.geometry as any)
-                    : null;
+                 const distanceStats = seg.waypointDistances?.[wpIndex] || null;
 
                  return (
                    <Fragment key={`${seg.id}-${wp.id}`}>

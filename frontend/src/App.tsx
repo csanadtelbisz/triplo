@@ -9,6 +9,7 @@ import type { Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
+import { computeTripCaches } from './utils/distance';
 
 import { TripManager } from './components/TripManager';
 import { TripEditor } from './components/TripEditor';
@@ -36,9 +37,10 @@ export default function App() {
 
   const loadTrips = () => {
     TripAPI.getTrips().then(fetchedTrips => {
-      setTrips(fetchedTrips);
+      const cachedTrips = fetchedTrips.map(computeTripCaches);
+      setTrips(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
-      fetchedTrips.forEach(t => {
+      cachedTrips.forEach(t => {
         initHistories[t.id] = { past: [], future: [], lastSavedStr: JSON.stringify(t) };
       });
       setHistories(initHistories);
@@ -46,11 +48,12 @@ export default function App() {
   };
 
   const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? newTrip : t));
+    const cachedTrip = computeTripCaches(newTrip);
+    setTrips(prev => prev.map(t => t.id === tripId ? cachedTrip : t));
 
     setHistories(prev => {
       const h = prev[tripId] || { past: [], future: [], lastSavedStr: '' };
-      const currentTrip = trips.find(t => t.id === tripId) || newTrip;
+      const currentTrip = trips.find(t => t.id === tripId) || cachedTrip;
       return {
         ...prev,
         [tripId]: {
@@ -62,7 +65,7 @@ export default function App() {
     });
     
     if (selectedTrip?.id === tripId) {
-      setSelectedTrip(newTrip);
+      setSelectedTrip(cachedTrip);
     }
   };
 
@@ -164,7 +167,7 @@ export default function App() {
 
   const handleCreateTrip = () => {
     const newWpId = `wp_${Math.random().toString(36).substring(2, 9)}`;
-    const newTrip: Trip = {
+    const newTrip = computeTripCaches({
       id: `trip_${Math.random().toString(36).substring(2, 9)}`,
       name: 'New Trip',
       createdAt: new Date().toISOString(),
@@ -187,7 +190,7 @@ export default function App() {
           ]
         }
       ]
-    };
+    });
     
     setTrips(prev => [...prev, newTrip]);
     setHistories(prev => ({
@@ -348,6 +351,7 @@ export default function App() {
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}
             onHoverCoordinate={setHoveredCoordinate}
+            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg)}
           />
         ) : selectedWaypointId && selectedTrip ? (
           <WaypointInfo 

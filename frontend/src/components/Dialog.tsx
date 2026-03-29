@@ -32,3 +32,47 @@ export function Dialog({
     </div>
   );
 }
+
+export interface ConfirmDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  confirmVariant?: 'danger' | 'primary';
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+export function ConfirmDialog({
+  isOpen,
+  title,
+  message,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  confirmVariant = 'primary',
+  onConfirm,
+  onCancel
+}: ConfirmDialogProps) {
+  const confirmClass = confirmVariant === 'danger' ? 'dialog-btn-confirm' : 'dialog-btn-primary';
+
+  return (
+    <Dialog
+      isOpen={isOpen}
+      title={title}
+      onClose={onCancel}
+      actions={
+        <>
+          <button className="dialog-btn dialog-btn-cancel" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button className={`dialog-btn ${confirmClass}`} onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </>
+      }
+    >
+      {message}
+    </Dialog>
+  );
+}

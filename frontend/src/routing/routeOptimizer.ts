@@ -8,6 +8,10 @@ import { route } from './RoutingService';
  * Otherwise, finds the changed waypoint(s) and patches the geometry.
  */
 export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): Promise<GeoJSON.LineString | undefined> {
+  if (newSeg.routingService === 'gpx' || newSeg.routingProfile === 'Imported GPX') {
+    return newSeg.geometry || oldSeg?.geometry;
+  }
+
   const validCoords = newSeg.waypoints
     .filter(w => w.coordinates && w.coordinates.length === 2)
     .map(w => w.coordinates as [number, number]);

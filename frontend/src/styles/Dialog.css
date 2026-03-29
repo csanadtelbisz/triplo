@@ -68,6 +68,15 @@
   background: #c9302c;
 }
 
+.dialog-btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.dialog-btn-primary:hover {
+  background: #0056b3;
+}
+
 @keyframes dialogFadeIn {
   from {
     opacity: 0;

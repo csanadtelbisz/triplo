@@ -41,6 +41,7 @@ function getRenderGeometry(seg: any) {
 
 export interface MapRef {
     zoomToTrip: (trip: Trip) => void;
+    zoomToSegment: (segment: Segment) => void;
     handleJumpToWaypoint: (waypointId: string) => void;
     flyTo: (lon: number, lat: number) => void;
 }
@@ -172,6 +173,41 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
+  const zoomToSegment = (seg: Segment) => {
+    if (!mapRef.current) return;
+    
+    const allWps: { id: string, coordinates: [number, number] }[] = [];
+    seg.waypoints.forEach(wp => {
+      if (wp.coordinates && wp.coordinates.length === 2) {
+        if (allWps.length === 0 || allWps[allWps.length - 1].id !== wp.id) {
+          allWps.push({ id: wp.id, coordinates: wp.coordinates as [number, number] });
+        }
+      }
+    });
+    if (seg.geometry && seg.geometry.coordinates) {
+        seg.geometry.coordinates.forEach(coord => {
+            allWps.push({ id: 'geom', coordinates: coord as [number, number] });
+        });
+    }
+
+    if (allWps.length === 0) return;
+
+    const bounds = new LngLatBounds(allWps[0].coordinates, allWps[0].coordinates);
+    allWps.forEach(wp => bounds.extend(wp.coordinates));
+
+    requestAnimationFrame(() => {
+      if (!mapRef.current) return;
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: 50 });
+      if (camera) {
+        mapRef.current.flyTo({
+          ...camera,
+          essential: true,
+          duration: 1200
+        });
+      }
+    });
+  };
+
   const handleJumpToWaypoint = (waypointId: string) => {
     if (!selectedTrip || !mapRef.current) return;
     
@@ -228,6 +264,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
   useImperativeHandle(ref, () => ({
     zoomToTrip,
+    zoomToSegment,
     handleJumpToWaypoint,
     flyTo
   }));

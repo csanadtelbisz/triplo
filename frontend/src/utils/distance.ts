@@ -27,9 +27,15 @@ export function getDistanceStats(wp1: Waypoint, wp2: Waypoint, geometry: GeoJSON
   try {
     const startPt = turf.point(wp1.coordinates as [number, number]);
     const endPt = turf.point(wp2.coordinates as [number, number]);
-    const sliced = turf.lineSlice(startPt, endPt, geometry);
-    const distanceKm = turf.length(sliced, { units: 'kilometers' });
     
+    const snapped1 = turf.nearestPointOnLine(geometry, startPt);
+    const snapped2 = turf.nearestPointOnLine(geometry, endPt);
+    const loc1 = snapped1.properties?.location as number ?? 0;
+    const loc2 = snapped2.properties?.location as number ?? 0;
+    
+    const distanceKm = Math.abs(loc2 - loc1);
+    
+    const sliced = turf.lineSlice(startPt, endPt, geometry);
     let elevationUp = 0; 
     let elevationDown = 0; 
     let hasElevation = false;
@@ -64,7 +70,21 @@ export function getTripDistanceSummary(trip: Trip) {
   for (const seg of trip.segments) {
     let segDist = 0;
     
-    if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2) {
+    if (seg.routingService === 'gpx' && seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2 && seg.waypoints.length >= 2) {
+        const line = turf.feature(seg.geometry) as turf.Feature<turf.LineString>;
+        const wpDistances = seg.waypoints.map(wp => {
+            if (wp.coordinates && wp.coordinates.length >= 2) {
+                const pt = turf.point(wp.coordinates as [number, number]);
+                const snapped = turf.nearestPointOnLine(line, pt);
+                return snapped.properties?.location as number ?? 0;
+            }
+            return 0;
+        });
+        
+        for (let i = 0; i < wpDistances.length - 1; i++) {
+            segDist += Math.abs(wpDistances[i+1] - wpDistances[i]);
+        }
+    } else if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2) {
         segDist = turf.length(turf.feature(seg.geometry), { units: 'kilometers' });
     } else if (seg.waypoints.length >= 2) {
         for (let i = 0; i < seg.waypoints.length - 1; i++) {
@@ -88,7 +108,32 @@ export function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
   let elevationDown = 0;
   let hasElevation = false;
 
-  if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2) {
+  if (seg.routingService === 'gpx' && seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2 && seg.waypoints.length >= 2) {
+      const line = turf.feature(seg.geometry) as turf.Feature<turf.LineString>;
+      const wpDistances = seg.waypoints.map(wp => {
+          if (wp.coordinates && wp.coordinates.length >= 2) {
+              const pt = turf.point(wp.coordinates as [number, number]);
+              const snapped = turf.nearestPointOnLine(line, pt);
+              return snapped.properties?.location as number ?? 0;
+          }
+          return 0;
+      });
+      
+      for (let i = 0; i < wpDistances.length - 1; i++) {
+          totalDistance += Math.abs(wpDistances[i+1] - wpDistances[i]);
+      }
+
+      // Assume elevation is calculated from the start to the end of the trimmed section
+      const coords = seg.geometry.coordinates;
+      for (let i = 1; i < coords.length; i++) {
+          if (coords[i - 1].length > 2 && coords[i].length > 2) {
+              hasElevation = true;
+              const diff = (coords[i][2] || 0) - (coords[i - 1][2] || 0);
+              if (diff > 0) elevationUp += diff;
+              else elevationDown -= diff;
+          }
+      }
+  } else if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2) {
       totalDistance = turf.length(turf.feature(seg.geometry), { units: 'kilometers' });
       const coords = seg.geometry.coordinates;
       for (let i = 1; i < coords.length; i++) {
@@ -110,4 +155,46 @@ export function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
   }
 
   return { totalDistance, hasElevation, elevationUp, elevationDown };
+}
+
+export function computeTripCaches(trip: Trip): Trip {
+  const newTrip = { ...trip };
+  
+  let overallTotalDistance = 0;
+  const distanceByMode: Record<string, number> = {};
+
+  const newSegments = newTrip.segments.map(seg => {
+    // Computing Segment stats
+    const segDistStats = getSegmentDistanceSummary(seg);
+    overallTotalDistance += segDistStats.totalDistance;
+    distanceByMode[seg.transportMode] = (distanceByMode[seg.transportMode] || 0) + segDistStats.totalDistance;
+
+    // Computing intermediate waypoint distances
+    const wpStats: DistanceStats[] = [];
+    if (seg.waypoints.length >= 2) {
+      for (let i = 0; i < seg.waypoints.length - 1; i++) {
+        const wp1 = seg.waypoints[i];
+        const wp2 = seg.waypoints[i+1];
+        if (wp1.coordinates?.length >= 2 && wp2.coordinates?.length >= 2) {
+           wpStats.push(getDistanceStats(wp1, wp2, seg.geometry as any));
+        } else {
+           wpStats.push({ distanceKm: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 });
+        }
+      }
+    }
+
+    return {
+      ...seg,
+      distanceStats: segDistStats,
+      waypointDistances: wpStats
+    };
+  });
+
+  newTrip.segments = newSegments;
+  newTrip.tripDistanceSummary = {
+    totalDistance: overallTotalDistance,
+    distanceByMode
+  };
+
+  return newTrip;
 }

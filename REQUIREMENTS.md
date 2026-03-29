@@ -56,7 +56,7 @@ Each segment connects two or more waypoints and supports:
 | `id` | UUID | Auto-generated |
 | `transportMode` | string | User-facing label: `walk`, `hike`, `run`, `bike`, `car`, `flight`, `rail`, `ferry`, `waterway`, etc. Extensible. |
 | `routingMode` | string | Internal: which engine+profile was used |
-| `source` | `"router"` \| `"recorded_track"` \| `"manual"` | Whether geometry came from a routing engine, an imported GPX track, or was drawn manually |
+| `source` | `"router"` \| `"gpx"` \| `"manual"` | Whether geometry came from a routing engine, an imported GPX track, or was drawn manually |
 | `routerService` | string (optional) | e.g. `"graphhopper_api"`, `"graphhopper_self_hosted"`, `"openrailrouting"` |
 | `geometry` | GeoJSON LineString | The resolved route (stored after routing) |
 | `waypoints` | array of Waypoint refs | Ordered list |
@@ -93,7 +93,7 @@ The data model may be extended later with further properties.
 ### GPX Support
 
 - **Import:** A GPX track can be imported as a new segment. The track geometry is used
-  directly (source = `"recorded_track"`); no routing engine is called.
+  directly (source = `"gpx"`); no routing engine is called.
 - **Export:** Any trip or segment can be exported as a `.gpx` file.
   Track segments map to `<trkseg>` elements; waypoints map to `<wpt>` elements.
   Elevation data (`<ele>`) is preserved if present in the GeoJSON geometry (3D coordinates).
