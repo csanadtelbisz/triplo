@@ -5,7 +5,6 @@ import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
 import { routingManager } from '../routing/RoutingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
-import { getDistanceStats, getTripDistanceSummary } from '../utils/distance';
 
 interface TripEditorProps {
   trip: Trip;
@@ -36,6 +35,30 @@ export function TripEditor({
   const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
   const [wpSearchResults, setWpSearchResults] = useState<any[]>([]);
   const [isWpSearching, setIsWpSearching] = useState(false);
+  
+  const [dragRender, setDragRender] = useState<{
+    activeId: string;
+    deltaY: number;
+    originalGlobalIndex: number;
+    currentGlobalIndex: number;
+    isReleasing?: boolean;
+  } | null>(null);
+
+  const dragContext = useRef<{
+    activeId: string;
+    startY: number;
+    items: { id: string; top: number; height: number; center: number }[];
+    pointerId: number;
+    scrollContainer: Element;
+  } | null>(null);
+
+  useEffect(() => {
+    if (dragRender) {
+      document.body.style.userSelect = 'none';
+    } else {
+      document.body.style.userSelect = '';
+    }
+  }, [dragRender !== null]);
 
   useEffect(() => {
     if (!wpSearchState) {
@@ -68,8 +91,11 @@ export function TripEditor({
       // Add a brief highlight flash
       const el = waypointRefs.current[highlightedWaypointId];
       if (el) {
-        el.style.transition = 'background-color 0.5s';
-        el.style.backgroundColor = '#e6f2ff';
+        const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
+        highlightTargets.forEach(target => {
+          target.style.transition = 'background-color 0.5s';
+          target.style.backgroundColor = '#e6f2ff';
+        });
         
         const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
         if (input) {
@@ -77,7 +103,9 @@ export function TripEditor({
         }
         
         setTimeout(() => {
-          el.style.backgroundColor = 'white';
+          highlightTargets.forEach(target => {
+            target.style.backgroundColor = '';
+          });
         }, 1000);
       }
     }
@@ -125,6 +153,20 @@ export function TripEditor({
     }
   };
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && dragRender && !dragRender.isReleasing) {
+        setDragRender(prev => prev ? { ...prev, deltaY: 0, currentGlobalIndex: prev.originalGlobalIndex, isReleasing: true } : null);
+        setTimeout(() => {
+          setDragRender(null);
+          if (dragContext.current) dragContext.current = null;
+        }, 200);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [dragRender]);
+
   const globalWaypoints = trip.segments.flatMap((seg, i) => 
     seg.waypoints.slice(0, i === trip.segments.length - 1 ? undefined : -1)
   );
@@ -136,6 +178,143 @@ export function TripEditor({
     for (let j = 0; j < i; j++) sum += trip.segments[j].waypoints.length - 1;
     return sum;
   });
+
+  const handlePointerDown = (e: React.PointerEvent, wpId: string, globalIndex: number) => {
+    if (e.button !== 0) return; // Only left click
+    
+    // Check if clicked exactly on a button or input, ignore sorting then
+    if ((e.target as HTMLElement).closest('button, input, textarea')) return;
+
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+
+    // Measure all rows for collision detection
+    const scrollContainer = target.closest('.content') || document.documentElement;
+    const currentScroll = scrollContainer.scrollTop;
+
+    const items = Array.from(scrollContainer.querySelectorAll('.waypoint-row-tr')).map(row => {
+      const el = row as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      return {
+        id: el.getAttribute('data-wpid')!,
+        top: rect.top + currentScroll,
+        height: rect.height,
+        center: rect.top + rect.height / 2 + currentScroll
+      };
+    }).filter(item => item.id);
+
+    dragContext.current = {
+      activeId: wpId,
+      startY: e.clientY + currentScroll,
+      items,
+      pointerId: e.pointerId,
+      scrollContainer
+    };
+
+    setDragRender({
+      activeId: wpId,
+      deltaY: 0,
+      originalGlobalIndex: globalIndex,
+      currentGlobalIndex: globalIndex
+    });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragContext.current || !dragRender) return;
+    
+    const { startY, items, activeId, scrollContainer } = dragContext.current;
+    
+    const containerRect = scrollContainer.getBoundingClientRect();
+
+    // Auto-scroll vertically if near window or container edges
+    const SCROLL_MARGIN = 60;
+    const SCROLL_SPEED = 15;
+    if (e.clientY < containerRect.top + SCROLL_MARGIN) {
+      scrollContainer.scrollBy({ top: -SCROLL_SPEED, behavior: 'instant' });
+    } else if (e.clientY > Math.min(window.innerHeight, containerRect.bottom) - SCROLL_MARGIN) {
+      scrollContainer.scrollBy({ top: SCROLL_SPEED, behavior: 'instant' });
+    }
+
+    const currentScroll = scrollContainer.scrollTop;
+    const currentAbsoluteY = e.clientY + currentScroll;
+
+    let deltaY = currentAbsoluteY - startY;
+
+    const origItem = items.find(i => i.id === activeId);
+    if (!origItem || items.length === 0) return;
+
+    // Prevent dragging above the first waypoint or below the last waypoint
+    const minTarget = items[0].top;
+    const maxTarget = items[items.length - 1].top + items[items.length - 1].height;
+
+    if (origItem.top + deltaY < minTarget) {
+      deltaY = minTarget - origItem.top;
+    } else if (origItem.top + origItem.height + deltaY > maxTarget) {
+      deltaY = maxTarget - (origItem.top + origItem.height);
+    }
+
+    const currentCenter = origItem.center + deltaY;
+
+    // Find nearest item using target document Y (currentCenter)
+    let newCurrentId = activeId;
+    let minDiff = Infinity;
+    for (const item of items) {
+       const diff = Math.abs(currentCenter - item.center);
+       if (diff < minDiff) {
+         minDiff = diff;
+         newCurrentId = item.id;
+       }
+    }
+
+    const currentGlobalIndex = globalWaypoints.findIndex(w => w.id === newCurrentId);
+
+    setDragRender(prev => prev ? { 
+      ...prev, 
+      deltaY, 
+      currentGlobalIndex: currentGlobalIndex !== -1 ? currentGlobalIndex : prev.currentGlobalIndex 
+    } : null);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragContext.current || !dragRender) return;
+    try {
+      e.currentTarget.releasePointerCapture(dragContext.current.pointerId);
+    } catch (err) {}
+    
+    const { originalGlobalIndex, currentGlobalIndex, activeId } = dragRender;
+    const items = dragContext.current.items;
+    
+    // Prevent border dragging anomalies
+    const targetId = globalWaypoints[currentGlobalIndex]?.id;
+    const isBoundaryDrag = targetId && boundaryIds.includes(activeId) && boundaryIds.includes(targetId) && activeId !== targetId;
+    
+    if (originalGlobalIndex !== currentGlobalIndex && !isBoundaryDrag) {
+      let targetDeltaY = 0;
+      if (items && items.length > 0) {
+        targetDeltaY = items[currentGlobalIndex].top - items[originalGlobalIndex].top;
+      }
+      
+      setDragRender(prev => prev ? { ...prev, deltaY: targetDeltaY, isReleasing: true } : null);
+      
+      setTimeout(() => {
+        const newGlobal = [...globalWaypoints];
+        const [dragged] = newGlobal.splice(originalGlobalIndex, 1);
+        newGlobal.splice(currentGlobalIndex, 0, dragged);
+        
+        dragContext.current = null;
+        applyGlobalWaypoints(newGlobal).finally(() => {
+          setDragRender(null);
+        });
+      }, 200);
+    } else {
+      setDragRender(prev => prev ? { ...prev, deltaY: 0, isReleasing: true } : null);
+      
+      setTimeout(() => {
+        setDragRender(null);
+        dragContext.current = null;
+      }, 200);
+    }
+  };
 
   const applyGlobalWaypoints = async (newGlobalWaypoints: Waypoint[]) => {
     const newSegments = [];
@@ -436,14 +615,81 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                  const canMoveLater = globalIndex >= 0 && globalIndex < globalWaypoints.length - 1 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id));
                  const canRemove = !(isFirstInSeg && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id)) && !(isLastOfTrip && isFirstInSeg);
 
-                 const hasValidCoords = (w?: Waypoint) => w && w.coordinates && (w.coordinates as any).length >= 2;
                  const distanceStats = seg.waypointDistances?.[wpIndex] || null;
+
+                 let translateY = 0;
+                 let isDragged = false;
+                 let targetDotColor = '';
+                 
+                 if (dragRender) {
+                   if (dragRender.activeId === wp.id) {
+                     isDragged = true;
+                     translateY = dragRender.deltaY;
+                     
+                     const { originalGlobalIndex, currentGlobalIndex } = dragRender;
+                     const newGlobal = [...globalWaypoints];
+                     const [draggedItem] = newGlobal.splice(originalGlobalIndex, 1);
+                     newGlobal.splice(currentGlobalIndex, 0, draggedItem);
+                     
+                     let foundSegIndex = 0;
+                     for (let i = currentGlobalIndex; i >= 0; i--) {
+                       if (boundaryIds.includes(newGlobal[i].id)) {
+                         foundSegIndex = Math.min(boundaryIds.indexOf(newGlobal[i].id), trip.segments.length - 1);
+                         break;
+                       }
+                     }
+                     targetDotColor = ModeThemes[trip.segments[foundSegIndex]?.transportMode]?.color || currSegColor;
+                   } else {
+                     const { originalGlobalIndex, currentGlobalIndex } = dragRender;
+                     const isMovingUp = currentGlobalIndex < originalGlobalIndex;
+                     const items = dragContext.current?.items;
+                     
+                     if (items && items.length > 1) {
+                       const sizeRef = originalGlobalIndex < items.length - 1 ? 
+                         items[originalGlobalIndex + 1].top - items[originalGlobalIndex].top : 
+                         items[originalGlobalIndex].top - items[originalGlobalIndex - 1].top;
+                         
+                       if (isMovingUp && globalIndex >= currentGlobalIndex && globalIndex < originalGlobalIndex) {
+                         translateY = sizeRef;
+                       } else if (!isMovingUp && globalIndex <= currentGlobalIndex && globalIndex > originalGlobalIndex) {
+                         translateY = -sizeRef;
+                       }
+                     }
+                   }
+                 }
+                 
+                 const isReleasing = dragRender?.isReleasing;
+                 
+                 const transitionStyle = (dragRender && !isDragged) || (isDragged && isReleasing) 
+                   ? 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)' 
+                   : 'none';
+
+                 const transformStyle: React.CSSProperties = {
+                   transform: `translateY(${translateY}px)`,
+                   transition: transitionStyle,
+                   zIndex: isDragged ? 100 : 1,
+                   position: 'relative'
+                 };
+                 
+                 const dotTransformStyle: React.CSSProperties = {
+                   transform: `translate(-50%, calc(-50% + ${translateY}px))`,
+                   transition: transitionStyle,
+                   zIndex: isDragged ? 100 : 2,
+                 };
 
                  return (
                    <Fragment key={`${seg.id}-${wp.id}`}>
-                     <tr className={`waypoint-row-tr ${highlightedWaypointId === wp.id ? 'selected' : ''}`} ref={(el) => { waypointRefs.current[wp.id] = el; }}>
+                     <tr 
+                      className={`waypoint-row-tr ${isDragged ? 'dragged' : ''}`}
+                      ref={(el) => { waypointRefs.current[wp.id] = el; }}
+                      data-wpid={wp.id}
+                      onPointerDown={(e) => handlePointerDown(e, wp.id, globalIndex)}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerCancel={handlePointerUp}
+                     >
                        {isFirstInSeg ? (
-                        <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)}>
+                        <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)} onPointerDown={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
                            <div className="segment-toolbox">
                              <textarea 
                                className="segment-title-textarea"
@@ -502,12 +748,15 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                          <div className="timeline-line top" style={{ background: topLineColor }}></div>
                          <div className="timeline-line bottom" style={{ background: bottomLineColor }}></div>
                          <div className="timeline-dot" style={{ 
-                           background: wp.importance === 'hidden' ? 'white' : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor), 
-                           border: wp.importance === 'hidden' ? `3px solid ${currSegColor}` : 'none'
+                           ...dotTransformStyle,
+                           background: isDragged ? targetDotColor : (wp.importance === 'hidden' ? 'white' : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor)), 
+                           border: isDragged ? `3px solid white` : (wp.importance === 'hidden' ? `3px solid ${currSegColor}` : 'none'),
+                           boxShadow: isDragged ? `0 0 0 2px ${targetDotColor}` : 'none',
+                           cursor: isDragged ? 'grabbing' : 'grab'
                          }}></div>
                        </td>
                        <td className="waypoint-col">
-                         <div className="waypoint-card">
+                         <div className="waypoint-card" style={{ ...transformStyle, cursor: isDragged ? 'grabbing' : undefined }}>
                            <div style={{ position: 'relative' }}>
                              <input
                                key={`wpt-${wp.id}-${wp.name}`}
@@ -600,7 +849,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                        </td>
                        <td className="waypoint-col gap-col">
                          {!isLastOfTrip && distanceStats ? (
-                           <div className="distance-content">
+                           <div className="distance-content" style={{ visibility: dragRender ? 'hidden' : 'visible' }}>
                              <span className="distance-stat"><MaterialIcon name="straighten" size={14} /> {(distanceStats.distanceKm).toFixed(1)} km</span>
                              {distanceStats.hasElevation && (
                                <>

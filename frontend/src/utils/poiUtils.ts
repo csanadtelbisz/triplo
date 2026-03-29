@@ -1,6 +1,6 @@
 ﻿export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string => {
   const emojiMap: Record<string, string> = {
-    peak: '⛰️',
+    peak: '🔺',
     water: '💧',
     lake: '💧',
     campsite: '⛺',

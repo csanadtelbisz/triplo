@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
-import { getSegmentDistanceSummary } from '../utils/distance';
 import { routingManager, route } from '../routing/RoutingService';
 import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
@@ -95,7 +94,6 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCo
         updatedSeg.waypoints.push({
           id: 'wp-' + Date.now().toString(),
           coordinates: lastCoord,
-          type: 'stop',
           importance: 'normal'
         });
       } else if (updatedSeg.waypoints.length > 1) {
