@@ -29,7 +29,7 @@ export class FlightRouter implements IRoutingService {
   }
 
   getRoutingProfiles(mode: TransportMode): string[] {
-    if (mode === 'flight') return ['flight'];
+    if (mode === 'flight' || mode === 'other') return ['flight'];
     return [];
   }
 }

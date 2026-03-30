@@ -401,8 +401,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
 
     const newWaypoint: Waypoint = {
       id: `wp_${Math.random().toString(36).substring(2, 9)}`,
-      coordinates: [] as any, 
-      importance: 'normal',
+      coordinates: [] as any,
       name: '',
     };
 
@@ -580,7 +579,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                <tr className="gap-row">
                  <td className="segment-col"></td>
                  <td className="timeline-col gap-col">
-                   <div className="timeline-line bottom" style={{ background: ModeThemes[trip.segments[0].transportMode]?.color || '#007bff' }}></div>
+                   <div className="timeline-line bottom" style={{ background: trip.segments[0].customColor || ModeThemes[trip.segments[0].transportMode]?.color || '#007bff' }}></div>
                    <div 
                      className="timeline-plus" 
                      title="Add Waypoint Here"
@@ -598,7 +597,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                const isLastSegment = segIndex === trip.segments.length - 1;
                const renderedWaypoints = isLastSegment ? seg.waypoints : seg.waypoints.slice(0, -1);
                
-               const currSegColor = ModeThemes[seg.transportMode]?.color || '#007bff';
+               const currSegColor = seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff';
 
                return renderedWaypoints.map((wp, wpIndex) => {
                  const isFirstInSeg = wpIndex === 0;
@@ -606,7 +605,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                  const isLastInSegRender = wpIndex === renderedWaypoints.length - 1;
                  const isLastOfTrip = isLastSegment && isLastInSegRender;
 
-                 const prevSegColor = segIndex > 0 ? (ModeThemes[trip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
+                 const prevSegColor = segIndex > 0 ? (trip.segments[segIndex - 1].customColor || ModeThemes[trip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
                  const topLineColor = (isFirstInSeg && segIndex > 0) ? prevSegColor : currSegColor;
                  const bottomLineColor = currSegColor;
 
@@ -638,7 +637,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                          break;
                        }
                      }
-                     targetDotColor = ModeThemes[trip.segments[foundSegIndex]?.transportMode]?.color || currSegColor;
+                     targetDotColor = trip.segments[foundSegIndex]?.customColor || ModeThemes[trip.segments[foundSegIndex]?.transportMode]?.color || currSegColor;
                    } else {
                      const { originalGlobalIndex, currentGlobalIndex } = dragRender;
                      const isMovingUp = currentGlobalIndex < originalGlobalIndex;
@@ -722,7 +721,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                    onUpdateTrip({ ...trip, segments: newSegments });
                                  }}
                                >
-                                 {getModeIcon(seg.transportMode, 18)}
+                               {seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18)}
                                </button>
                                <button className="iconButton small" title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
                                  <MaterialIcon name="info" size={18} />
@@ -749,11 +748,16 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                          <div className="timeline-line bottom" style={{ background: bottomLineColor }}></div>
                          <div className="timeline-dot" style={{ 
                            ...dotTransformStyle,
-                           background: isDragged ? targetDotColor : (wp.importance === 'hidden' ? 'white' : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor)), 
-                           border: isDragged ? `3px solid white` : (wp.importance === 'hidden' ? `3px solid ${currSegColor}` : 'none'),
+                           width: wp.icon ? '24px' : undefined,
+                           height: wp.icon ? '24px' : undefined,
+                           background: isDragged ? targetDotColor : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor), 
+                           border: isDragged ? `3px solid white` : 'none',
                            boxShadow: isDragged ? `0 0 0 2px ${targetDotColor}` : 'none',
-                           cursor: isDragged ? 'grabbing' : 'grab'
-                         }}></div>
+                           cursor: isDragged ? 'grabbing' : 'grab',
+                           color: 'white'
+                         }}>
+                           {wp.icon && <MaterialIcon name={wp.icon} size={16} />}
+                         </div>
                        </td>
                        <td className="waypoint-col">
                          <div className="waypoint-card" style={{ ...transformStyle, cursor: isDragged ? 'grabbing' : undefined }}>
@@ -818,13 +822,6 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                              )}
                            </div>
                            <div className="waypoint-tools">
-                             <button className="iconButton small" title={wp.importance === 'hidden' ? 'Make Normal' : 'Make Hidden'} onClick={() => {
-                               const newImportance: 'normal' | 'hidden' = wp.importance === 'hidden' ? 'normal' : 'hidden';
-                               const newSegments = trip.segments.map(s => ({ ...s, waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, importance: newImportance } : w) }));
-                               onUpdateTrip({ ...trip, segments: newSegments });
-                             }}>
-                               <MaterialIcon name={wp.importance === 'hidden' ? 'visibility_off' : 'visibility'} size={16} />
-                             </button>
                              <button className="iconButton small" title="Jump to point" onClick={() => onJumpToWaypoint(wp.id)}><MaterialIcon name="my_location" size={16} /></button>
                              <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || wpIndex === seg.waypoints.length - 1} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
                              <button className="iconButton small" title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>

@@ -17,10 +17,10 @@ export const mockTrips: Trip[] = [
         routingProfile: 'car',
         source: 'router',
         waypoints: [
-          { id: 'wp-1', coordinates: [11.3933, 47.2692], importance: 'normal', name: 'Innsbruck Hbf' },
-          { id: 'wp-1a', coordinates: [11.4100, 47.2550], importance: 'hidden', name: 'Amras Waypoint' },
-          { id: 'wp-1b', coordinates: [11.4050, 47.2300], importance: 'normal', name: 'Igls Village' },
-          { id: 'wp-2', coordinates: [11.3945, 47.1950], importance: 'normal', name: 'Patscherkofelbahn Bottom' }
+          { id: 'wp-1', coordinates: [11.3933, 47.2692], name: 'Innsbruck Hbf', icon: 'train' },
+          { id: 'wp-1a', coordinates: [11.4100, 47.2550], name: 'Amras Waypoint' },
+          { id: 'wp-1b', coordinates: [11.4050, 47.2300], name: 'Igls Village', icon: 'house' },
+          { id: 'wp-2', coordinates: [11.3945, 47.1950], name: 'Patscherkofelbahn Bottom' }
         ],
         geometry: {
           type: 'LineString',
@@ -43,9 +43,9 @@ export const mockTrips: Trip[] = [
         routingProfile: 'foot',
         source: 'router',
         waypoints: [
-          { id: 'wp-2', coordinates: [11.3945, 47.1950], importance: 'normal', name: 'Patscherkofelbahn Bottom' },
-          { id: 'wp-2a', coordinates: [11.4000, 47.1850], importance: 'hidden', name: 'Patscher Alm Connector' },
-          { id: 'wp-3', coordinates: [11.4116, 47.1706], importance: 'normal', name: 'Patscherkofel Summit' }
+          { id: 'wp-2', coordinates: [11.3945, 47.1950], name: 'Patscherkofelbahn Bottom' },
+          { id: 'wp-2a', coordinates: [11.4000, 47.1850], name: 'Patscher Alm Connector' },
+          { id: 'wp-3', coordinates: [11.4116, 47.1706], name: 'Patscherkofel Summit', icon: 'landscape' }
         ],
         geometry: {
           type: 'LineString',
@@ -76,8 +76,8 @@ export const mockTrips: Trip[] = [
         routingProfile: 'straight',
         source: 'router',
         waypoints: [
-          { id: 'wp-m1', coordinates: [11.5583, 48.1408], importance: 'normal', name: 'Munich Hbf' },
-          { id: 'wp-m2', coordinates: [11.5912, 48.1500], importance: 'normal', name: 'Lehel Station' }
+          { id: 'wp-m1', coordinates: [11.5583, 48.1408], name: 'Munich Hbf', icon: 'directions_subway' },
+          { id: 'wp-m2', coordinates: [11.5912, 48.1500], name: 'Lehel Station' }
         ],
         geometry: {
           type: 'LineString',
@@ -98,9 +98,9 @@ export const mockTrips: Trip[] = [
         routingProfile: 'foot',
         source: 'router',
         waypoints: [
-          { id: 'wp-m2', coordinates: [11.5912, 48.1500], importance: 'normal', name: 'Lehel Station' },
-          { id: 'wp-m3', coordinates: [11.5950, 48.1600], importance: 'hidden', name: 'Monopteros' },
-          { id: 'wp-m4', coordinates: [11.6050, 48.1750], importance: 'normal', name: 'Kleinhesseloher See' }
+          { id: 'wp-m2', coordinates: [11.5912, 48.1500], name: 'Lehel Station' },
+          { id: 'wp-m3', coordinates: [11.5950, 48.1600], name: 'Monopteros', icon: 'account_balance' },
+          { id: 'wp-m4', coordinates: [11.6050, 48.1750], name: 'Kleinhesseloher See', icon: 'water' }
         ],
         geometry: {
           type: 'LineString',
@@ -132,9 +132,9 @@ export const mockTrips: Trip[] = [
         routingProfile: 'flight',
         source: 'router',
         waypoints: [
-          { id: 'wp-muc', coordinates: [11.7861, 48.3538], importance: 'normal', name: 'Munich Airport (MUC)' },
-          { id: 'wp-inn', coordinates: [11.3440, 47.2602], importance: 'normal', name: 'Innsbruck Airport (INN)' },
-          { id: 'wp-bgy', coordinates: [9.7042, 45.6739], importance: 'normal', name: 'Milan Bergamo (BGY)' }
+          { id: 'wp-muc', coordinates: [11.7861, 48.3538], name: 'Munich Airport (MUC)', icon: 'flight_takeoff' },
+          { id: 'wp-inn', coordinates: [11.3440, 47.2602], name: 'Innsbruck Airport (INN)', icon: 'flight' },
+          { id: 'wp-bgy', coordinates: [9.7042, 45.6739], name: 'Milan Bergamo (BGY)', icon: 'flight_land' }
         ],
         geometry: {
           type: 'LineString',
@@ -152,8 +152,8 @@ export const mockTrips: Trip[] = [
         routingProfile: 'car',
         source: 'router',
         waypoints: [
-          { id: 'wp-bgy-2', coordinates: [9.7042, 45.6739], importance: 'normal', name: 'Milan Bergamo (BGY)' },
-          { id: 'wp-verona', coordinates: [10.9916, 45.4384], importance: 'normal', name: 'Verona' }
+          { id: 'wp-bgy-2', coordinates: [9.7042, 45.6739], name: 'Milan Bergamo (BGY)' },
+          { id: 'wp-verona', coordinates: [10.9916, 45.4384], name: 'Verona', icon: 'location_city' }
         ],
         geometry: {
           type: 'LineString',

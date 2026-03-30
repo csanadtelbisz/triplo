@@ -71,7 +71,7 @@ export function getTripDistanceSummary(trip: Trip) {
     let segDist = 0;
     
     if (seg.routingService === 'gpx' && seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2 && seg.waypoints.length >= 2) {
-        const line = turf.feature(seg.geometry) as turf.Feature<turf.LineString>;
+        const line = turf.feature(seg.geometry) as any;
         const wpDistances = seg.waypoints.map(wp => {
             if (wp.coordinates && wp.coordinates.length >= 2) {
                 const pt = turf.point(wp.coordinates as [number, number]);
@@ -109,7 +109,7 @@ export function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
   let hasElevation = false;
 
   if (seg.routingService === 'gpx' && seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2 && seg.waypoints.length >= 2) {
-      const line = turf.feature(seg.geometry) as turf.Feature<turf.LineString>;
+      const line = turf.feature(seg.geometry) as any;
       const wpDistances = seg.waypoints.map(wp => {
           if (wp.coordinates && wp.coordinates.length >= 2) {
               const pt = turf.point(wp.coordinates as [number, number]);

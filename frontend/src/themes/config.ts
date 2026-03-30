@@ -10,4 +10,5 @@ export const ModeThemes: Record<TransportMode, { color: string }> = {
   rail: { color: '#e74c3c' }, // red
   ferry: { color: '#00cec9' }, // teal
   waterway: { color: '#0984e3' }, // dark teal
+  other: { color: '#95a5a6' }, // gray
 };

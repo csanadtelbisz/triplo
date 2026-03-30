@@ -42,7 +42,8 @@ class RoutingServiceManager {
       flight: { serviceName: this.flight.name, profile: 'flight' },
       rail: { serviceName: this.rail.name, profile: 'rail' },
       ferry: { serviceName: this.straightLine.name, profile: 'straight' },
-      waterway: { serviceName: this.straightLine.name, profile: 'straight' }
+      waterway: { serviceName: this.straightLine.name, profile: 'straight' },
+      other: { serviceName: this.straightLine.name, profile: 'straight' }
     };
 
   constructor() {}

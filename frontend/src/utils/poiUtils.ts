@@ -1,4 +1,22 @@
-﻿export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string => {
+﻿export const SUGGESTED_WAYPOINT_ICONS = [
+  'landscape',
+  'water',
+  'beach_access',
+  'location_city',
+  'house',
+  'hotel',
+  'camping',
+  'bus_railway',
+  'flight_takeoff',
+  'flight_land',
+  'connecting_airports',
+  'church',
+  'mosque',
+  'museum',
+  'castle',
+];
+
+export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string => {
   const emojiMap: Record<string, string> = {
     peak: '🔺',
     water: '💧',

@@ -7,7 +7,7 @@ import '../styles/Map.css';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { ModeThemes } from '../themes/config';
 import * as turf from '@turf/turf';
-import { MAP_STYLES, POI_LAYERS } from '../config/mapStyles';
+import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD } from '../config/mapStyles';
 import { getPOIEmoji } from '../utils/poiUtils';
 
 
@@ -83,7 +83,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markersRef = useRef<Marker[]>([]);
+  const markersRef = useRef<{ marker: Marker, wp: any, pref: number }[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
   const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
@@ -676,7 +676,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
           const source = mapRef.current.getSource('route-source') as GeoJSONSource;
 
         // Cleanup old markers
-        markersRef.current.forEach(m => m.remove());
+        markersRef.current.forEach(m => m.marker.remove());
         markersRef.current = [];
 
       if (!selectedTrip) {
@@ -685,7 +685,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
            trip.segments.forEach(seg => {
              allFeatures.push({
                type: 'Feature',
-               properties: { segmentId: seg.id, mode: seg.transportMode, color: ModeThemes[seg.transportMode]?.color || '#007bff' },
+               properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
                geometry: getRenderGeometry(seg) as any
              });
            });
@@ -697,7 +697,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
       } else {
         const features: GeoJSON.Feature[] = selectedTrip.segments.map(seg => ({
           type: 'Feature',
-          properties: { segmentId: seg.id, mode: seg.transportMode, color: ModeThemes[seg.transportMode]?.color || '#007bff' },
+          properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
           geometry: getRenderGeometry(seg) as any
         }));
         source.setData({
@@ -707,9 +707,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
         // Add markers
         selectedTrip.segments.forEach((seg, segIndex) => {
-          const currSegColor = ModeThemes[seg.transportMode]?.color || '#007bff';
-          seg.waypoints.forEach((wp, wpIndex) => {          if (!wp.coordinates || wp.coordinates.length < 2) return;
-                      const isLastInSeg = wpIndex === seg.waypoints.length - 1;
+          const currSegColor = seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff';
+          seg.waypoints.forEach((wp, wpIndex) => {
+            if (!wp.coordinates || wp.coordinates.length < 2) return;
+            const isLastInSeg = wpIndex === seg.waypoints.length - 1;
             const isLastSegment = segIndex === selectedTrip.segments.length - 1;
 
             if (isLastInSeg && !isLastSegment) {
@@ -717,34 +718,50 @@ export const Map = forwardRef<MapRef, MapProps>(({
             }
 
             const isBordering = wpIndex === 0 && segIndex > 0;
+            let pref = 3;
+            if (wpIndex === 0 && segIndex === 0) pref = 0;
+            else if (isLastSegment && wpIndex === seg.waypoints.length - 1) pref = 0;
+            else if (wp.icon) pref = 1;
+            else if (isBordering) pref = 2;
 
             const el = document.createElement('div');
-            el.style.width = wp.importance === 'hidden' ? '10px' : '14px';
-            el.style.height = wp.importance === 'hidden' ? '10px' : '14px';
-            el.style.borderRadius = '50%';
             
-            const prevSegColor = isBordering ? (ModeThemes[selectedTrip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
-            const backgroundStyle = isBordering 
-              ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)`
-              : currSegColor;
+            if (wp.icon) {
+              // Classic map pin with Material Icon
+              el.style.width = '32px';
+              el.style.height = '32px';
+              el.className = 'custom-map-marker pin-marker';
+              el.innerHTML = `
+                <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg" style="display: block; overflow: visible;">
+                  <path d="M12 4C8.13 4 5 7.13 5 11c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${currSegColor}" stroke="white" stroke-width="1.5"/>
+                  <circle cx="12" cy="11" r="6.5" fill="white"/>
+                </svg>
+                <span class="material-symbols-rounded" style="position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); font-size: 13px; color: ${currSegColor}; pointer-events: none;">${wp.icon}</span>
+              `;
+              el.style.display = 'block';
+              el.style.cursor = 'pointer';
+              el.style.position = 'absolute';
+              // add a drop shadow to the SVG path via CSS
+              el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))';
+            } else {
+              el.className = 'custom-map-marker dot-marker';
+              el.style.width = '14px';
+              el.style.height = '14px';
+              el.style.borderRadius = '50%';
               
-            el.style.background = backgroundStyle;
-            el.style.border = wp.importance === 'hidden' ? 'none' : '2px solid white';
-            el.style.boxShadow = wp.importance === 'hidden' ? 'none' : '0 1px 3px rgba(0,0,0,0.3)';
-            el.style.display = 'flex';
-            el.style.alignItems = 'center';
-            el.style.justifyContent = 'center';
-            el.style.cursor = 'pointer';
-
-            if (wp.importance === 'hidden') {
-               const inner = document.createElement('div');
-               inner.style.width = wp.importance === 'hidden' ? '6px' : '8px';
-               inner.style.height = wp.importance === 'hidden' ? '6px' : '8px';
-               inner.style.background = 'white';
-               inner.style.borderRadius = '50%';
-               el.appendChild(inner);
+              const prevSegColor = isBordering ? (selectedTrip.segments[segIndex - 1].customColor || ModeThemes[selectedTrip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
+              const backgroundStyle = isBordering 
+                ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)`
+                : currSegColor;
+                
+              el.style.background = backgroundStyle;
+              el.style.border = '2px solid white';
+              el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+              el.style.display = 'flex';
+              el.style.alignItems = 'center';
+              el.style.justifyContent = 'center';
+              el.style.cursor = 'pointer';
             }
-            
             
             el.addEventListener('mouseenter', (e) => {
               isHoveringWaypointRef.current = true;
@@ -765,7 +782,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
             });
 
 
-            const marker = new Marker({ element: el, draggable: true })
+            const marker = new Marker({ element: el, draggable: true, anchor: wp.icon ? 'bottom' : 'center' })
               .setLngLat(wp.coordinates as [number, number])
               .addTo(mapRef.current!);
 
@@ -794,14 +811,63 @@ export const Map = forwardRef<MapRef, MapProps>(({
               }
             });
             
-            markersRef.current.push(marker);
+            markersRef.current.push({ marker, wp, pref });
           });
         });
+
+        // Trigger an initial declutter
+        if (mapRef.current) {
+          mapRef.current.fire('move');
+        }
       }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId]);
+
+  // Decluttering map markers on zoom/pan
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
+    
+    const updateVisibility = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      
+      const markers = markersRef.current;
+      const sorted = [...markers].sort((a, b) => a.pref - b.pref);
+      const visiblePositions: { x: number, y: number }[] = [];
+      
+      for (const m of sorted) {
+        const pos = map.project(m.marker.getLngLat());
+        
+        let tooClose = false;
+        for (const v of visiblePositions) {
+          const dx = pos.x - v.x;
+          const dy = pos.y - v.y;
+          if (Math.sqrt(dx * dx + dy * dy) < MARKER_HIDE_THRESHOLD) {
+            tooClose = true;
+            break;
+          }
+        }
+        
+        if (tooClose) {
+          m.marker.getElement().style.display = 'none';
+        } else {
+          // If we had 'flex' set before, use it
+          m.marker.getElement().style.display = m.marker.getElement().classList.contains('pin-marker') ? 'block' : 'flex';
+          visiblePositions.push(pos);
+        }
+      }
+    };
+    
+    mapRef.current.on('move', updateVisibility);
+    
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.off('move', updateVisibility);
+      }
+    };
+  }, [mapLoaded]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;

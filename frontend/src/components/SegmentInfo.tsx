@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
@@ -9,6 +9,7 @@ import { ConfirmDialog } from './Dialog';
 interface SegmentInfoProps {
   segmentId: string;
   trip: Trip;
+  allTrips?: Trip[];
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
   hoveredCoordinate?: { lon: number; lat: number; ele?: number } | null;
@@ -16,9 +17,17 @@ interface SegmentInfoProps {
   onZoomToSegment?: (segment: Segment) => void;
 }
 
-export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
+export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
+  const [copyColorOffer, setCopyColorOffer] = useState<{ color: string, icon: string } | null>(null);
+  
+  const [customIconInput, setCustomIconInput] = useState<string>('');
+  
+  useEffect(() => {
+    setCustomIconInput(seg?.customIcon || '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segmentId, seg?.customIcon]);
   
   const handleImportGPX = () => {
     if (!seg) return;
@@ -94,7 +103,6 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCo
         updatedSeg.waypoints.push({
           id: 'wp-' + Date.now().toString(),
           coordinates: lastCoord,
-          importance: 'normal'
         });
       } else if (updatedSeg.waypoints.length > 1) {
         updatedSeg.waypoints[0].coordinates = firstCoord;
@@ -186,7 +194,7 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCo
                       }
                     }}
                   >
-                    {getModeIcon(m, 24)}
+                    {m === 'other' && isSelected && seg.customIcon ? <MaterialIcon name={seg.customIcon} size={24} /> : getModeIcon(m, 24)}
                   </button>
                 );
               })}
@@ -234,6 +242,117 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCo
            )}
         </div>
 
+        <div className="form-row">
+          <div className="form-col" style={{ flex: 1 }}>
+             <label className="form-label">Color</label>
+             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+               <input 
+                 type="color" 
+                 value={seg.customColor || ModeThemes[seg.transportMode]?.color || '#000000'} 
+                 onChange={(e) => {
+                   const newSegments = trip.segments.map(s => 
+                     s.id === segmentId ? { ...s, customColor: e.target.value } : s
+                   );
+                   onUpdateTrip({ ...trip, segments: newSegments });
+                 }}
+                 style={{ width: '36px', height: '36px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+               />
+               <button 
+                 className="iconButton" 
+                 title="Reset Color" 
+                 onClick={() => {
+                   const newSegments = trip.segments.map(s => {
+                     if (s.id === segmentId) {
+                       const { customColor, ...rest } = s;
+                       return rest;
+                     }
+                     return s;
+                   });
+                   onUpdateTrip({ ...trip, segments: newSegments });
+                 }}
+                 style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9' }}
+               >
+                 <MaterialIcon name="restart_alt" size={20} />
+               </button>
+             </div>
+          </div>
+
+          {seg.transportMode === 'other' && (
+            <div className="form-col" style={{ flex: 2 }}>
+               <label className="form-label">Icon</label>
+               <div style={{ display: 'flex', gap: '8px' }}>
+                 <input 
+                   type="text" 
+                   placeholder="Custom icon name..." 
+                   className="form-input" 
+                   value={customIconInput}
+                   onChange={(e) => {
+                     setCustomIconInput(e.target.value);
+                     if (e.target.value === '' && !seg?.customIcon) return;
+                     const newSegments = trip.segments.map(s => 
+                       s.id === segmentId ? { ...s, customIcon: e.target.value || undefined } : s
+                     );
+                     onUpdateTrip({ ...trip, segments: newSegments });
+                   }}
+                   onBlur={() => {
+                     const icon = customIconInput.trim();
+                     if (!icon) return;
+                     
+                     let foundColor = trip.segments.find(s => s.id !== segmentId && s.transportMode === 'other' && s.customIcon === icon && s.customColor)?.customColor;
+                     if (!foundColor && allTrips) {
+                       for (const t of allTrips) {
+                         const match = t.segments.find(s => s.transportMode === 'other' && s.customIcon === icon && s.customColor);
+                         if (match) {
+                           foundColor = match.customColor;
+                           break;
+                         }
+                       }
+                     }
+                     if (foundColor && foundColor !== seg?.customColor) {
+                       setCopyColorOffer({ color: foundColor, icon });
+                     }
+                   }}
+                   onFocus={(e) => e.target.select()}
+                   onKeyDown={(e) => {
+                     if (e.key === 'Enter') {
+                       e.currentTarget.blur();
+                     }
+                   }}
+                 />
+                 <a 
+                   href="https://fonts.google.com/icons?icon.style=Rounded" 
+                   target="_blank" 
+                   rel="noreferrer"
+                   className="iconButton" 
+                   title="Search Icons" 
+                   style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit', textDecoration: 'none' }}
+                 >
+                   <MaterialIcon name="search" size={20} />
+                 </a>
+                 <button 
+                   className="iconButton" 
+                   title="Clear Icon" 
+                   onClick={() => {
+                     setCustomIconInput('');
+                     if (!seg?.customIcon) return;
+                     const newSegments = trip.segments.map(s => {
+                       if (s.id === segmentId) {
+                         const { customIcon, ...rest } = s;
+                         return rest;
+                       }
+                       return s;
+                     });
+                     onUpdateTrip({ ...trip, segments: newSegments });
+                   }}
+                   style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9' }}
+                 >
+                   <MaterialIcon name="close" size={20} />
+                 </button>
+               </div>
+            </div>
+          )}
+        </div>
+
         <div className="trip-summary" style={{ marginTop: 16 }}>
            <h3 className="trip-summary-title">
              <MaterialIcon name="analytics" size={18} /> Segment Summary
@@ -274,6 +393,30 @@ export function SegmentInfo({ segmentId, trip, onGoBack, onUpdateTrip, hoveredCo
         cancelLabel="No, keep them"
         onConfirm={() => handleConfirmGPXWaypoints(true)}
         onCancel={() => handleConfirmGPXWaypoints(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={copyColorOffer !== null}
+        title="Copy Color?"
+        message={
+          <>
+            Found another segment with the custom icon "{copyColorOffer?.icon}" and a custom color
+            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: copyColorOffer?.color, marginLeft: '6px', marginRight: '2px', verticalAlign: 'middle', border: '1px solid #ccc' }}></span>
+            . Do you want to copy its color?
+          </>
+        }
+        confirmLabel="Yes, copy color"
+        cancelLabel="No, thanks"
+        onConfirm={() => {
+          if (copyColorOffer) {
+            const newSegments = trip.segments.map(s =>
+              s.id === segmentId ? { ...s, customColor: copyColorOffer.color } : s
+            );
+            onUpdateTrip({ ...trip, segments: newSegments });
+            setCopyColorOffer(null);
+          }
+        }}
+        onCancel={() => setCopyColorOffer(null)}
       />
     </>
   );

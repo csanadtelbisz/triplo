@@ -184,7 +184,6 @@ export default function App() {
             {
               id: newWpId,
               coordinates: [] as any,
-              importance: 'normal',
               name: '',
             }
           ]
@@ -347,6 +346,7 @@ export default function App() {
           <SegmentInfo 
             segmentId={selectedSegmentId} 
             trip={selectedTrip} 
+            allTrips={trips}
             onGoBack={handleGoBackSegment} 
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}

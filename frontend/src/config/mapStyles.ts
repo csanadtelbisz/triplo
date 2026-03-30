@@ -1,5 +1,7 @@
 const mapyApiKey = import.meta.env.VITE_MAPY_API_KEY || '';
 
+export const MARKER_HIDE_THRESHOLD = 40;
+
 // Define our target vector tile POI layers based on zoomed tiers
 export const POI_LAYERS: any[] = [
   // Tier 1: Zoom >= 10: major peaks, passes, lakes (handled via generic poi classes where applicable in openmaptiles)

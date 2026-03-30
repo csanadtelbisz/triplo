@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
-import { getPOIEmoji } from '../utils/poiUtils';
+import { getPOIEmoji, SUGGESTED_WAYPOINT_ICONS } from '../utils/poiUtils';
 
 interface WaypointInfoProps {
   waypointId: string;
@@ -15,8 +16,23 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
     const found = seg.waypoints.find(w => w.id === waypointId);
     if (found) wp = found;
   });
-  
+
+  const [customIconInput, setCustomIconInput] = useState<string>('');
+
+  useEffect(() => {
+    const isCustomIcon = wp?.icon && !SUGGESTED_WAYPOINT_ICONS.includes(wp.icon);
+    setCustomIconInput(isCustomIcon && wp?.icon ? wp.icon : '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waypointId, wp?.icon]);
+
   if (!wp) return null;
+
+  const displayIcons = [...SUGGESTED_WAYPOINT_ICONS];
+  if (customIconInput && !SUGGESTED_WAYPOINT_ICONS.includes(customIconInput)) {
+    displayIcons.push(customIconInput);
+  } else if (!customIconInput && wp?.icon && !SUGGESTED_WAYPOINT_ICONS.includes(wp.icon)) {
+    displayIcons.push(wp.icon);
+  }
 
   return (
     <>
@@ -76,23 +92,86 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
              }}
            />
         </div>
-        <div className="form-group visibility-switch-row">
-           <label className="form-label" style={{ marginBottom: 0 }}>Visibility</label>
-           <div 
-             className={`visibility-switch ${wp.importance === 'normal' ? 'normal' : 'hidden'}`}
-             style={{ cursor: 'pointer' }}
-             onClick={() => {
-               const newImportance: 'normal' | 'hidden' = wp?.importance === 'hidden' ? 'normal' : 'hidden';
-               const newSegments = trip.segments.map(s => ({
-                 ...s,
-                 waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, importance: newImportance } : w)
-               }));
-               onUpdateTrip({ ...trip, segments: newSegments });
-             }}
-           >
-             <div className={`visibility-knob ${wp.importance === 'normal' ? 'normal' : 'hidden'}`} />
+        <div className="form-group">
+           <label className="form-label">Icon</label>
+           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+             {displayIcons.map((iconName, iconIndex) => (
+               <div 
+                 key={`${iconName}-${iconIndex}`}
+                 onClick={() => {
+                   const newSegments = trip.segments.map(s => ({
+                     ...s,
+                     waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, icon: wp?.icon === iconName ? undefined : iconName } : w)
+                   }));
+                   onUpdateTrip({ ...trip, segments: newSegments });
+                 }}
+                 style={{ 
+                   width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                   cursor: 'pointer', borderRadius: '4px', 
+                   border: wp?.icon === iconName ? '2px solid #007bff' : '1px solid #ccc',
+                   background: wp?.icon === iconName ? '#e6f2ff' : '#f9f9f9'
+                 }}
+                 title={iconName}
+               >
+                 <MaterialIcon name={iconName} size={20} />
+               </div>
+             ))}
            </div>
-           <span style={{ fontSize: '0.8rem', color: '#333', fontWeight: 'bold' }}>{wp.importance === 'normal' ? 'Visible' : 'Hidden'}</span>
+           <div style={{ display: 'flex', gap: '8px' }}>
+             <input 
+               type="text" 
+               placeholder="Custom material icon name..." 
+               className="form-input" 
+               value={customIconInput}
+               onChange={(e) => {
+                 setCustomIconInput(e.target.value);
+                 if (e.target.value === '' && !wp?.icon) return;
+                 const newSegments = trip.segments.map(s => ({
+                   ...s,
+                   waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, icon: e.target.value || undefined } : w)
+                 }));
+                 onUpdateTrip({ ...trip, segments: newSegments });
+               }}
+               onFocus={(e) => e.target.select()}
+               onKeyDown={(e) => {
+                 if (e.key === 'Enter') {
+                   e.currentTarget.blur();
+                 }
+               }}
+             />
+             <a 
+               href="https://fonts.google.com/icons?icon.style=Rounded" 
+               target="_blank" 
+               rel="noreferrer"
+               className="iconButton" 
+               title="Search Icons" 
+               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit', textDecoration: 'none' }}
+             >
+               <MaterialIcon name="search" size={20} />
+             </a>
+             <button 
+               className="iconButton" 
+               title="Clear Icon" 
+               onClick={() => {
+                 setCustomIconInput('');
+                 if (!wp?.icon) return;
+                 const newSegments = trip.segments.map(s => ({
+                   ...s,
+                   waypoints: s.waypoints.map(w => {
+                     if (w.id === waypointId) {
+                       const { icon, ...rest } = w;
+                       return rest;
+                     }
+                     return w;
+                   })
+                 }));
+                 onUpdateTrip({ ...trip, segments: newSegments });
+               }}
+               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9' }}
+             >
+               <MaterialIcon name="close" size={20} />
+             </button>
+           </div>
         </div>
         <div className="form-row align-end">
            <div className="form-col">

@@ -2,7 +2,7 @@
 import type { TransportMode } from '../../../shared/types';
 
 export const MaterialIcon = ({ name, size = 20, style, className }: { name: string, size?: number, style?: React.CSSProperties, className?: string }) => (
-  <span className={`material-symbols-rounded ${className || ''}`.trim()} style={{ fontSize: size, userSelect: 'none', ...style }}>{name}</span>
+  <span className={`material-symbols-rounded ${className || ''}`.trim()} style={{ fontSize: size, userSelect: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: size, display: 'inline-block', verticalAlign: 'middle', ...style }}>{name}</span>
 );
 
 export function getModeIcon(mode: TransportMode, size: number = 18) {

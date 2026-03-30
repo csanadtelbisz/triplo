@@ -17,7 +17,7 @@ export class RailRouter implements IRoutingService {
   }
 
   getRoutingProfiles(mode: TransportMode): string[] {
-    if (mode === 'rail') return ['rail'];
+    if (mode === 'rail' || mode === 'other') return ['rail'];
     return [];
   }
 }
