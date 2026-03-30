@@ -5,6 +5,8 @@ import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
 import { routingManager } from '../routing/RoutingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
+import { Dialog } from './Dialog';
+import { exportTripGPX, exportTripGeoJSON, downloadFile } from '../utils/exportUtils';
 
 interface TripEditorProps {
   trip: Trip;
@@ -35,6 +37,11 @@ export function TripEditor({
   const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
   const [wpSearchResults, setWpSearchResults] = useState<any[]>([]);
   const [isWpSearching, setIsWpSearching] = useState(false);
+
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
+  const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
+  const [exportMinify, setExportMinify] = useState(false);
   
   const [dragRender, setDragRender] = useState<{
     activeId: string;
@@ -530,7 +537,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
            <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="zoom_out_map" size={20} /></button>
            <button className="iconButton" title="Save" onClick={onSave} disabled={!canSave} style={{ color: canSave ? '#007bff' : 'inherit' }}><MaterialIcon name="save" size={20} /></button>
-           <button className="iconButton" title="Export GPX"><MaterialIcon name="file_download" size={20} /></button>
+           <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>
       <div className="content">
@@ -806,13 +813,27 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                    <div key={res.place_id} style={{ padding: '8px', fontSize: '0.85rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                        onClick={() => {
+                                        onMouseDown={(e) => {
+                                            e.preventDefault(); 
                                             const newSegments = trip.segments.map(s => ({
                                               ...s,
-                                              waypoints: s.waypoints.map(w => w.id === wp.id ? { ...w, name: res.name || res.display_name.split(',')[0], coordinates: [parseFloat(res.lon), parseFloat(res.lat)] as [number, number] } : w)
+                                              waypoints: s.waypoints.map(w => w.id === wp.id ? { 
+                                                ...w, 
+                                                name: res.name || res.display_name.split(',')[0], 
+                                                coordinates: [parseFloat(res.lon), parseFloat(res.lat)] as [number, number],
+                                                poi: {
+                                                  id: res.osm_id ? `search-${res.osm_type}-${res.osm_id}` : res.place_id,
+                                                  name: res.name || res.display_name.split(',')[0],
+                                                  type: res.class,
+                                                  details: { subclass: res.type }
+                                                }
+                                              } : w)
                                             }));
                                             setWpSearchState(null);
                                             onUpdateTrip({ ...trip, segments: newSegments });
+                                            setTimeout(() => {
+                                              onJumpToWaypoint(wp.id);
+                                            }, 50);
                                         }}>
                                      <strong>{res.name || res.display_name.split(',')[0]}</strong>
                                      <div style={{ fontSize: '0.75rem', color: '#666' }}>{res.display_name}</div>
@@ -901,6 +922,77 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
            )}
          </div>
       </div>
+
+      <Dialog
+        isOpen={isExportDialogOpen}
+        title="Export Trip"
+        onClose={() => setIsExportDialogOpen(false)}
+        actions={
+          <>
+            <button className="dialog-btn dialog-btn-cancel" onClick={() => setIsExportDialogOpen(false)}>Cancel</button>
+            <button className="dialog-btn dialog-btn-primary" onClick={() => {
+              const content = exportFormat === 'gpx' 
+                ? exportTripGPX(trip, exportIncludeMetadata) 
+                : exportTripGeoJSON(trip, exportIncludeMetadata, exportMinify);
+              const filename = `${trip.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'trip'}.${exportFormat}`;
+              const mimeType = exportFormat === 'gpx' ? 'application/gpx+xml' : 'application/geo+json';
+              downloadFile(content, filename, mimeType);
+              setIsExportDialogOpen(false);
+            }}>Export</button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Format</label>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="exportFormat" 
+                  value="gpx" 
+                  checked={exportFormat === 'gpx'} 
+                  onChange={() => setExportFormat('gpx')} 
+                /> GPX
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input 
+                  type="radio" 
+                  name="exportFormat" 
+                  value="geojson" 
+                  checked={exportFormat === 'geojson'} 
+                  onChange={() => setExportFormat('geojson')} 
+                /> GeoJSON
+              </label>
+            </div>
+            {exportFormat === 'geojson' && (
+              <div style={{ marginTop: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={exportMinify} 
+                    onChange={(e) => setExportMinify(e.target.checked)} 
+                  />
+                  <span>Minify output (no pretty printing)</span>
+                </label>
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input 
+                type="checkbox" 
+                checked={exportIncludeMetadata} 
+                onChange={(e) => setExportIncludeMetadata(e.target.checked)} 
+              />
+              <span>Include Application Metadata</span>
+            </label>
+            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '4px', marginLeft: '24px' }}>
+              Includes Triplo-specific data like colors, custom icons, and other rich information.
+            </div>
+          </div>
+        </div>
+      </Dialog>
     </>
   );
 }

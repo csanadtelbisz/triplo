@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { ModeThemes } from '../themes/config';
+import { exportGPX, downloadFile } from '../utils/exportUtils';
 import { routingManager, route } from '../routing/RoutingService';
 import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
@@ -129,7 +130,12 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
           <button className="iconButton" onClick={handleImportGPX} title="Import GPX">
             <MaterialIcon name="file_upload" size={20} />
           </button>
-          <button className="iconButton" onClick={() => {}} title="Export GPX (Coming Soon)">
+          <button className="iconButton" onClick={() => {
+            if (seg) {
+              const gpx = exportGPX(seg, trip, true);
+              downloadFile(gpx, `segment_${seg.id.slice(0, 8)}.gpx`, 'application/gpx+xml');
+            }
+          }} title="Export GPX">
             <MaterialIcon name="file_download" size={20} />
           </button>
         </div>
@@ -239,6 +245,29 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
              <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
                This routing service is currently unavailable. Routes will default to straight lines.
              </div>
+           )}
+           {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && seg.routingService === 'Rail Router' && (
+             <button
+               onClick={() => {
+                 const pointsParams = seg.waypoints.map(wp => `point=${wp.coordinates[1]}%2C${wp.coordinates[0]}`).join('&');
+                 window.open(`https://routing.openrailrouting.org/maps/?${pointsParams}&locale=en-GB&elevation=false&profile=all_tracks&use_miles=false&layer=OSM%20Carto`, '_blank');
+               }}
+               style={{
+                 marginTop: '8px',
+                 padding: '6px 12px',
+                 backgroundColor: '#f0f0f0',
+                 border: '1px solid #ccc',
+                 borderRadius: '4px',
+                 cursor: 'pointer',
+                 fontSize: '0.85rem',
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: '6px'
+               }}
+               title="Open route in openrailrouting.org"
+             >
+               <MaterialIcon name="open_in_new" size={16} /> Open in openrailrouting.org
+             </button>
            )}
         </div>
 
