@@ -1,6 +1,9 @@
 // Mock client for Trip data operations
 import type { Trip } from '../../../shared/types';
-import { mockTrips } from './mockData';
+import { mockTrips as defaultMockTrips } from './mockData';
+
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const mockTrips: Trip[] = isLocalhost ? [...defaultMockTrips] : [];
 
 export const TripAPI = {
   getTrips: async (): Promise<Trip[]> => {
