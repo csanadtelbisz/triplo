@@ -37,6 +37,7 @@ export interface Segment {
   name?: string;
   customColor?: string;
   customIcon?: string;
+  isHidden?: boolean;
   distanceStats?: {
     totalDistance: number;
     hasElevation: boolean;

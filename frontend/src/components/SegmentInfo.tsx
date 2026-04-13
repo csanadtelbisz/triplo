@@ -126,8 +126,19 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 className="toolbar-title">Segment Info</h2>
-        <div className="toolbar-actions">
-          <button className="iconButton" onClick={handleImportGPX} title="Import GPX">
+        <div className="toolbar-actions">            <button
+              className="iconButton"
+              onClick={() => {
+                const newSegments = trip.segments.map(s =>
+                  s.id === segmentId ? { ...s, isHidden: !s.isHidden } : s
+                );
+                onUpdateTrip({ ...trip, segments: newSegments });
+              }}
+              title={seg.isHidden ? "Segment is hidden on map" : "Segment is visible"}
+              style={{ color: seg.isHidden ? '#999' : 'inherit' }}
+            >
+              <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={20} />
+            </button>          <button className="iconButton" onClick={handleImportGPX} title="Import GPX">
             <MaterialIcon name="file_upload" size={20} />
           </button>
           <button className="iconButton" onClick={() => {

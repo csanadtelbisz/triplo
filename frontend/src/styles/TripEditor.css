@@ -66,15 +66,14 @@
   box-shadow: 0 0 0 2px #007bff !important;
   outline: none;
 }
-.segment-tools-row {
-  display: flex;
+.segment-tools-row,
+.segment-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 .segment-tools-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
+  margin-top: 4px;
   z-index: 2;
 }
 

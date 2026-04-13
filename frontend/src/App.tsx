@@ -622,6 +622,7 @@ export default function App() {
         hoveredCoordinate={hoveredCoordinate}
         onHoverCoordinate={setHoveredCoordinate}
         onSearchClick={() => setIsSearchOpen(true)}
+        onSelectTrip={handleSelectTrip}
       />
     </div>
 

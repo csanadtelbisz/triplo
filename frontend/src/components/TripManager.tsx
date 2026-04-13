@@ -54,7 +54,9 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
   return (
     <>
       <div className="toolbar">
-        <h1>Triplo Manager</h1>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          Triplo Manager
+        </h1>
         <div className="toolbar-actions">
            <button className="iconButton" title="Status" onClick={onOpenStatus}><MaterialIcon name="info" size={20} /></button>
            <button

@@ -737,19 +737,31 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                >
                                {seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18)}
                                </button>
+                               <button 
+                                 className="iconButton small" 
+                                 title={seg.isHidden ? "Show Segment" : "Hide Segment"} 
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   const newSegments = trip.segments.map(s => 
+                                     s.id === seg.id ? { ...s, isHidden: !s.isHidden } : s
+                                   );
+                                   onUpdateTrip({ ...trip, segments: newSegments });
+                                 }}>
+                                 <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={18} style={{ color: seg.isHidden ? '#999' : 'inherit' }} />
+                               </button>
                                <button className="iconButton small" title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
                                  <MaterialIcon name="info" size={18} />
                                </button>
                              </div>
                              <div className="segment-tools-grid">
                                <button className="iconButton small" title="Start earlier" disabled={segIndex === 0 || trip.segments[segIndex - 1].waypoints.length <= 2} onClick={() => handleStartEarlier(segIndex)}>
-                                 <MaterialIcon name="arrow_upward" size={16} />
+                                 <MaterialIcon name="arrow_upward" size={18} />
                                </button>
                                <button className="iconButton small" title="Start later" disabled={segIndex === 0 || seg.waypoints.length <= 2} onClick={() => handleStartLater(segIndex)}>
-                                 <MaterialIcon name="arrow_downward" size={16} />
+                                 <MaterialIcon name="arrow_downward" size={18} />
                                </button>
                                <button className="iconButton small" title="Delete segment" disabled={segIndex === 0} onClick={() => handleDeleteSegment(segIndex)}>
-                                 <MaterialIcon name="delete" size={16} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
+                                 <MaterialIcon name="delete" size={18} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
                                </button>
                              </div>
                            </div>

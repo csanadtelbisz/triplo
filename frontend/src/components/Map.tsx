@@ -62,6 +62,7 @@ export interface MapProps {
     hoveredCoordinate: { lon: number; lat: number; ele?: number } | null;
     onHoverCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
     onSearchClick: () => void;
+    onSelectTrip?: (trip: Trip) => void;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -79,7 +80,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     setSelectedPOI,
     hoveredCoordinate,
     onHoverCoordinate,
-    onSearchClick
+    onSearchClick,
+    onSelectTrip
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -96,11 +98,12 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [activeMapStyle, setActiveMapStyle] = useState<string>('openfreemap');
   const [showLayerSelector, setShowLayerSelector] = useState(false);
+  const [showHiddenSegments, setShowHiddenSegments] = useState(false);
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string, mode: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
 
-  const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI });
+  const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip });
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -132,15 +135,16 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [waitingWaypointId, waitingWaypointIdRef]);
 
   useEffect(() => {
-    hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI };
-  }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI]);
+    hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip };
+  }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip]);
 
   const zoomToTrip = (trip: Trip) => {
     if (!mapRef.current) return;
-    
+
     // Find waypoint and neighbors
     const allWps: { id: string, coordinates: [number, number] }[] = [];
     trip.segments.forEach(seg => {
+      if (seg.isHidden && !showHiddenSegments) return;
       seg.waypoints.forEach(wp => {
         if (wp.coordinates && wp.coordinates.length === 2) {
           if (allWps.length === 0 || allWps[allWps.length - 1].id !== wp.id) {
@@ -373,7 +377,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
           let features: any[] = [];
           let poiFeatures: any[] = [];
           try {
-            if (mapRef.current?.getLayer('route-layer') && hotkeyRefs.current.selectedTrip) {
+            if (mapRef.current?.getLayer('route-layer')) {
               features = mapRef.current.queryRenderedFeatures(e.point, { layers: ['route-layer'] }) || [];
             }
             const allFeatures = mapRef.current?.queryRenderedFeatures(e.point) || [];
@@ -385,20 +389,31 @@ export const Map = forwardRef<MapRef, MapProps>(({
             // Ignore transient map state errors during tile switching
           }
 
-          if (features.length > 0 && hotkeyRefs.current.selectedTrip) {
+          if (features.length > 0) {
             const feature = features[0];
             const segId = feature.properties.segmentId;
-            const segInfo = hotkeyRefs.current.selectedTrip.segments.find((s: any) => s.id === segId);
+            let segInfo: any;
+            let tripName = '';
+            
+            if (hotkeyRefs.current.selectedTrip) {
+              segInfo = hotkeyRefs.current.selectedTrip.segments.find((s: any) => s.id === segId);
+            } else if (hotkeyRefs.current.trips) {
+              const trip = hotkeyRefs.current.trips.find(t => t.segments.some(s => s.id === segId));
+              if (trip) {
+                tripName = trip.name;
+                segInfo = trip.segments.find(s => s.id === segId);
+              }
+            }
             
             mapRef.current!.getCanvas().style.cursor = 'pointer';
             setHoverInfo({
               x: e.originalEvent.clientX,
               y: e.originalEvent.clientY,
-              name: segInfo?.name || '',
+              name: tripName ? `${tripName} - ${segInfo?.name || ''}` : segInfo?.name || '',
               mode: feature.properties.mode
             });
             
-            if (segInfo && segInfo.geometry && segInfo.geometry.coordinates.length > 1) {
+            if (hotkeyRefs.current.selectedTrip && segInfo && segInfo.geometry && segInfo.geometry.coordinates.length > 1) {
               const line = turf.lineString(segInfo.geometry.coordinates as [number, number][]);
               const mousePoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
               const snapped = turf.nearestPointOnLine(line, mousePoint);
@@ -559,6 +574,20 @@ export const Map = forwardRef<MapRef, MapProps>(({
         mapRef.current.on('click', async (e) => {
           setContextMenu(null);
 
+          if (!hotkeyRefs.current.selectedTrip) {
+            try {
+              const routeFeatures = mapRef.current?.queryRenderedFeatures(e.point, { layers: ['route-layer'] }) || [];
+              if (routeFeatures.length > 0) {
+                const clickedSegId = routeFeatures[0].properties?.segmentId;
+                const trip = hotkeyRefs.current.trips.find(t => t.segments.some(s => s.id === clickedSegId));
+                if (trip && hotkeyRefs.current.onSelectTrip) {
+                  hotkeyRefs.current.onSelectTrip(trip);
+                }
+                return;
+              }
+            } catch (err) {}
+          }
+
           let poiCoord: [number, number] | null = null;
           let poiData: any = null;
           try {
@@ -683,6 +712,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
         const allFeatures: GeoJSON.Feature[] = [];
         trips.forEach(trip => {
            trip.segments.forEach(seg => {
+             if (seg.isHidden && !showHiddenSegments) return;
              allFeatures.push({
                type: 'Feature',
                properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
@@ -695,7 +725,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
           features: allFeatures
         });
       } else {
-        const features: GeoJSON.Feature[] = selectedTrip.segments.map(seg => ({
+        const features: GeoJSON.Feature[] = selectedTrip.segments
+          .filter(seg => !seg.isHidden || showHiddenSegments)
+          .map(seg => ({
           type: 'Feature',
           properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
           geometry: getRenderGeometry(seg) as any
@@ -707,6 +739,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
         // Add markers
         selectedTrip.segments.forEach((seg, segIndex) => {
+          if (seg.isHidden && !showHiddenSegments) return;
           const currSegColor = seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {
             if (!wp.coordinates || wp.coordinates.length < 2) return;
@@ -823,7 +856,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {
@@ -959,6 +992,15 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
 {/* Top Left Controls */}
         <div className="top-left-controls">
+          <button
+            className="map-control-button"
+            onClick={() => setShowHiddenSegments(!showHiddenSegments)}
+            title={showHiddenSegments ? "Hide invisible segments" : "Show invisible segments"}
+            style={{ color: showHiddenSegments ? '#007bff' : 'inherit' }}
+          >
+            <span className="material-symbols-rounded">{showHiddenSegments ? "visibility" : "visibility_off"}</span>
+          </button>
+
           <button
             className="map-control-button"
             onClick={onSearchClick}
