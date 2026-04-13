@@ -2,7 +2,7 @@ import type { Trip } from '../../../shared/types';
 
 export const mockTrips: Trip[] = [
   {
-    id: '123e4567-e89b-12d3-a456-426614174000',
+    id: 'alps_road_trip_hike',
     name: 'Alps Road Trip & Hike',
     description: 'A brief drive up the mountains, followed by a hike to the peak and a train back.',
     startDate: '2025-06-15T08:00:00Z',
@@ -61,7 +61,7 @@ export const mockTrips: Trip[] = [
     ]
   },
   {
-    id: '234e5678-f90c-12d3-b567-526614175111',
+    id: 'munich_city_sprint',
     name: 'Munich City Sprint',
     description: 'A quick train commute followed by a run through the English Garden.',
     startDate: '2025-08-10T09:00:00Z',

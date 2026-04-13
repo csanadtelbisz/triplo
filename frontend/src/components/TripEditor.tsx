@@ -20,7 +20,7 @@ interface TripEditorProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  onSave: () => void;
+  onSave: () => Promise<void> | void;
   canSave: boolean;
   onUpdateTrip: (newTrip: Trip) => void;
   onWaitingForCoords: (waypointId: string | null) => void;
@@ -42,6 +42,13 @@ export function TripEditor({
   const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [exportMinify, setExportMinify] = useState(false);
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const handleSaveWrapper = async () => {
+    setIsSaving(true);
+    await onSave();
+    setIsSaving(false);
+  };
   
   const [dragRender, setDragRender] = useState<{
     activeId: string;
@@ -536,7 +543,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
            <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>
            <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="zoom_out_map" size={20} /></button>
-           <button className="iconButton" title="Save" onClick={onSave} disabled={!canSave} style={{ color: canSave ? '#007bff' : 'inherit' }}><MaterialIcon name="save" size={20} /></button>
+           <button className="iconButton" title="Save" onClick={handleSaveWrapper} disabled={!canSave || isSaving} style={{ color: (canSave && !isSaving) ? '#007bff' : 'inherit' }}><MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} /></button>
            <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>

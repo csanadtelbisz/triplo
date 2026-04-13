@@ -2,15 +2,24 @@ import { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import { routingManager } from '../routing/RoutingService';
 import { MAP_STYLES } from '../config/mapStyles';
+import { persistingManager } from '../persisting/PersistingManager';
+
+import type { Trip } from '../../../shared/types';
+import { PersistingConfigDialog } from './PersistingConfigDialog';
 
 interface StatusPanelProps {
   onGoBack: () => void;
+  trips: Trip[];
+  onUpdateTrips?: (trips: Trip[]) => void;
 }
 
-export function StatusPanel({ onGoBack }: StatusPanelProps) {
+export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps) {
   const services = routingManager.getServices();
-  
+  const persistingServices = persistingManager.getServices();
+
   const [mapStatuses, setMapStatuses] = useState<Record<string, 'pending' | 'success' | 'error'>>({});
+  const [, setUpdateTick] = useState(0);
+  const [configuringService, setConfiguringService] = useState<any>(null);
 
   useEffect(() => {
     Object.entries(MAP_STYLES).forEach(([key, style]) => {
@@ -53,7 +62,60 @@ export function StatusPanel({ onGoBack }: StatusPanelProps) {
       </div>
       
       <div className="content status-panel-content">
-        <h3 className="status-panel-section-title first">Routing Services</h3>
+        <h3 className="status-panel-section-title first">Persisting Services</h3>
+        <div className="status-panel-list">
+          {persistingServices.map((service: any, idx: number) => {
+            const available = service.isAvailable();
+            const instruction = service.getConnectionInstruction();
+            return (
+              <div key={idx} className="status-panel-card">
+                <div className={`status-panel-card-header ${!available ? 'with-margin' : 'no-margin'}`}>
+                  <div className="status-panel-card-title-container">
+                    <img
+                      src={service.icon} 
+                      alt={`${service.name} icon`}
+                      width={20}
+                      height={20}
+                      style={{
+                        filter: available ? 'none' : 'grayscale(100%)',
+                        opacity: available ? 1 : 0.6,
+                        objectFit: 'contain',
+                        display: 'block'
+                      }}
+                    />
+                    <span className="status-panel-card-title">{service.name}</span>
+                  </div>
+                  {available ? (
+                    <button
+                      className="iconButton"
+                      onClick={() => setConfiguringService(service)}
+                      title={`Configure ${service.name}`}
+                      style={{ marginLeft: 'auto', padding: '4px', cursor: 'pointer' }}
+                    >
+                      <MaterialIcon name="settings" size={20} />
+                    </button>
+                  ) : (
+                    <span className="status-panel-badge unavailable">Unavailable</span>
+                  )}
+                </div>
+                {!available && (
+                  <div className="status-panel-attribution" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span dangerouslySetInnerHTML={{ __html: instruction.htmlDescription }} />
+                    <button
+                      className="dialog-btn dialog-btn-primary"
+                        onClick={() => instruction.onAction(() => setUpdateTick(Date.now()), () => setConfiguringService(service))}
+                      style={{ alignSelf: 'flex-start', padding: '4px 12px', fontSize: '0.85rem' }}
+                    >
+                      {instruction.actionButtonLabel}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <h3 className="status-panel-section-title second">Routing Services</h3>
         <div className="status-panel-list">
           {services.map((service: any, idx: number) => {
             const available = service.isAvailable();
@@ -62,11 +124,26 @@ export function StatusPanel({ onGoBack }: StatusPanelProps) {
               <div key={idx} className="status-panel-card">
                 <div className={`status-panel-card-header ${attr ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
-                    <MaterialIcon 
-                      name={available ? 'check_circle' : 'cancel'} 
-                      size={20} 
-                      className={`status-panel-icon ${available ? 'success' : 'unavailable'}`}
-                    />
+                    {service.icon ? (
+                      <img
+                        src={service.icon}
+                        alt={`${service.name} icon`}
+                        width={20}
+                        height={20}
+                        style={{
+                          filter: available ? 'none' : 'grayscale(100%)',
+                          opacity: available ? 1 : 0.6,
+                          objectFit: 'contain',
+                          display: 'block'
+                        }}
+                      />
+                    ) : (
+                      <MaterialIcon
+                        name={available ? 'check_circle' : 'cancel'}
+                        size={20}
+                        className={`status-panel-icon ${available ? 'success' : 'unavailable'}`}
+                      />
+                    )}
                     <span className="status-panel-card-title">{service.name}</span>
                   </div>
                   <span className={`status-panel-badge ${available ? 'success' : 'unavailable'}`}>
@@ -106,9 +183,26 @@ export function StatusPanel({ onGoBack }: StatusPanelProps) {
               <div key={key} className="status-panel-card">
                 <div className={`status-panel-card-header ${htmlAttribution ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
-                    {status === 'pending' && <MaterialIcon name="hourglass_empty" size={20} className="status-panel-icon pending" />}
-                    {status === 'success' && <MaterialIcon name="check_circle" size={20} className="status-panel-icon success" />}
-                    {status === 'error' && <MaterialIcon name="cancel" size={20} className="status-panel-icon error" />}
+                    {style.icon ? (
+                      <img
+                        src={style.icon}
+                        alt={`${style.name} icon`}
+                        width={20}
+                        height={20}
+                        style={{
+                          filter: status === 'success' ? 'none' : 'grayscale(100%)',
+                          opacity: status === 'success' ? 1 : 0.6,
+                          objectFit: 'contain',
+                          display: 'block'
+                        }}
+                      />
+                    ) : (
+                      <>
+                        {status === 'pending' && <MaterialIcon name="hourglass_empty" size={20} className="status-panel-icon pending" />}
+                        {status === 'success' && <MaterialIcon name="check_circle" size={20} className="status-panel-icon success" />}
+                        {status === 'error' && <MaterialIcon name="cancel" size={20} className="status-panel-icon error" />}
+                      </>
+                    )}
                     <span className="status-panel-card-title">{style.name}</span>
                   </div>
                   <span className={`status-panel-badge ${status === 'success' ? 'success' : status === 'error' ? 'error' : 'pending'}`}>
@@ -126,6 +220,13 @@ export function StatusPanel({ onGoBack }: StatusPanelProps) {
           })}
         </div>
       </div>
+
+      <PersistingConfigDialog 
+        service={configuringService} 
+        trips={trips} 
+        onClose={() => setConfiguringService(null)} 
+        onUpdateTrips={onUpdateTrips}
+      />
     </div>
   );
 }

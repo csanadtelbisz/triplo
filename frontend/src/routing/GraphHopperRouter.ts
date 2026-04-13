@@ -1,8 +1,10 @@
 import type { TransportMode } from '../../../shared/types';
 import type { IRoutingService } from './RoutingService';
+import iconUrl from '../assets/icons/graphhopper.png';
 
 export class GraphHopperRouter implements IRoutingService {
   name = 'GraphHopper Router';
+  icon = iconUrl;
   private apiKey: string;
 
   constructor() {

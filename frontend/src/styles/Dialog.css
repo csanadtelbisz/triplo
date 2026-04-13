@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 999999;
 }
 
 .dialog-content {
@@ -17,6 +17,8 @@
   border-radius: 8px;
   width: 90%;
   max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: dialogFadeIn 0.2s ease-out;
 }

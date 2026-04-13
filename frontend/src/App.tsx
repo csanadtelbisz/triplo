@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './styles/App.css';
 import './styles/Shared.css';
 import './styles/TripManager.css';
@@ -10,6 +10,7 @@ import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
 import { computeTripCaches } from './utils/distance';
+import { slugify } from './utils/slugify';
 
 import { TripManager } from './components/TripManager';
 import { TripEditor } from './components/TripEditor';
@@ -17,7 +18,9 @@ import { SegmentInfo } from './components/SegmentInfo';
 import { WaypointInfo } from './components/WaypointInfo';
 import { POIInfo } from './components/POIInfo';
 import { SearchPanel } from './components/SearchPanel';
+import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
+import { persistingManager } from './persisting/PersistingManager';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 
@@ -25,6 +28,9 @@ export default function App() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [histories, setHistories] = useState<Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }>>({});
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [tripConflicts, setTripConflicts] = useState<Record<string, Trip[]>>({});
+  const conflictedTripIds = new Set(Object.keys(tripConflicts));
+  const [resolvingTripId, setResolvingTripId] = useState<string | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
@@ -35,16 +41,96 @@ export default function App() {
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
 
-  const loadTrips = () => {
-    TripAPI.getTrips().then(fetchedTrips => {
+  const stripMeta = (t: Trip) => {
+    const copy: any = { ...t };
+    delete copy.metadata;
+    return JSON.stringify(copy);
+  };
+
+  const loadTrips = async () => {
+    try {
+      const apiTrips = await TripAPI.getTrips();
+      const remoteTrips = await persistingManager.loadAllTrips();
+
+      const variantsByTripId: Record<string, Trip[]> = {};
+      const conflictsFound: Record<string, Trip[]> = {};
+
+      apiTrips.forEach(t => {
+        t.metadata = t.metadata || {};
+        t.metadata._sourceService = 'Local Browser Storage';
+        variantsByTripId[t.id] = [t];
+      });
+
+      remoteTrips.forEach((t: Trip) => {
+        if (!variantsByTripId[t.id]) variantsByTripId[t.id] = [];
+        variantsByTripId[t.id].push(t);
+      });
+
+      const tripsMap = new globalThis.Map<string, Trip>();
+
+      Object.entries(variantsByTripId).forEach(([id, variants]) => {
+        // Find remote variants
+        const remoteVariants = variants.filter(v => v.metadata?._sourceService && v.metadata._sourceService !== 'Local Browser Storage');
+        
+        // Count unique remote contents ignoring metadata
+        const uniqueRemoteContents = new Set(remoteVariants.map(v => stripMeta(v)));
+
+        // Only conflict if there are MULTIPLE distinct remote versions that disagree
+        if (uniqueRemoteContents.size > 1) {
+          // It's a conflict!
+          const groupedVariants: Trip[] = [];
+          variants.forEach(variant => {
+            const existing = groupedVariants.find(t => stripMeta(t) === stripMeta(variant));
+            if (existing) {
+              const existingSources = new Set((existing.metadata?._sourceService || '').split(', '));
+              if (variant.metadata?._sourceService) existingSources.add(variant.metadata._sourceService);
+              existing.metadata = existing.metadata || {};
+              existing.metadata._sourceService = Array.from(existingSources).filter(Boolean).join(', ');
+            } else {
+              groupedVariants.push({ ...variant, metadata: { ...variant.metadata, _sourceService: variant.metadata?._sourceService } });
+            }
+          });
+          conflictsFound[id] = groupedVariants;
+
+          // Use the newest one tentatively in the map so it renders
+          const newest = [...variants].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+          tripsMap.set(id, newest);
+        } else {
+          // No conflict between persisting services
+          // Auto-resolve by taking the absolute newest one (even if it's local)
+          const newest = { ...[...variants].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] };
+          
+          // Merge metadata
+          const allSyncedServices = new Set<string>();
+          variants.forEach(v => {
+            if (v.metadata?._sourceService && v.metadata._sourceService !== 'Local Browser Storage') {
+              allSyncedServices.add(v.metadata._sourceService);
+            }
+            (v.metadata?.syncedServices || []).forEach((s: string) => allSyncedServices.add(s));
+          });
+
+          newest.metadata = newest.metadata || {};
+          newest.metadata.syncedServices = Array.from(allSyncedServices);
+          // Keep Local Browser Storage as the active working source tag
+          newest.metadata._sourceService = 'Local Browser Storage';
+
+          tripsMap.set(id, newest);
+        }
+      });
+
+      setTripConflicts(conflictsFound);
+
+      const fetchedTrips = Array.from(tripsMap.values());
       const cachedTrips = fetchedTrips.map(computeTripCaches);
       setTrips(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
       cachedTrips.forEach(t => {
-        initHistories[t.id] = { past: [], future: [], lastSavedStr: JSON.stringify(t) };
+        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(t) };
       });
       setHistories(initHistories);
-    });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false) => {
@@ -139,37 +225,78 @@ export default function App() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedTrip) return;
-    setHistories(prev => {
-      const h = prev[selectedTrip.id];
-      return {
-        ...prev,
-        [selectedTrip.id]: {
-          ...h,
-          lastSavedStr: JSON.stringify(selectedTrip)
-        }
-      };
-    });
+    
+    try {
+      const updatingTrip = { ...selectedTrip, updatedAt: new Date().toISOString() };
+      
+      if (persistingManager.getAvailableServices().length > 0) {
+        await persistingManager.uploadToAll(updatingTrip);
+      }
+
+      const newTripState = computeTripCaches(updatingTrip);
+      setTrips(prev => prev.map(t => t.id === selectedTrip.id ? newTripState : t));
+      TripAPI.saveTrip(newTripState);
+
+      setHistories(prev => {
+        const h = prev[selectedTrip.id];
+        return {
+          ...prev,
+          [selectedTrip.id]: {
+            ...h,
+            lastSavedStr: stripMeta(newTripState)
+          }
+        };
+      });
+    } catch (e) {
+      console.error(e);
+      alert(`Failed to save ${selectedTrip.name}`);
+    }
   };
 
-  const handleSaveAllUnsaved = () => {
-    setHistories(prev => {
-      const next = { ...prev };
-      trips.forEach(t => {
-        if (next[t.id] && next[t.id].lastSavedStr !== JSON.stringify(t)) {
-          next[t.id] = { ...next[t.id], lastSavedStr: JSON.stringify(t) };
-        }
+  const handleSaveAllUnsaved = async () => {
+    const unsavedTrips = trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t));
+    if (unsavedTrips.length === 0) return;
+
+    try {
+      const updatingTrips = unsavedTrips.map(u => ({ ...u, updatedAt: new Date().toISOString() }));
+      
+      if (persistingManager.getAvailableServices().length > 0) {
+        await persistingManager.saveAll(updatingTrips);
+      }
+
+      const nextTrips = updatingTrips.map(u => computeTripCaches(u));
+
+      setTrips(prev => prev.map(t => {
+        const matching = nextTrips.find(n => n.id === t.id);
+        return matching ? matching : t;
+      }));
+      
+      nextTrips.forEach(t => TripAPI.saveTrip(t));
+
+      setHistories(prev => {
+        const next = { ...prev };
+        nextTrips.forEach(t => {
+          if (next[t.id]) {
+            next[t.id] = { ...next[t.id], lastSavedStr: stripMeta(t) };
+          }
+        });
+        return next;
       });
-      return next;
-    });
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save some trips');
+    }
   };
 
   const handleCreateTrip = () => {
+    const title = 'New Trip';
+    const newId = slugify(title, trips.map(t => t.id));
     const newWpId = `wp_${Math.random().toString(36).substring(2, 9)}`;
     const newTrip = computeTripCaches({
-      id: `trip_${Math.random().toString(36).substring(2, 9)}`,
-      name: 'New Trip',
+      id: newId,
+      name: title,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       segments: [
@@ -194,7 +321,7 @@ export default function App() {
     setTrips(prev => [...prev, newTrip]);
     setHistories(prev => ({
       ...prev,
-      [newTrip.id]: { past: [], future: [], lastSavedStr: JSON.stringify(newTrip) }
+      [newTrip.id]: { past: [], future: [], lastSavedStr: stripMeta(newTrip) }
     }));
     
     setSelectedTrip(newTrip);
@@ -215,9 +342,49 @@ export default function App() {
     }, 150);
   };
 
+  // Uses stripMeta to ignore metadata differences (like syncedServices lists) for local unsaved status
   const unsavedTripIds = new Set(
-    trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== JSON.stringify(t)).map(t => t.id)
+    trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t)).map(t => t.id)
   );
+
+  const handleResolveConflict = async (tripId: string, acceptedVersion: Trip) => {
+    // 1. collect all sources involved
+    const conflicts = tripConflicts[tripId] || [];
+    const allSources = new Set<string>();
+    conflicts.forEach((c: any) => {
+      if (c.metadata?._sourceService) allSources.add(c.metadata._sourceService);
+      (c.metadata?.syncedServices || []).forEach((s: string) => allSources.add(s));
+    });
+    
+    // 2. make accepted version definitive 
+    const finalTrip = { ...acceptedVersion };
+    finalTrip.metadata = finalTrip.metadata || {};
+    finalTrip.metadata.syncedServices = Array.from(allSources).filter(s => s !== 'Local Browser Storage');
+    delete finalTrip.metadata._sourceService; // clean up internal marker
+
+    // 3. update state
+    const newTrips = trips.map(t => t.id === tripId ? finalTrip : t);
+    setTrips(newTrips);
+    
+    setTripConflicts(prev => {
+      const next = { ...prev };
+      delete next[tripId];
+      return next;
+    });
+    setResolvingTripId(null);
+    
+    // 4. save locally and upload all to sync remote places
+    try {
+      await TripAPI.saveTrip(finalTrip);
+      setHistories(prev => ({
+        ...prev,
+        [tripId]: { past: [], future: [], lastSavedStr: stripMeta(finalTrip) }
+      }));
+      await persistingManager.uploadToAll(finalTrip);
+    } catch (err) {
+      console.error('Failed to upload resolved trip:', err);
+    }
+  };
 
   const handleGoBackTripEditor = () => {
     setSelectedTrip(null);
@@ -298,7 +465,32 @@ export default function App() {
     TripAPI.deleteTrip(tripId);
   };
 
+  const handleUploadTrip = async (trip: Trip) => {
+    try {
+      await persistingManager.uploadToAll(trip);
+      const newTripState = { ...trip };
+      setTrips(prev => prev.map(t => t.id === trip.id ? newTripState : t));
+      setHistories(prev => {
+        if (!prev[trip.id]) return prev;
+        return {
+          ...prev,
+          [trip.id]: {
+            ...prev[trip.id],
+            lastSavedStr: stripMeta(newTripState)
+          }
+        };
+      });
+    } catch (e) {
+      console.error(e);
+      alert(`Failed to upload ${trip.name}`);
+    }
+  };
+
   const handleSelectTrip = (trip: Trip) => {
+    if (conflictedTripIds.has(trip.id)) {
+      setResolvingTripId(trip.id);
+      return;
+    }
     setSelectedTrip(trip);
     setTimeout(() => {
       if (mapComponentRef.current) {
@@ -307,11 +499,30 @@ export default function App() {
     }, 100);
   };
 
+  const handleUpdateExternalTrips = (updatedTrips: Trip[]) => {
+    setTrips(updatedTrips);
+    setHistories(prev => {
+      const next = { ...prev };
+      updatedTrips.forEach(t => {
+        if (next[t.id]) {
+          next[t.id] = { ...next[t.id], lastSavedStr: stripMeta(t) };
+        }
+      });
+      return next;
+    });
+    updatedTrips.forEach(t => TripAPI.saveTrip(t));
+  };
+
   return (
-    <div className="layout">
+    <>
+      <div className="layout">
       <div className="sidebar">
         {isStatusOpen ? (
-          <StatusPanel onGoBack={() => setIsStatusOpen(false)} />
+          <StatusPanel
+            onGoBack={() => setIsStatusOpen(false)}
+            trips={trips}
+            onUpdateTrips={handleUpdateExternalTrips}
+          />
         ) : isSearchOpen ? (
           <SearchPanel 
             onGoBack={() => setIsSearchOpen(false)}
@@ -365,8 +576,9 @@ export default function App() {
             trips={trips}
             onSelectTrip={handleSelectTrip}
             onDeleteTrip={handleDeleteTrip}
-            unsavedTripIds={unsavedTripIds}
-            onSaveAll={handleSaveAllUnsaved}
+              onUploadTrip={handleUploadTrip}
+              onReloadTrips={loadTrips}
+            unsavedTripIds={unsavedTripIds}              conflictedTripIds={conflictedTripIds}            onSaveAll={handleSaveAllUnsaved}
             onCreateTrip={handleCreateTrip}
             onOpenStatus={() => setIsStatusOpen(true)}
           />
@@ -384,7 +596,7 @@ export default function App() {
             canUndo={!!histories[selectedTrip.id]?.past.length}
             canRedo={!!histories[selectedTrip.id]?.future.length}
             onSave={handleSave}
-            canSave={histories[selectedTrip.id]?.lastSavedStr !== JSON.stringify(selectedTrip)}
+            canSave={histories[selectedTrip.id]?.lastSavedStr !== stripMeta(selectedTrip)}
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             onWaitingForCoords={(wpId) => {
               setWaitingWaypointId(wpId);
@@ -412,5 +624,28 @@ export default function App() {
         onSearchClick={() => setIsSearchOpen(true)}
       />
     </div>
+
+    {resolvingTripId && <Dialog
+      isOpen={true}
+      title="Resolve Trip Conflict"
+      onClose={() => setResolvingTripId(null)}
+      actions={
+        <button className="dialog-btn dialog-btn-cancel" onClick={() => setResolvingTripId(null)}>Cancel</button>
+      }
+    >
+      <div className="conflict-dialog">
+        <p>This trip has conflicting versions from different sources. Please select the version you want to keep. The chosen version will overwrite the others.</p>
+        <div className="conflict-list">
+          {(tripConflicts[resolvingTripId] || []).map((t, i) => (
+            <div key={i} className="conflict-item">
+              <h4>Source: {t.metadata?._sourceService || 'Unknown'}</h4>
+              <p>Last modified: {new Date(t.updatedAt).toLocaleString()}</p>
+              <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolveConflict(resolvingTripId, t)}>Keep this version</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Dialog>}
+    </>
   );
 }

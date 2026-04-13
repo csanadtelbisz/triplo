@@ -1,3 +1,8 @@
+import mapyIcon from '../assets/icons/mapy.png';
+import openfreemapIcon from '../assets/icons/openfreemap.png';
+import openstreetmapIcon from '../assets/icons/openstreetmap.png';
+import opentopomapIcon from '../assets/icons/opentopomap.png';
+
 const mapyApiKey = import.meta.env.VITE_MAPY_API_KEY || '';
 
 export const MARKER_HIDE_THRESHOLD = 40;
@@ -102,9 +107,10 @@ export const POI_LAYERS: any[] = [
   }
 ];
 
-export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: string }> = {
+export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: string, icon?: string }> = {
   mapy_outdoor: {
     name: 'Mapy.com',
+    icon: mapyIcon,
     url: {
       version: 8,
       sources: {
@@ -126,11 +132,13 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
   },
   openfreemap: {
     name: 'OpenFreeMap',
+    icon: openfreemapIcon,
     url: 'https://tiles.openfreemap.org/styles/liberty',
     attribution: '<a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
   },
   osm: {
     name: 'OpenStreetMap',
+    icon: openstreetmapIcon,
     url: {
       version: 8,
       sources: {
@@ -152,6 +160,7 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
   },
   opentopomap: {
     name: 'OpenTopoMap',
+    icon: opentopomapIcon,
     url: {
       version: 8,
       sources: {

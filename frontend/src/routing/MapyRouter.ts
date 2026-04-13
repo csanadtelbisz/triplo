@@ -1,8 +1,10 @@
 import type { TransportMode } from '../../../shared/types';
 import type { IRoutingService } from './RoutingService';
+import iconUrl from '../assets/icons/mapy.png';
 
 export class MapyRouter implements IRoutingService {
   name = 'Mapy Router';
+  icon = iconUrl;
   private apiKey: string;
 
   constructor() {

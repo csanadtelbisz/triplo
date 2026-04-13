@@ -7,6 +7,7 @@ import { MapyRouter } from './MapyRouter';
 
 export interface IRoutingService {
   name: string;
+  icon?: string;
   route: (waypoints: [number, number][], profile: string) => Promise<GeoJSON.LineString>;
   isAvailable: () => boolean;
   getAttribution: () => { text: string; link?: string } | undefined;

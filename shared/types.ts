@@ -60,6 +60,8 @@ export interface Trip {
   segments: Segment[];
   createdAt: string;
   updatedAt: string;
+  sourceService?: string;
+  metadata?: any;
   tripDistanceSummary?: {
     totalDistance: number;
     distanceByMode: Record<string, number>;

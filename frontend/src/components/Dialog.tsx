@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import '../styles/Dialog.css';
 
 interface DialogProps {
@@ -18,7 +19,7 @@ export function Dialog({
 }: DialogProps) {
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
         <h3 className="dialog-title">{title}</h3>
@@ -29,7 +30,8 @@ export function Dialog({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
