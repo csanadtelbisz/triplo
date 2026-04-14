@@ -67,10 +67,22 @@ export function TripEditor({
   } | null>(null);
 
   useEffect(() => {
+    const preventDefault = (e: globalThis.TouchEvent) => {
+      if (dragContext.current) e.preventDefault();
+    };
+
     if (dragRender) {
       document.body.style.userSelect = 'none';
+      document.body.classList.add('is-dragging');
+      document.addEventListener('touchmove', preventDefault, { passive: false });
     } else {
       document.body.style.userSelect = '';
+      document.body.classList.remove('is-dragging');
+      document.removeEventListener('touchmove', preventDefault);
+    }
+
+    return () => {
+      document.removeEventListener('touchmove', preventDefault);
     }
   }, [dragRender !== null]);
 
@@ -101,27 +113,36 @@ export function TripEditor({
 
   useEffect(() => {
     if (highlightedWaypointId && waypointRefs.current[highlightedWaypointId]) {
-      waypointRefs.current[highlightedWaypointId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Add a brief highlight flash
       const el = waypointRefs.current[highlightedWaypointId];
-      if (el) {
-        const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
-        highlightTargets.forEach(target => {
-          target.style.transition = 'background-color 0.5s';
-          target.style.backgroundColor = '#e6f2ff';
-        });
-        
-        const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
-        if (input) {
-          input.focus();
+      if (!el) return;
+
+      if (window.innerWidth <= 768) {
+        const container = el.closest('.content') || el.closest('.trip-editor');
+        if (container) {
+          const targetTop = el.offsetTop - (container as HTMLElement).offsetTop;
+          container.scrollTo({ top: targetTop - (container.clientHeight / 2), behavior: 'smooth' });
         }
-        
-        setTimeout(() => {
-          highlightTargets.forEach(target => {
-            target.style.backgroundColor = '';
-          });
-        }, 1000);
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+
+      // Add a brief highlight flash
+      const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
+      highlightTargets.forEach(target => {
+        target.style.transition = 'background-color 0.5s';
+        target.style.backgroundColor = '#e6f2ff';
+      });
+      
+      const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
+      if (input && window.innerWidth > 768) {
+        input.focus();
+      }
+      
+      setTimeout(() => {
+        highlightTargets.forEach(target => {
+          target.style.backgroundColor = '';
+        });
+      }, 1000);
     }
   }, [highlightedWaypointId]);
 
@@ -196,8 +217,12 @@ export function TripEditor({
   const handlePointerDown = (e: React.PointerEvent, wpId: string, globalIndex: number) => {
     if (e.button !== 0) return; // Only left click
     
-    // Check if clicked exactly on a button or input, ignore sorting then
-    if ((e.target as HTMLElement).closest('button, input, textarea')) return;
+    // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
+    const HTMLElementTarget = e.target as HTMLElement;
+    if (HTMLElementTarget.closest('button, input, textarea')) return;
+    if (!HTMLElementTarget.closest('.timeline-col') && !HTMLElementTarget.closest('.drag-handle')) {
+      return;
+    }
 
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
@@ -224,6 +249,7 @@ export function TripEditor({
       pointerId: e.pointerId,
       scrollContainer
     };
+    document.body.classList.add('is-dragging');
 
     setDragRender({
       activeId: wpId,
@@ -430,8 +456,16 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
       const inputs = Array.from(document.querySelectorAll('.waypoint-title-input')) as HTMLInputElement[];
       const el = inputs.find(input => input.getAttribute('data-wpid') === newWaypoint.id);
       if (el) {
-        el.focus();
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (window.innerWidth <= 768) {
+          const container = el.closest('.content') || el.closest('.trip-editor');
+          if (container) {
+            const targetTop = el.offsetTop - (container as HTMLElement).offsetTop;
+            container.scrollTo({ top: targetTop - (container.clientHeight / 2), behavior: 'smooth' });
+          }
+        } else {
+          el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     }, 100);
   };
@@ -575,6 +609,9 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                type="date" 
                className="form-input"
                defaultValue={trip.startDate ? trip.startDate.split('T')[0] : ''}
+               onChange={(e) => {
+                 onUpdateTrip({ ...trip, startDate: e.target.value });
+               }}
              />
            </div>
            <div className="form-col">
@@ -583,6 +620,9 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                type="date" 
                className="form-input"
                defaultValue={trip.endDate ? trip.endDate.split('T')[0] : ''}
+               onChange={(e) => {
+                 onUpdateTrip({ ...trip, endDate: e.target.value });
+               }}
              />
            </div>
          </div>
@@ -786,14 +826,15 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                          </div>
                        </td>
                        <td className="waypoint-col">
-                         <div className="waypoint-card" style={{ ...transformStyle, cursor: isDragged ? 'grabbing' : undefined }}>
-                           <div style={{ position: 'relative' }}>
+                         <div className="waypoint-card" style={{ ...transformStyle, position: 'relative' }}>
+                           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                              <input
                                key={`wpt-${wp.id}-${wp.name}`}
                                type="text"
                                defaultValue={wp.name || ''}
                                placeholder={(!wp.coordinates || (wp.coordinates as any).length < 2) ? (focusedWaypointWithoutCoords === wp.id ? "Select on map or type to search" : "Focus to set coordinates") : `${wp.coordinates[1].toFixed(5)}, ${wp.coordinates[0].toFixed(5)}`}
                                className="waypoint-title-input"
+                               style={{ flex: 1 }}
                                data-wpid={wp.id}
                                onChange={(e) => {
                                  if (!wp.coordinates || (wp.coordinates as any).length < 2) {
@@ -825,6 +866,9 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                  }
                                }}
                              />
+                             <div className="drag-handle" style={{ cursor: isDragged ? 'grabbing' : 'grab', padding: '0 8px', color: '#ccc', display: 'flex', alignItems: 'center' }}>
+                               <MaterialIcon name="drag_indicator" size={20} />
+                             </div>
                              {wpSearchState?.wpId === wp.id && (wpSearchResults.length > 0 || isWpSearching) && (
                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                                  {isWpSearching && <div style={{ padding: '8px', fontSize: '0.85rem', color: '#666' }}>Searching...</div>}

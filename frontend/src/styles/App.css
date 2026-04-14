@@ -4,6 +4,8 @@ body, html, #root {
   width: 100%;
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overscroll-behavior-y: none; /* Prevents pull-to-refresh on mobile browsers globally */
+  overflow: hidden; /* Ensure the page itself NEVER scrolls */
 }
 
 * {
@@ -12,7 +14,8 @@ body, html, #root {
 
 .layout {
   display: flex;
-  height: 100vh;
+  height: 100vh; /* Fallback for older browsers */
+  height: 100dvh; /* Dynamic viewport height to account for mobile URL bars correctly */
   width: 100vw;
   overflow: hidden;
 }
@@ -23,9 +26,9 @@ body, html, #root {
   border-right: 1px solid #ddd;
   display: flex;
   flex-direction: column;
-  z-index: 2;
+  z-index: 10000;
   box-shadow: 2px 0 8px rgba(0,0,0,0.05);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s;
 }
 
 #map {

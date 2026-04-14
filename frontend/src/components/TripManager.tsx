@@ -15,9 +15,10 @@ interface TripManagerProps {
   onSaveAll: () => Promise<void> | void;
   onCreateTrip: () => void;
   onOpenStatus: () => void;
+  isTripsLoading?: boolean;
 }
 
-export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus }: TripManagerProps) {
+export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, isTripsLoading }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -160,14 +161,19 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
                   </button>
                 </div>
               </div>
-              <p className="trip-card-desc">{trip.description?.slice(0, 50)}...</p>
+              <p className="trip-card-desc">
+                {trip.description && trip.description.length > 50 
+                  ? `${trip.description.slice(0, 50)}...` 
+                  : trip.description}
+              </p>
               <div className="trip-card-footer" style={{ marginTop: 'auto', paddingTop: '12px' }}>
                 <small className="trip-card-date">{dateDisplay}</small>
               </div>
             </div>
           );
         })}
-        {trips.length === 0 && <p className="empty-state">Loading trips...</p>}
+        {trips.length === 0 && isTripsLoading && <p className="empty-state">Loading trips...</p>}
+        {trips.length === 0 && !isTripsLoading && <p className="empty-state">No trips found.</p>}
       </div>
 
       <ConfirmDialog

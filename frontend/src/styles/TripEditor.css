@@ -25,6 +25,26 @@
   height: 28px;
 }
 
+/* Allow native touch scroll on waypoints on mobile */
+.waypoint-row-tr, .waypoint-row-tr * {
+  touch-action: pan-y pan-x; /* Allow scrolling on the card */
+}
+/* But intercept scrolling perfectly when explicitly grabbing handles */
+.waypoint-row-tr .timeline-col,
+.waypoint-row-tr .timeline-col *,
+.waypoint-row-tr .drag-handle {
+  touch-action: none !important;
+}
+
+body.is-dragging .content {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
+body.is-dragging * {
+  touch-action: none !important; /* Force touch prevention globally to avoid scrolling escaping */
+}
+
 /* Toolbox */
 .segment-toolbox {
   display: flex;

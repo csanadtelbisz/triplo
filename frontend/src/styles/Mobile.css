@@ -1,0 +1,72 @@
+.mobile-drag-handle {
+  display: none;
+  width: 40px;
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+  margin: 8px auto 0;
+  cursor: grab;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  #map {
+    height: 100%;
+    width: 100%;
+  }
+
+  .sidebar {
+    width: 100vw;
+    height: 70vh;
+    border-right: none;
+    border-top: 1px solid #ddd;
+    border-radius: 16px 16px 0 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    background: #fcfcfc;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  }
+
+  .sidebar.collapsed {
+    transform: translateY(calc(100% - 64px));
+  }
+  
+  /* Ensure the content inside sidebar properly handles scroll when expanded and hides when collapsed */
+  .sidebar.collapsed > .content,
+  .sidebar.collapsed > .trip-editor {
+    overflow: hidden;
+  }
+
+  /* Prevent pull-to-refresh when scrolling lists past top or bottom */
+  .sidebar > .content,
+  .sidebar > .trip-editor {
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent map showing under the panel when mobile browser UI hides and resizes */
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 100vh;
+    background-color: inherit;
+    z-index: 10000;
+  }
+
+  .mobile-drag-handle {
+    display: block;
+    /* Prevents the browser's native pull-to-refresh when dragging the handle */
+    touch-action: none; 
+  }
+
+  /* Also prevent pull-to-refresh when touching the empty spaces of the toolbar to drag */
+  .sidebar > .toolbar {
+    touch-action: none;
+  }
+}

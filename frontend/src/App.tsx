@@ -5,6 +5,7 @@ import './styles/TripManager.css';
 import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
+import './styles/Mobile.css';
 import type { Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
@@ -36,10 +37,13 @@ export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
   const [hoveredCoordinate, setHoveredCoordinate] = useState<{ lon: number; lat: number; ele?: number } | null>(null);
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
+  const [isLoadingTrips, setIsLoadingTrips] = useState(true);
 
   const stripMeta = (t: Trip) => {
     const copy: any = { ...t };
@@ -48,6 +52,7 @@ export default function App() {
   };
 
   const loadTrips = async () => {
+    setIsLoadingTrips(true);
     try {
       const apiTrips = await TripAPI.getTrips();
       const remoteTrips = await persistingManager.loadAllTrips();
@@ -130,6 +135,8 @@ export default function App() {
       setHistories(initHistories);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsLoadingTrips(false);
     }
   };
 
@@ -330,6 +337,7 @@ export default function App() {
 
     // Focus the title input (give it a bit of time to render)
     setTimeout(() => {
+      if (window.innerWidth <= 768) return; // Prevent layout bouncing on mobile keyboard popup
       const inputs = document.querySelectorAll('.trip-header input[placeholder="Trip Name"]');
       if (inputs.length) {
         (inputs[0] as HTMLElement).focus();
@@ -497,6 +505,7 @@ export default function App() {
         mapComponentRef.current.zoomToTrip(trip);
       }
     }, 100);
+    setIsSidebarCollapsed(true);
   };
 
   const handleUpdateExternalTrips = (updatedTrips: Trip[]) => {
@@ -513,10 +522,56 @@ export default function App() {
     updatedTrips.forEach(t => TripAPI.saveTrip(t));
   };
 
+  const sidebarProps = {
+    className: `sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`,
+    onTouchStart: (e: React.TouchEvent) => {
+      const target = e.target as HTMLElement;
+      const contentScrollContainer = target.closest('.content') || target.closest('.trip-editor');
+      
+      const isToolbar = target.closest('.toolbar') || target.closest('.mobile-drag-handle');
+      const isScrollTop = contentScrollContainer && contentScrollContainer.scrollTop === 0;
+
+      if (isToolbar || isScrollTop) {
+        touchStartRef.current = {
+          y: e.touches[0].clientY,
+          isContentEdge: !isToolbar && !!isScrollTop
+        };
+      }
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      if (touchStartRef.current === null) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - touchStartRef.current.y;
+      // Prevent default scrolling only if we are significantly dragging vertically on the handle
+      if (Math.abs(deltaY) > 10) {
+        // We do not call preventDefault here directly because React's touchMove is passive by default
+      }
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (touchStartRef.current === null) return;
+      const { y, isContentEdge } = touchStartRef.current;
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaY = touchEndY - y;
+      
+      if (deltaY > 50) {
+        setIsSidebarCollapsed(true);
+      } else if (deltaY < -50 && (!isContentEdge || isSidebarCollapsed)) {
+        setIsSidebarCollapsed(false);
+      } else if (Math.abs(deltaY) < 10) {
+        // It was a tap, toggle if it was on the handle itself
+        if (isSidebarCollapsed && (e.target as HTMLElement).closest('.mobile-drag-handle')) {
+          setIsSidebarCollapsed(false);
+        }
+      }
+      touchStartRef.current = null;
+    }
+  };
+
   return (
     <>
       <div className="layout">
-      <div className="sidebar">
+      <div {...sidebarProps}>
+        <div className="mobile-drag-handle"></div>
         {isStatusOpen ? (
           <StatusPanel
             onGoBack={() => setIsStatusOpen(false)}
@@ -577,7 +632,7 @@ export default function App() {
             onSelectTrip={handleSelectTrip}
             onDeleteTrip={handleDeleteTrip}
               onUploadTrip={handleUploadTrip}
-              onReloadTrips={loadTrips}
+              onReloadTrips={loadTrips}              isTripsLoading={isLoadingTrips}
             unsavedTripIds={unsavedTripIds}              conflictedTripIds={conflictedTripIds}            onSaveAll={handleSaveAllUnsaved}
             onCreateTrip={handleCreateTrip}
             onOpenStatus={() => setIsStatusOpen(true)}
@@ -588,7 +643,10 @@ export default function App() {
             onGoBack={handleGoBackTripEditor} 
             onSelectSegment={setSelectedSegmentId}
             onSelectWaypoint={setSelectedWaypointId}
-            onZoomToTrip={() => mapComponentRef.current?.zoomToTrip(selectedTrip)}
+            onZoomToTrip={() => {
+              mapComponentRef.current?.zoomToTrip(selectedTrip);
+              setIsSidebarCollapsed(true);
+            }}
             onJumpToWaypoint={(id) => mapComponentRef.current?.handleJumpToWaypoint(id)}
             highlightedWaypointId={highlightedWaypointId}
             onUndo={handleUndo}
@@ -615,7 +673,10 @@ export default function App() {
         updateTripState={updateTripState}
         handleCoordinateChange={handleCoordinateChange}
         setSelectedWaypointId={setSelectedWaypointId}
-        setHighlightedWaypointId={setHighlightedWaypointId}
+        setHighlightedWaypointId={(id) => {
+          setHighlightedWaypointId(id);
+          if (id) setIsSidebarCollapsed(false);
+        }}
         setSelectedSegmentId={setSelectedSegmentId}
         selectedPOI={selectedPOI}
         setSelectedPOI={setSelectedPOI}

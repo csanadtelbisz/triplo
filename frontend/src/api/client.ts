@@ -2,8 +2,11 @@
 import type { Trip } from '../../../shared/types';
 import { mockTrips as defaultMockTrips } from './mockData';
 
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const mockTrips: Trip[] = isLocalhost ? [...defaultMockTrips] : [];
+const isLocalhostOrIP = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname);
+
+const mockTrips: Trip[] = isLocalhostOrIP ? [...defaultMockTrips] : [];
 
 export const TripAPI = {
   getTrips: async (): Promise<Trip[]> => {

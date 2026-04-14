@@ -138,6 +138,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
     hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip };
   }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip]);
 
+  const getPadding = () => window.innerWidth <= 768 
+    ? { top: 50, bottom: 150, left: 50, right: 50 } 
+    : { top: 50, bottom: 50, left: 50, right: 50 };
+
   const zoomToTrip = (trip: Trip) => {
     if (!mapRef.current) return;
 
@@ -164,9 +168,11 @@ export const Map = forwardRef<MapRef, MapProps>(({
     const bounds = new LngLatBounds(allWps[0].coordinates, allWps[0].coordinates);
     allWps.forEach(wp => bounds.extend(wp.coordinates));
 
+    const paddingLayer = getPadding();
+
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: 50 });
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: paddingLayer });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
@@ -201,7 +207,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: 50 });
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding() });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
@@ -246,9 +252,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: 50 });
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding() });
       if (camera) {
         mapRef.current.flyTo({
+          ...camera,
           center: targetCoord,
           zoom: Math.min(camera.zoom || 15, 15),
           duration: 1200,
@@ -262,6 +269,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     mapRef.current?.flyTo({
       center: [lon, lat],
       zoom: 14,
+      padding: window.innerWidth <= 768 ? { top: 0, bottom: 150, left: 0, right: 0 } : undefined,
       essential: true
     });
   };
@@ -581,6 +589,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 const clickedSegId = routeFeatures[0].properties?.segmentId;
                 const trip = hotkeyRefs.current.trips.find(t => t.segments.some(s => s.id === clickedSegId));
                 if (trip && hotkeyRefs.current.onSelectTrip) {
+                  setHoverInfo(null);
                   hotkeyRefs.current.onSelectTrip(trip);
                 }
                 return;
