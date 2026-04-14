@@ -68,6 +68,13 @@ export class PersistingManager {
       }
     }
   }
+
+  async deleteFromAll(tripId: string): Promise<void> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      await service.delete(tripId);
+    }
+  }
 }
 
 export const persistingManager = new PersistingManager();

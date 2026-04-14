@@ -24,6 +24,9 @@ export interface PersistingService {
   // saves all unsaved trips
   saveAll(trips: any[]): Promise<void>;
 
+  // deletes a trip from this service
+  delete(tripId: string): Promise<void>;
+
   // check if the service is currently available
   isAvailable(): boolean;
 

@@ -201,6 +201,26 @@ export class GoogleDrivePersistingService implements PersistingService {
     }
   }
 
+  async delete(tripId: string): Promise<void> {
+    if (!this.getAccessToken()) return;
+
+    try {
+      const fileName = `${tripId}.triplo.json`;
+      const folderId = await this.getOrCreateFolder();
+
+      const q = encodeURIComponent(`'${folderId}' in parents and name='${fileName}' and trashed=false`);
+      const searchRes = await this.request(`files?q=${q}&spaces=drive`);
+      
+      if (searchRes.files && searchRes.files.length > 0) {
+        for (const file of searchRes.files) {
+          await this.request(`files/${file.id}`, { method: 'DELETE' });
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to delete trip ${tripId} from Google Drive`, e);
+    }
+  }
+
   isAvailable(): boolean {
     return this.getAccessToken() !== null;
   }

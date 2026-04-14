@@ -146,7 +146,7 @@ export default function App() {
 
     setHistories(prev => {
       const h = prev[tripId] || { past: [], future: [], lastSavedStr: '' };
-      const currentTrip = trips.find(t => t.id === tripId) || cachedTrip;
+      const currentTrip = trips.find(t => t.id === tripId) || (selectedTrip?.id === tripId ? selectedTrip : cachedTrip);
       return {
         ...prev,
         [tripId]: {
@@ -236,29 +236,56 @@ export default function App() {
     if (!selectedTrip) return;
     
     try {
-      const updatingTrip = { ...selectedTrip, updatedAt: new Date().toISOString() };
+      let tripToSave = { ...selectedTrip, updatedAt: new Date().toISOString() };
       
-      if (persistingManager.getAvailableServices().length > 0) {
-        await persistingManager.uploadToAll(updatingTrip);
+      const isNew = tripToSave.id.startsWith('temp_trip_');
+      const oldId = tripToSave.id;
+      if (isNew) {
+        const title = tripToSave.name.trim() || 'New Trip';
+        const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+        let randomStr = '';
+        for (let i = 0; i < 6; i++) {
+          randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const baseSlug = slugify(title, trips.map(t => t.id));
+        tripToSave.id = `${baseSlug}_${randomStr}`;
       }
 
-      const newTripState = computeTripCaches(updatingTrip);
-      setTrips(prev => prev.map(t => t.id === selectedTrip.id ? newTripState : t));
+      if (persistingManager.getAvailableServices().length > 0) {
+        await persistingManager.uploadToAll(tripToSave);
+      }
+
+      const newTripState = computeTripCaches(tripToSave);
+      
+      setTrips(prev => {
+        if (isNew) {
+            return [...prev, newTripState];
+        }
+        return prev.map(t => t.id === newTripState.id ? newTripState : t);
+      });
+      
       TripAPI.saveTrip(newTripState);
 
       setHistories(prev => {
-        const h = prev[selectedTrip.id];
-        return {
-          ...prev,
-          [selectedTrip.id]: {
-            ...h,
-            lastSavedStr: stripMeta(newTripState)
-          }
+        const h = prev[oldId] || { past: [], future: [], lastSavedStr: '' };
+        const next = { ...prev };
+        if (isNew) {
+          delete next[oldId]; // Clean up temp history
+        }
+        next[newTripState.id] = {
+          past: h.past.map(p => ({ ...p, id: newTripState.id })),
+          future: h.future.map(f => ({ ...f, id: newTripState.id })),
+          lastSavedStr: stripMeta(newTripState)
         };
+        return next;
       });
+      
+      if (isNew) {
+         setSelectedTrip(newTripState);
+      }
     } catch (e) {
       console.error(e);
-      alert(`Failed to save ${selectedTrip.name}`);
+      alert('Failed to save trip');
     }
   };
 
@@ -299,10 +326,10 @@ export default function App() {
 
   const handleCreateTrip = () => {
     const title = 'New Trip';
-    const newId = slugify(title, trips.map(t => t.id));
+    const tempId = `temp_trip_${Math.random().toString(36).substring(2, 9)}`;
     const newWpId = `wp_${Math.random().toString(36).substring(2, 9)}`;
     const newTrip = computeTripCaches({
-      id: newId,
+      id: tempId,
       name: title,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -324,24 +351,23 @@ export default function App() {
         }
       ]
     });
-    
-    setTrips(prev => [...prev, newTrip]);
+
     setHistories(prev => ({
       ...prev,
-      [newTrip.id]: { past: [], future: [], lastSavedStr: stripMeta(newTrip) }
+      [newTrip.id]: { past: [], future: [], lastSavedStr: "" }
     }));
-    
+
     setSelectedTrip(newTrip);
     setSelectedSegmentId(null);
     setSelectedWaypointId(null);
 
-    // Focus the title input (give it a bit of time to render)
+    // Give it a bit of time to render the new trip editor
     setTimeout(() => {
       if (window.innerWidth <= 768) return; // Prevent layout bouncing on mobile keyboard popup
       const inputs = document.querySelectorAll('.trip-header input[placeholder="Trip Name"]');
       if (inputs.length) {
         (inputs[0] as HTMLElement).focus();
-      } else {
+        setTimeout(() => { (inputs[0] as HTMLInputElement).select(); }, 50);
         const titleInputs = document.querySelectorAll('input[placeholder="Waypoint Name"], .waypoint-title-input');
         if (titleInputs.length) {
           (titleInputs[0] as HTMLElement).focus();
@@ -463,7 +489,7 @@ export default function App() {
 
   const mapComponentRef = useRef<MapRef>(null);
 
-  const handleDeleteTrip = (tripId: string) => {
+  const handleDeleteTrip = async (tripId: string) => {
     setTrips(prev => prev.filter(t => t.id !== tripId));
     setHistories(prev => {
       const next = { ...prev };
@@ -471,6 +497,10 @@ export default function App() {
       return next;
     });
     TripAPI.deleteTrip(tripId);
+    
+    if (persistingManager.getAvailableServices().length > 0) {
+      await persistingManager.deleteFromAll(tripId);
+    }
   };
 
   const handleUploadTrip = async (trip: Trip) => {

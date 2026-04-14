@@ -115,6 +115,42 @@ export class GitHubPersistingService implements PersistingService {
     }
   }
 
+  async delete(tripId: string): Promise<void> {
+    if (!this.isAvailable()) return;
+    const repo = this.getRepo();
+    const path = `trips/${tripId}.triplo.json`;
+    
+    let sha: string | undefined;
+    try {
+      const res = await this.request(`/repos/${repo}/contents/${path}`);
+      if (res.ok) {
+        const fileData = await res.json();
+        sha = fileData.sha;
+      } else {
+        return; // File does not exist
+      }
+    } catch (e) {
+      return; // Ignored: probably 404
+    }
+
+    if (!sha) return;
+
+    const body = JSON.stringify({
+      message: `Triplo: Delete trip ${tripId}`,
+      sha
+    });
+
+    const deleteRes = await this.request(`/repos/${repo}/contents/${path}`, {
+      method: 'DELETE',
+      body
+    });
+
+    if (!deleteRes.ok) {
+      const errText = await deleteRes.text();
+      console.error(`Failed to delete trip ${tripId} from GitHub: ${deleteRes.status} ${errText}`);
+    }
+  }
+
   isAvailable(): boolean {
     return !!localStorage.getItem('github_token') && !!localStorage.getItem('github_repo');
   }
