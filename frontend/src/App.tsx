@@ -41,6 +41,7 @@ export default function App() {
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
   const [hoveredCoordinate, setHoveredCoordinate] = useState<{ lon: number; lat: number; ele?: number } | null>(null);
+  const [exitingTempTripAlert, setExitingTempTripAlert] = useState<boolean>(false);
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
@@ -233,7 +234,7 @@ export default function App() {
   };
 
   const handleSave = async () => {
-    if (!selectedTrip) return;
+    if (!selectedTrip) return false;
     
     try {
       let tripToSave = { ...selectedTrip, updatedAt: new Date().toISOString() };
@@ -283,9 +284,11 @@ export default function App() {
       if (isNew) {
          setSelectedTrip(newTripState);
       }
+      return true;
     } catch (e) {
       console.error(e);
       alert('Failed to save trip');
+      return false;
     }
   };
 
@@ -324,13 +327,15 @@ export default function App() {
     }
   };
 
-  const handleCreateTrip = () => {
-    const title = 'New Trip';
+  const handleCreateTrip = (initialPoi?: any, initialDetails?: any) => {
+    const title = initialPoi?.name || initialDetails?.name || initialDetails?.display_name || 'New Trip';
     const tempId = `temp_trip_${Math.random().toString(36).substring(2, 9)}`;
     const newWpId = `wp_${Math.random().toString(36).substring(2, 9)}`;
+    const initialCoords = initialPoi?.coordinates || [];
+
     const newTrip = computeTripCaches({
       id: tempId,
-      name: title,
+      name: title as string,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       segments: [
@@ -340,12 +345,20 @@ export default function App() {
           routingService: 'GraphHopper Router',
           routingProfile: 'car',
           source: 'router',
-          geometry: { type: 'LineString', coordinates: [] },
+          geometry: { type: 'LineString', coordinates: initialCoords.length > 0 ? [initialCoords] : [] },
           waypoints: [
             {
               id: newWpId,
-              coordinates: [] as any,
-              name: '',
+              coordinates: initialCoords as any,
+              name: initialPoi?.name || initialDetails?.name || initialDetails?.display_name || '',
+              ...(initialPoi ? {
+                poi: {
+                  id: initialPoi.id || initialPoi.properties?.id || initialDetails?.osm_id,
+                  name: initialPoi.name || initialDetails?.name || initialDetails?.display_name,
+                  type: initialPoi.class,
+                  details: initialDetails
+                }
+              } : {})
             }
           ]
         }
@@ -421,6 +434,11 @@ export default function App() {
   };
 
   const handleGoBackTripEditor = () => {
+    if (selectedTrip && selectedTrip.id.startsWith('temp_trip_')) {
+      setExitingTempTripAlert(true);
+      return;
+    }
+
     setSelectedTrip(null);
     setSelectedSegmentId(null);
     setSelectedWaypointId(null);
@@ -524,18 +542,24 @@ export default function App() {
     }
   };
 
-  const handleSelectTrip = (trip: Trip) => {
+  const handleSelectTrip = (trip: Trip, maintainState?: boolean) => {
     if (conflictedTripIds.has(trip.id)) {
       setResolvingTripId(trip.id);
       return;
     }
+    setSelectedWaypointId(null);
+    setSelectedSegmentId(null);
     setSelectedTrip(trip);
+
+    if (maintainState) return;
+
+    setIsSidebarCollapsed(true);
+
     setTimeout(() => {
       if (mapComponentRef.current) {
-        mapComponentRef.current.zoomToTrip(trip);
+        mapComponentRef.current.zoomToTrip(trip, 'collapsed');
       }
     }, 100);
-    setIsSidebarCollapsed(true);
   };
 
   const handleUpdateExternalTrips = (updatedTrips: Trip[]) => {
@@ -552,8 +576,12 @@ export default function App() {
     updatedTrips.forEach(t => TripAPI.saveTrip(t));
   };
 
+  const isMobileSearchOpen = isSearchOpen;
+  const isMobilePoiSmaller = !!selectedPOI;
+  const sidebarClasses = `sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isMobileSearchOpen ? 'search-maximized' : ''} ${isMobilePoiSmaller && !isSearchOpen ? 'poi-info-smaller' : ''}`;
+
   const sidebarProps = {
-    className: `sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`,
+    className: sidebarClasses,
     onTouchStart: (e: React.TouchEvent) => {
       const target = e.target as HTMLElement;
       const contentScrollContainer = target.closest('.content') || target.closest('.trip-editor');
@@ -613,9 +641,9 @@ export default function App() {
             onGoBack={() => setIsSearchOpen(false)}
             onResultClick={(result) => {
               if (Array.isArray(result)) {
-                mapComponentRef.current?.flyTo(result[0], result[1]);
-              } else {
-                mapComponentRef.current?.flyTo(parseFloat(result.lon), parseFloat(result.lat));
+                  mapComponentRef.current?.flyTo(result[0], result[1], 'open', true);
+                } else {
+                  mapComponentRef.current?.flyTo(parseFloat(result.lon), parseFloat(result.lat), 'open', true);
                 const newPoi = {
                   id: `search-${result.osm_type}-${result.osm_id}`,
                   name: result.name || result.display_name.split(',')[0],
@@ -634,10 +662,16 @@ export default function App() {
             poi={selectedPOI}
             trip={selectedTrip}
             onGoBack={handleGoBackPOI}
-            onUpdateTrip={(newTrip) => updateTripState(newTrip.id, newTrip)}            onAddedToTrip={(wpId) => {
+            onUpdateTrip={(newTrip) => updateTripState(newTrip.id, newTrip)}
+            onStartNewTrip={(poi, details) => {
+              handleCreateTrip(poi, details);
+              setSelectedPOI(null);
+            }}
+            onAddedToTrip={(wpId) => {
               handleGoBackPOI();
               setHighlightedWaypointId(wpId);
-            }}          />
+            }}
+          />
         ) : selectedSegmentId && selectedTrip ? (
           <SegmentInfo 
             segmentId={selectedSegmentId} 
@@ -647,7 +681,7 @@ export default function App() {
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}
             onHoverCoordinate={setHoveredCoordinate}
-            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg)}
+            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg, window.innerWidth <= 768 ? (!isSidebarCollapsed ? 'open' : 'collapsed') : 'current')}
           />
         ) : selectedWaypointId && selectedTrip ? (
           <WaypointInfo 
@@ -674,16 +708,19 @@ export default function App() {
             onSelectSegment={setSelectedSegmentId}
             onSelectWaypoint={setSelectedWaypointId}
             onZoomToTrip={() => {
-              mapComponentRef.current?.zoomToTrip(selectedTrip);
               setIsSidebarCollapsed(true);
+              mapComponentRef.current?.zoomToTrip(selectedTrip, 'collapsed');
             }}
-            onJumpToWaypoint={(id) => mapComponentRef.current?.handleJumpToWaypoint(id)}
+            onJumpToWaypoint={(id) => {
+              setIsSidebarCollapsed(true);
+              mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed');
+            }}
             highlightedWaypointId={highlightedWaypointId}
             onUndo={handleUndo}
             onRedo={handleRedo}
             canUndo={!!histories[selectedTrip.id]?.past.length}
             canRedo={!!histories[selectedTrip.id]?.future.length}
-            onSave={handleSave}
+            onSave={() => {handleSave();}}
             canSave={histories[selectedTrip.id]?.lastSavedStr !== stripMeta(selectedTrip)}
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             onWaitingForCoords={(wpId) => {
@@ -709,10 +746,20 @@ export default function App() {
         }}
         setSelectedSegmentId={setSelectedSegmentId}
         selectedPOI={selectedPOI}
-        setSelectedPOI={setSelectedPOI}
+        setSelectedPOI={(poi) => {
+          setSelectedPOI(poi);
+          if (poi && mapComponentRef.current && poi.coordinates) {
+             mapComponentRef.current.flyTo(poi.coordinates[0], poi.coordinates[1], 'open', true);
+          }
+          if (poi) setIsSidebarCollapsed(false);
+        }}
         hoveredCoordinate={hoveredCoordinate}
         onHoverCoordinate={setHoveredCoordinate}
-        onSearchClick={() => setIsSearchOpen(true)}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onSearchClick={() => {
+          setIsSearchOpen(true);
+          setIsSidebarCollapsed(false);
+        }}
         onSelectTrip={handleSelectTrip}
       />
     </div>
@@ -737,6 +784,37 @@ export default function App() {
           ))}
         </div>
       </div>
+    </Dialog>}
+
+    {exitingTempTripAlert && <Dialog
+      isOpen={true}
+      title="Unsaved Trip"
+      onClose={() => setExitingTempTripAlert(false)}
+      actions={
+        <>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => {
+             setExitingTempTripAlert(false);
+             setSelectedTrip(null);
+             setSelectedSegmentId(null);
+             setSelectedWaypointId(null);
+             setHighlightedWaypointId(null);
+             setSelectedPOI(null);
+          }}>Discard</button>
+          <button className="dialog-btn dialog-btn-primary" onClick={async () => {
+             const success = await handleSave();
+             if (success) {
+               setExitingTempTripAlert(false);
+               setSelectedTrip(null);
+               setSelectedSegmentId(null);
+               setSelectedWaypointId(null);
+               setHighlightedWaypointId(null);
+               setSelectedPOI(null);
+             }
+          }}>Save & Exit</button>
+        </>
+      }
+    >
+      <p>This new trip has not been saved yet. Would you like to save it or discard it?</p>
     </Dialog>}
     </>
   );

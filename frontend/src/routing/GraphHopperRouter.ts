@@ -32,6 +32,8 @@ export class GraphHopperRouter implements IRoutingService {
       case 'bike':
         return ['bike'];
       case 'car':
+      case 'bus':
+      case 'taxi':
         return ['car'];
       case 'other':
         return ['foot', 'bike', 'car'];

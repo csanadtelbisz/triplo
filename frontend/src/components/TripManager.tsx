@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import { ConfirmDialog } from './Dialog';
@@ -18,11 +18,21 @@ interface TripManagerProps {
   isTripsLoading?: boolean;
 }
 
+let tripManagerScrollPos = 0;
+
 export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, isTripsLoading }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = tripManagerScrollPos;
+    }
+  }, []);
 
   const handleSaveAllWrapper = async () => {
     setIsSavingAll(true);
@@ -76,7 +86,11 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
            <button className="iconButton" title="New Trip" onClick={onCreateTrip}><MaterialIcon name="add" size={20} /></button>
         </div>
       </div>
-      <div className="content">
+      <div
+        className="content"
+        ref={contentRef}
+        onScroll={(e) => { tripManagerScrollPos = e.currentTarget.scrollTop; }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ fontSize: '0.9rem', color: '#495057', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -96,7 +110,19 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
           </button>
         </div>
 
-        {trips.map(trip => {
+        {[...trips].sort((a, b) => {
+          const dateA = a.endDate || a.startDate;
+          const dateB = b.endDate || b.startDate;
+          if (dateA && dateB) {
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+          } else if (dateA) {
+            return -1;
+          } else if (dateB) {
+            return 1;
+          } else {
+            return (a.name || '').localeCompare(b.name || '');
+          }
+        }).map(trip => {
           const startDateStr = trip.startDate ? new Date(trip.startDate).toLocaleDateString() : '';
           const endDateStr = trip.endDate ? new Date(trip.endDate).toLocaleDateString() : '';
           const dateDisplay = startDateStr && endDateStr && startDateStr !== endDateStr

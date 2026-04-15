@@ -21,8 +21,7 @@ interface SegmentInfoProps {
 export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
-  const [copyColorOffer, setCopyColorOffer] = useState<{ color: string, icon: string } | null>(null);
-  
+  const [copyColorOffer, setCopyColorOffer] = useState<{ color: string, icon: string, mode?: string, segmentId?: string, newName?: string } | null>(null);
   const [customIconInput, setCustomIconInput] = useState<string>('');
   
   useEffect(() => {
@@ -160,11 +159,41 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
              defaultValue={seg.name || ''} 
              className="form-input" 
              onBlur={(e) => {
-               if (e.target.value !== (seg?.name || '')) {
-                 const newSegments = trip.segments.map(s => 
-                   s.id === segmentId ? { ...s, name: e.target.value } : s
-                 );
-                 onUpdateTrip({ ...trip, segments: newSegments });
+               const newValue = e.target.value;
+               if (newValue !== (seg?.name || '')) {
+                 let colorToCopy: string | undefined;
+                 let iconToCopy: string | undefined;
+                 let modeToCopy: string | undefined;
+
+                 if (newValue.trim() !== '') {
+                   let found = trip.segments.find(s => s.id !== segmentId && s.name?.toLowerCase() === newValue.toLowerCase());
+                   if (!found && allTrips) {
+                     for (const t of allTrips) {
+                       found = t.segments.find(s => s.name?.toLowerCase() === newValue.toLowerCase());
+                       if (found) break;
+                     }
+                   }
+                   if (found) {
+                     colorToCopy = found.customColor;
+                     iconToCopy = found.customIcon;
+                     modeToCopy = found.transportMode;
+                   }
+                 }
+
+                 if (modeToCopy && newValue.trim() !== '') {
+                    setCopyColorOffer({
+                      color: colorToCopy || ModeThemes[modeToCopy as any as import('../../../shared/types').TransportMode]?.color || '#000000',
+                      icon: iconToCopy || '',
+                      mode: modeToCopy,
+                      segmentId: segmentId,
+                      newName: newValue
+                    });
+                 } else {
+                   const newSegments = trip.segments.map(s =>
+                     s.id === segmentId ? { ...s, name: newValue } : s
+                   );
+                   onUpdateTrip({ ...trip, segments: newSegments });
+                 }
                }
              }}
            />
@@ -437,26 +466,69 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
 
       <ConfirmDialog
         isOpen={copyColorOffer !== null}
-        title="Copy Color?"
+        title={copyColorOffer?.newName ? "Apply Style Settings?" : "Copy Color?"}
         message={
-          <>
-            Found another segment with the custom icon "{copyColorOffer?.icon}" and a custom color
-            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: copyColorOffer?.color, marginLeft: '6px', marginRight: '2px', verticalAlign: 'middle', border: '1px solid #ccc' }}></span>
-            . Do you want to copy its color?
-          </>
+          copyColorOffer?.newName ? (
+            <>
+              <div style={{ marginBottom: "16px" }}>
+                A segment with the name <strong>{copyColorOffer.newName}</strong> already exists.
+                Would you like to copy its transport mode, color, and icon?
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+                <strong>Icon:</strong>
+                <span style={{ color: copyColorOffer.color }}>
+                  {copyColorOffer.mode === 'other' && copyColorOffer.icon ? <MaterialIcon name={copyColorOffer.icon} size={24} /> : getModeIcon((copyColorOffer.mode as any) || 'other', 24)}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <strong>Color:</strong>
+                <div style={{ padding: "4px 8px", backgroundColor: copyColorOffer.color, color: "#fff", borderRadius: "4px" }}>
+                  {copyColorOffer.color}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              Found another segment with the custom icon "{copyColorOffer?.icon}" and a custom color
+              <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: copyColorOffer?.color, marginLeft: '6px', marginRight: '2px', verticalAlign: 'middle', border: '1px solid #ccc' }}></span>
+              . Do you want to copy its color?
+            </>
+          )
         }
-        confirmLabel="Yes, copy color"
-        cancelLabel="No, thanks"
+        confirmLabel={copyColorOffer?.newName ? "Apply Style" : "Yes, copy color"}
+        cancelLabel={copyColorOffer?.newName ? "No, leave as is" : "No, thanks"}
         onConfirm={() => {
           if (copyColorOffer) {
-            const newSegments = trip.segments.map(s =>
-              s.id === segmentId ? { ...s, customColor: copyColorOffer.color } : s
-            );
+            const newSegments = trip.segments.map(s => {
+              if (s.id === (copyColorOffer.segmentId || segmentId)) {
+                if (copyColorOffer.newName) {
+                  return {
+                    ...s,
+                    name: copyColorOffer.newName,
+                    customColor: copyColorOffer.color,
+                    customIcon: copyColorOffer.icon,
+                    transportMode: copyColorOffer.mode as any
+                  };
+                } else {
+                  return { ...s, customColor: copyColorOffer.color };
+                }
+              }
+              return s;
+            });
             onUpdateTrip({ ...trip, segments: newSegments });
             setCopyColorOffer(null);
           }
         }}
-        onCancel={() => setCopyColorOffer(null)}
+        onCancel={() => {
+          if (copyColorOffer && copyColorOffer.newName) {
+            // Apply just the name change, no styling
+            const newSegments = trip.segments.map(s =>
+              s.id === (copyColorOffer.segmentId || segmentId) ? { ...s, name: copyColorOffer.newName } : s
+            );
+            onUpdateTrip({ ...trip, segments: newSegments });
+          }
+          setCopyColorOffer(null);
+        }}
       />
     </>
   );

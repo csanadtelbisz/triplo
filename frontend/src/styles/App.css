@@ -28,7 +28,7 @@ body, html, #root {
   flex-direction: column;
   z-index: 10000;
   box-shadow: 2px 0 8px rgba(0,0,0,0.05);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 0.3s ease;
 }
 
 #map {

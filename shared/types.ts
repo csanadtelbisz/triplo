@@ -1,8 +1,8 @@
 // shared/types.ts
 
-export type TransportMode = 'walk' | 'hike' | 'run' | 'bike' | 'car' | 'flight' | 'rail' | 'ferry' | 'waterway' | 'other';
+export type TransportMode = 'walk' | 'hike' | 'run' | 'bike' | 'car' | 'flight' | 'rail' | 'bus' | 'taxi' | 'ferry' | 'waterway' | 'other';
 
-export const TRANSPORT_MODES: TransportMode[] = ['walk', 'hike', 'run', 'bike', 'car', 'flight', 'rail', 'ferry', 'waterway', 'other'];
+export const TRANSPORT_MODES: TransportMode[] = ['walk', 'hike', 'run', 'bike', 'car', 'flight', 'rail', 'bus', 'taxi', 'ferry', 'waterway', 'other'];
 
 export interface Coordinates {
   lon: number;

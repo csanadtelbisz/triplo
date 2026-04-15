@@ -14,6 +14,8 @@ export function getModeIcon(mode: TransportMode, size: number = 18) {
     case 'car': return <MaterialIcon name="directions_car" size={size} />;
     case 'flight': return <MaterialIcon name="flight" size={size} />;
     case 'rail': return <MaterialIcon name="train" size={size} />;
+    case 'bus': return <MaterialIcon name="directions_bus" size={size} />;
+    case 'taxi': return <MaterialIcon name="local_taxi" size={size} />;
     case 'ferry': return <MaterialIcon name="directions_boat" size={size} />;
     case 'waterway': return <MaterialIcon name="water" size={size} />;
     default: return <MaterialIcon name="navigation" size={size} />;

@@ -12,9 +12,10 @@ interface POIInfoProps {
   onGoBack: () => void;
   onUpdateTrip: (trip: Trip) => void;
   onAddedToTrip: (wpId: string) => void;
+  onStartNewTrip?: (poi: any, details?: any) => void;
 }
 
-export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: POIInfoProps) => {
+export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip }: POIInfoProps) => {
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -140,7 +141,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: PO
             </>
         )}
 
-        {trip && (
+        {trip ? (
             <div className="actions-group" style={{marginTop: '20px'}}>
                 <button 
                   className="action-button primary"
@@ -148,6 +149,16 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip }: PO
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                     <MaterialIcon name="add_location" /> Add to Trip
+                </button>
+            </div>
+        ) : (
+            <div className="actions-group" style={{marginTop: '20px'}}>
+                <button
+                  className="action-button primary"
+                  onClick={() => onStartNewTrip && onStartNewTrip(poi, details)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                    <MaterialIcon name="add_location" /> Start new trip here
                 </button>
             </div>
         )}

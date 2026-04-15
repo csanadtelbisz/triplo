@@ -40,10 +40,10 @@ function getRenderGeometry(seg: any) {
 }
 
 export interface MapRef {
-    zoomToTrip: (trip: Trip) => void;
-    zoomToSegment: (segment: Segment) => void;
-    handleJumpToWaypoint: (waypointId: string) => void;
-    flyTo: (lon: number, lat: number) => void;
+    zoomToTrip: (trip: Trip, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
+    zoomToSegment: (segment: Segment, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
+    handleJumpToWaypoint: (waypointId: string, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
+    flyTo: (lon: number, lat: number, targetSidebarState?: 'open' | 'collapsed' | 'current', onlyIfNotVisible?: boolean) => void;
 }
 
 export interface MapProps {
@@ -63,6 +63,7 @@ export interface MapProps {
     onHoverCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
     onSearchClick: () => void;
     onSelectTrip?: (trip: Trip) => void;
+    isSidebarCollapsed?: boolean;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -81,7 +82,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     hoveredCoordinate,
     onHoverCoordinate,
     onSearchClick,
-    onSelectTrip
+    onSelectTrip,
+    isSidebarCollapsed
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -96,14 +98,26 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const layerSelectorRef = useRef<HTMLDivElement>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [activeMapStyle, setActiveMapStyle] = useState<string>('openfreemap');
+  const [activeMapStyle, setActiveMapStyle] = useState<string>(() => {
+    return localStorage.getItem('activeMapStyle') || 'openfreemap';
+  });
   const [showLayerSelector, setShowLayerSelector] = useState(false);
-  const [showHiddenSegments, setShowHiddenSegments] = useState(false);
+  const [showHiddenSegments, setShowHiddenSegments] = useState<boolean>(() => {
+    return localStorage.getItem('showHiddenSegments') === 'true';
+  });
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string, mode: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
 
-  const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip });
+  useEffect(() => {
+    localStorage.setItem('activeMapStyle', activeMapStyle);
+  }, [activeMapStyle]);
+
+  useEffect(() => {
+    localStorage.setItem('showHiddenSegments', String(showHiddenSegments));
+  }, [showHiddenSegments]);
+
+  const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI });
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -135,14 +149,31 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [waitingWaypointId, waitingWaypointIdRef]);
 
   useEffect(() => {
-    hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip };
-  }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip]);
+    hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI };
+  }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI]);
 
-  const getPadding = () => window.innerWidth <= 768 
-    ? { top: 50, bottom: 150, left: 50, right: 50 } 
-    : { top: 50, bottom: 50, left: 50, right: 50 };
+// Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
+  const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
+    if (window.innerWidth > 768) {
+      return { top: 50, bottom: 50, left: 50, right: 50 };
+    }
+    // Mobile height offset calculation.
+    let heightOffset = 64; // Collapsed height
 
-  const zoomToTrip = (trip: Trip) => {
+    const shouldBeOpen = targetSidebarState === 'open'
+      ? true
+      : targetSidebarState === 'collapsed'
+        ? false
+        : !isSidebarCollapsed;
+
+    if (shouldBeOpen) {
+        const isEditingPoint = !!hotkeyRefs.current.selectedTrip;
+        heightOffset = isEditingPoint || hotkeyRefs.current.selectedPOI ? Math.min(window.innerHeight * 0.50, 400) : 150;
+    }
+    return { top: 50, bottom: heightOffset, left: 50, right: 50 };
+  };
+
+  const zoomToTrip = (trip: Trip, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
     if (!mapRef.current) return;
 
     // Find waypoint and neighbors
@@ -168,7 +199,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     const bounds = new LngLatBounds(allWps[0].coordinates, allWps[0].coordinates);
     allWps.forEach(wp => bounds.extend(wp.coordinates));
 
-    const paddingLayer = getPadding();
+    const paddingLayer = getPadding(targetSidebarState);
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
@@ -176,6 +207,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
+          padding: paddingLayer,
           essential: true,
           duration: 1200
         });
@@ -183,9 +215,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const zoomToSegment = (seg: Segment) => {
+  const zoomToSegment = (seg: Segment, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
     if (!mapRef.current) return;
-    
+
     const allWps: { id: string, coordinates: [number, number] }[] = [];
     seg.waypoints.forEach(wp => {
       if (wp.coordinates && wp.coordinates.length === 2) {
@@ -207,10 +239,12 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding() });
+      const targetPadding = getPadding(targetSidebarState);
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
+          padding: targetPadding,
           essential: true,
           duration: 1200
         });
@@ -218,7 +252,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const handleJumpToWaypoint = (waypointId: string) => {
+  const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
     if (!selectedTrip || !mapRef.current) return;
     
     // Find waypoint and neighbors
@@ -252,12 +286,13 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding() });
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding(targetSidebarState) });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
           center: targetCoord,
           zoom: Math.min(camera.zoom || 15, 15),
+          padding: getPadding(targetSidebarState),
           duration: 1200,
           essential: true
         });
@@ -265,11 +300,29 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const flyTo = (lon: number, lat: number) => {
-    mapRef.current?.flyTo({
+  const flyTo = (lon: number, lat: number, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', onlyIfNotVisible: boolean = false) => {
+    if (!mapRef.current) return;
+
+    const padding = getPadding(targetSidebarState);
+
+    if (onlyIfNotVisible && window.innerWidth > 768) {
+      const container = mapRef.current.getContainer();
+      const rect = container.getBoundingClientRect();
+      const px = mapRef.current.project([lon, lat]);
+
+      const isVisible =
+        px.x >= padding.left &&
+        px.x <= (rect.width - padding.right) &&
+        px.y >= padding.top &&
+        px.y <= (rect.height - padding.bottom);
+
+      if (isVisible) return;
+    }
+
+    mapRef.current.flyTo({
       center: [lon, lat],
       zoom: 14,
-      padding: window.innerWidth <= 768 ? { top: 0, bottom: 150, left: 0, right: 0 } : undefined,
+      padding,
       essential: true
     });
   };
@@ -850,6 +903,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 setTimeout(() => setHighlightedWaypointId(wp.id), 10);
                 setSelectedWaypointId(null);
                 setSelectedSegmentId(null);
+
+                if (window.innerWidth <= 768 && wp.coordinates) {
+                   flyTo(wp.coordinates[0], wp.coordinates[1], 'open');
+                }
               }
             });
             
@@ -862,8 +919,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
           mapRef.current.fire('move');
         }
       }
-      }
     }
+  }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments]);
 

@@ -24,15 +24,25 @@ interface TripEditorProps {
   canSave: boolean;
   onUpdateTrip: (newTrip: Trip) => void;
   onWaitingForCoords: (waypointId: string | null) => void;
+  allTrips?: Trip[];
 }
+
+const tripEditorScrollPositions: Record<string, number> = {};
 
 export function TripEditor({
   trip, onGoBack, onSelectSegment, onSelectWaypoint,
   onZoomToTrip, onJumpToWaypoint, highlightedWaypointId,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
-  onWaitingForCoords
+  onWaitingForCoords, allTrips
 }: TripEditorProps) {
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = tripEditorScrollPositions[trip.id] || 0;
+    }
+  }, [trip.id]);
   const [focusedWaypointWithoutCoords, setFocusedWaypointWithoutCoords] = useState<string | null>(null);
   const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
   const [wpSearchResults, setWpSearchResults] = useState<any[]>([]);
@@ -42,7 +52,9 @@ export function TripEditor({
   const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [exportMinify, setExportMinify] = useState(false);
-  
+
+  const [copyColorOffer, setCopyColorOffer] = useState<{ color: string, icon: string, mode: string, segmentId: string, newName: string } | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const handleSaveWrapper = async () => {
     setIsSaving(true);
@@ -113,36 +125,40 @@ export function TripEditor({
 
   useEffect(() => {
     if (highlightedWaypointId && waypointRefs.current[highlightedWaypointId]) {
-      const el = waypointRefs.current[highlightedWaypointId];
-      if (!el) return;
+      // Delay scrolling by 350ms to allow Mobile sidebar CSS expansion (.sidebar transition 0.3s) to finish
+      // otherwise the offsetTop and clientHeight measurements are completely wrong.
+      setTimeout(() => {
+        const el = waypointRefs.current[highlightedWaypointId as string];
+        if (!el) return;
 
-      if (window.innerWidth <= 768) {
         const container = el.closest('.content') || el.closest('.trip-editor');
         if (container) {
-          const targetTop = el.offsetTop - (container as HTMLElement).offsetTop;
-          container.scrollTo({ top: targetTop - (container.clientHeight / 2), behavior: 'smooth' });
+          const rect = el.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const targetTop = container.scrollTop + (rect.top - containerRect.top);
+          container.scrollTo({ top: targetTop - container.clientHeight / 3, behavior: 'smooth' });
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      } else {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
 
-      // Add a brief highlight flash
-      const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
-      highlightTargets.forEach(target => {
-        target.style.transition = 'background-color 0.5s';
-        target.style.backgroundColor = '#e6f2ff';
-      });
-      
-      const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
-      if (input && window.innerWidth > 768) {
-        input.focus();
-      }
-      
-      setTimeout(() => {
+        // Add a brief highlight flash
+        const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
         highlightTargets.forEach(target => {
-          target.style.backgroundColor = '';
+          target.style.transition = 'background-color 0.5s';
+          target.style.backgroundColor = '#e6f2ff';
         });
-      }, 1000);
+
+        const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
+        if (input && window.innerWidth > 768) {
+          input.focus({ preventScroll: true });
+        }
+
+        setTimeout(() => {
+          highlightTargets.forEach(target => {
+            target.style.backgroundColor = '';
+          });
+        }, 1000);
+      }, window.innerWidth <= 768 ? 350 : 0);
     }
   }, [highlightedWaypointId]);
 
@@ -220,7 +236,7 @@ export function TripEditor({
     // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
     const HTMLElementTarget = e.target as HTMLElement;
     if (HTMLElementTarget.closest('button, input, textarea')) return;
-    if (!HTMLElementTarget.closest('.timeline-col') && !HTMLElementTarget.closest('.drag-handle')) {
+    if (!HTMLElementTarget.closest('.timeline-col')) {
       return;
     }
 
@@ -456,16 +472,14 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
       const inputs = Array.from(document.querySelectorAll('.waypoint-title-input')) as HTMLInputElement[];
       const el = inputs.find(input => input.getAttribute('data-wpid') === newWaypoint.id);
       if (el) {
-        if (window.innerWidth <= 768) {
-          const container = el.closest('.content') || el.closest('.trip-editor');
-          if (container) {
-            const targetTop = el.offsetTop - (container as HTMLElement).offsetTop;
-            container.scrollTo({ top: targetTop - (container.clientHeight / 2), behavior: 'smooth' });
-          }
-        } else {
-          el.focus();
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const container = el.closest('.content') || el.closest('.trip-editor');
+        if (container) {
+          const rect = el.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const targetTop = container.scrollTop + (rect.top - containerRect.top);
+          container.scrollTo({ top: targetTop - (container.clientHeight / 2), behavior: 'smooth' });
         }
+        el.focus({ preventScroll: true });
       }
     }, 100);
   };
@@ -535,7 +549,10 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
 
   const handleSplitSegment = useCallback(async (segIndex: number, wpIndex: number) => {
     const seg = trip.segments[segIndex];
-    if (wpIndex === 0 || wpIndex === seg.waypoints.length - 1) return;
+    if (wpIndex === 0) return;
+
+    // Only allow splitting at the last waypoint if it's the last segment and it isn't already a single waypoint
+    if (wpIndex === seg.waypoints.length - 1 && !(segIndex === trip.segments.length - 1 && seg.waypoints.length > 1)) return;
 
     const newSegments = [...trip.segments];
     // Generate an ID based on highest existing segment number suffix if possible, or just a unique id.
@@ -581,7 +598,11 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
            <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>
-      <div className="content">
+      <div
+        className="content"
+        ref={contentRef}
+        onScroll={(e) => { tripEditorScrollPositions[trip.id] = e.currentTarget.scrollTop; }}
+      >
          <input 
             key={`title-${trip.name}`}
             className="form-input title-input"
@@ -749,10 +770,39 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                defaultValue={seg.name || seg.transportMode}
                                onKeyDown={handleSegmentTitleKeyDown}
                                onBlur={(e) => {
-                                 if (e.target.value !== (seg.name || seg.transportMode) && e.target.value !== seg.name) {
-                                   const newSegments = [...trip.segments];
-                                   newSegments[segIndex] = { ...seg, name: e.target.value };
-                                   onUpdateTrip({ ...trip, segments: newSegments });
+                                 const newValue = e.target.value;
+                                 if (newValue !== (seg.name || seg.transportMode) && newValue !== seg.name) {
+                                   let colorToCopy: string | undefined;
+                                   let iconToCopy: string | undefined;
+                                   let modeToCopy: string | undefined;
+                                   if (newValue.trim() !== '') {
+                                      let found = trip.segments.find(s => s.id !== seg.id && s.name?.toLowerCase() === newValue.toLowerCase());
+                                      if (!found && allTrips) {
+                                         for (const t of allTrips) {
+                                            found = t.segments.find(s => s.name?.toLowerCase() === newValue.toLowerCase());
+                                            if (found) break;
+                                         }
+                                      }
+                                      if (found) {
+                                         colorToCopy = found.customColor;
+                                         iconToCopy = found.customIcon;
+                                         modeToCopy = found.transportMode;
+                                      }
+                                   }
+
+                                   if (modeToCopy && newValue.trim() !== '') {
+                                      setCopyColorOffer({
+                                         color: colorToCopy || ModeThemes[modeToCopy as any as import('../../../shared/types').TransportMode]?.color || '#000000',
+                                         icon: iconToCopy || '',
+                                         mode: modeToCopy,
+                                         segmentId: seg.id,
+                                         newName: newValue
+                                      });
+                                   } else {
+                                     const newSegments = [...trip.segments];
+                                     newSegments[segIndex] = { ...seg, name: newValue };
+                                     onUpdateTrip({ ...trip, segments: newSegments });
+                                   }
                                  }
                                }}
                              />
@@ -775,11 +825,11 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                    onUpdateTrip({ ...trip, segments: newSegments });
                                  }}
                                >
-                               {seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18)}
+                               {seg.transportMode !== 'other' ? getModeIcon(seg.transportMode, 18) : (seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18))}
                                </button>
-                               <button 
-                                 className="iconButton small" 
-                                 title={seg.isHidden ? "Show Segment" : "Hide Segment"} 
+                               <button
+                                 className="iconButton small"
+                                 title={seg.isHidden ? "Show Segment" : "Hide Segment"}
                                  onClick={(e) => {
                                    e.stopPropagation();
                                    const newSegments = trip.segments.map(s => 
@@ -866,9 +916,6 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                  }
                                }}
                              />
-                             <div className="drag-handle" style={{ cursor: isDragged ? 'grabbing' : 'grab', padding: '0 8px', color: '#ccc', display: 'flex', alignItems: 'center' }}>
-                               <MaterialIcon name="drag_indicator" size={20} />
-                             </div>
                              {wpSearchState?.wpId === wp.id && (wpSearchResults.length > 0 || isWpSearching) && (
                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                                  {isWpSearching && <div style={{ padding: '8px', fontSize: '0.85rem', color: '#666' }}>Searching...</div>}
@@ -907,7 +954,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                            </div>
                            <div className="waypoint-tools">
                              <button className="iconButton small" title="Jump to point" onClick={() => onJumpToWaypoint(wp.id)}><MaterialIcon name="my_location" size={16} /></button>
-                             <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || wpIndex === seg.waypoints.length - 1} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
+                             <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || (wpIndex === seg.waypoints.length - 1 && !(segIndex === trip.segments.length - 1 && seg.waypoints.length > 1))} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
                              <button className="iconButton small" title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>
                              <button className="iconButton small" title="Move Later" disabled={!canMoveLater} onClick={() => handleMoveWaypointLater(wp.id)}><MaterialIcon name="arrow_downward" size={16} /></button>
                              <button className="iconButton small" title="Remove waypoint" disabled={!canRemove} onClick={() => handleRemoveWaypoint(wp.id)}><MaterialIcon name="delete" size={16} style={{ color: canRemove ? '#d9534f' : 'inherit' }} /></button>
@@ -967,19 +1014,33 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                <tbody>
                  {Object.entries(tripSummary.distanceByMode)
                    .sort(([, a], [, b]) => b - a)
-                   .map(([mode, dist]) => (
-                   <tr key={mode} className="trip-summary-row">
-                     <td className="trip-summary-td">
-                       <span style={{ color: ModeThemes[mode as keyof typeof ModeThemes]?.color || '#666' }}>
-                         {getModeIcon(mode as any, 16)}
-                       </span>
-                       {mode.replace('_', ' ')}
-                     </td>
-                     <td className="trip-summary-td right">
-                       {(dist as number).toFixed(1)}
-                     </td>
-                   </tr>
-                 ))}
+                   .map(([mode, dist]) => {
+                     const isOther = mode.startsWith('other:');
+                     const actualMode = isOther ? 'other' : mode;
+                     const targetIcon = isOther ? mode.split(':')[1] : undefined;
+
+                     let displayName = mode.replace('_', ' ');
+                     if (isOther) {
+                       const matchingSegs = trip.segments.filter(s => s.transportMode === 'other' && s.customIcon === targetIcon);
+                       const allNames = matchingSegs.map(s => s.name?.trim()).filter(n => typeof n === 'string' && n !== '');
+                       const commonName = allNames.length === matchingSegs.length && new Set(allNames).size === 1 ? allNames[0] : null;
+                       displayName = commonName || 'Other';
+                     }
+
+                     return (
+                       <tr key={mode} className="trip-summary-row">
+                         <td className="trip-summary-td">
+                           <span style={{ color: ModeThemes[actualMode as keyof typeof ModeThemes]?.color || '#666' }}>
+                             {isOther && targetIcon ? <MaterialIcon name={targetIcon} size={16} /> : getModeIcon(actualMode as any, 16)}
+                           </span>
+                           {displayName}
+                         </td>
+                         <td className="trip-summary-td right">
+                           {(dist as number).toFixed(1)}
+                         </td>
+                       </tr>
+                     );
+                   })}
                </tbody>
              </table>
            )}
@@ -1056,6 +1117,68 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
           </div>
         </div>
       </Dialog>
+      {copyColorOffer && (
+        <Dialog
+          isOpen={true}
+          title="Apply Style Settings?"
+          onClose={() => setCopyColorOffer(null)}
+          actions={
+            <>
+              <button
+                className="dialog-btn dialog-btn-cancel"
+                onClick={() => {
+                  const newSegments = [...trip.segments];
+                  const segIndex = trip.segments.findIndex(s => s.id === copyColorOffer.segmentId);
+                  if (segIndex !== -1) {
+                    newSegments[segIndex] = { ...trip.segments[segIndex], name: copyColorOffer.newName };
+                    onUpdateTrip({ ...trip, segments: newSegments });
+                  }
+                  setCopyColorOffer(null);
+                }}
+              >
+                No, leave as is
+              </button>
+              <button
+                className="dialog-btn dialog-btn-primary"
+                onClick={() => {
+                  const newSegments = [...trip.segments];
+                  const segIndex = trip.segments.findIndex(s => s.id === copyColorOffer.segmentId);
+                  if (segIndex !== -1) {
+                    newSegments[segIndex] = {
+                      ...trip.segments[segIndex],
+                      name: copyColorOffer.newName,
+                      customColor: copyColorOffer.color,
+                      customIcon: copyColorOffer.icon,
+                      transportMode: copyColorOffer.mode as any
+                    };
+                    onUpdateTrip({ ...trip, segments: newSegments });
+                  }
+                  setCopyColorOffer(null);
+                }}
+              >
+                Apply Style
+              </button>
+            </>
+          }
+        >
+          <div style={{ marginBottom: "16px" }}>
+            A segment with the name <strong>{copyColorOffer.newName}</strong> already exists.
+            Would you like to copy its transport mode, color, and icon?
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+            <strong>Icon:</strong>
+            <span style={{ color: copyColorOffer.color }}>
+              {copyColorOffer.mode === 'other' && copyColorOffer.icon ? <MaterialIcon name={copyColorOffer.icon} size={24} /> : getModeIcon(copyColorOffer.mode as any, 24)}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <strong>Color:</strong>
+            <div style={{ padding: "4px 8px", backgroundColor: copyColorOffer.color, color: "#fff", borderRadius: "4px" }}>
+              {copyColorOffer.color}
+            </div>
+          </div>
+        </Dialog>
+      )}
     </>
   );
 }

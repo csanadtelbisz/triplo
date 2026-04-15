@@ -97,7 +97,8 @@ export function getTripDistanceSummary(trip: Trip) {
     }
 
     totalDistance += segDist;
-    distanceByMode[seg.transportMode] = (distanceByMode[seg.transportMode] || 0) + segDist;
+    const modeKey = seg.transportMode === 'other' && seg.customIcon ? `other:${seg.customIcon}` : seg.transportMode;
+    distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDist;
   }
 
   return { totalDistance, distanceByMode };
@@ -167,7 +168,8 @@ export function computeTripCaches(trip: Trip): Trip {
     // Computing Segment stats
     const segDistStats = getSegmentDistanceSummary(seg);
     overallTotalDistance += segDistStats.totalDistance;
-    distanceByMode[seg.transportMode] = (distanceByMode[seg.transportMode] || 0) + segDistStats.totalDistance;
+    const modeKey = seg.transportMode === 'other' && seg.customIcon ? `other:${seg.customIcon}` : seg.transportMode;
+    distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDistStats.totalDistance;
 
     // Computing intermediate waypoint distances
     const wpStats: DistanceStats[] = [];
