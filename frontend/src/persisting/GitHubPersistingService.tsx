@@ -13,6 +13,7 @@ export class GitHubPersistingService implements PersistingService {
     if (!token) throw new Error('GitHub token missing');
 
     const response = await fetch(`https://api.github.com${url}`, {
+      cache: 'no-store',
       ...options,
       headers: {
         'Accept': 'application/vnd.github+json',
@@ -49,7 +50,7 @@ export class GitHubPersistingService implements PersistingService {
       await Promise.all(
         files.filter(f => f.name.endsWith('.triplo.json')).map(async (file) => {
           try {
-            const fileRes = await fetch(file.download_url);
+            const fileRes = await fetch(file.download_url, { cache: 'no-store' });
             if (fileRes.ok) {
               const tripData = await fileRes.json();
               if (tripData && tripData.id) {
