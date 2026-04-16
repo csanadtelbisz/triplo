@@ -52,7 +52,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
   }, []);
 
   return (
-    <div className="panel status-panel-container">
+    <>
       <div className="toolbar">
         <button className="iconButton" onClick={onGoBack} title="Go Back">
           <MaterialIcon name="arrow_back" size={20} />
@@ -227,6 +227,6 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
         onClose={() => setConfiguringService(null)} 
         onUpdateTrips={onUpdateTrips}
       />
-    </div>
+    </>
   );
 }

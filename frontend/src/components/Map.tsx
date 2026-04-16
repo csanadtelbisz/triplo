@@ -40,10 +40,10 @@ function getRenderGeometry(seg: any) {
 }
 
 export interface MapRef {
-    zoomToTrip: (trip: Trip, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
-    zoomToSegment: (segment: Segment, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
-    handleJumpToWaypoint: (waypointId: string, targetSidebarState?: 'open' | 'collapsed' | 'current') => void;
-    flyTo: (lon: number, lat: number, targetSidebarState?: 'open' | 'collapsed' | 'current', onlyIfNotVisible?: boolean) => void;
+    zoomToTrip: (trip: Trip, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
+    zoomToSegment: (segment: Segment, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
+    handleJumpToWaypoint: (waypointId: string, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
+    flyTo: (lon: number, lat: number, targetSidebarState?: 'open' | 'collapsed' | 'current', onlyIfNotVisible?: boolean, targetView?: 'trip' | 'poi' | 'manager') => void;
 }
 
 export interface MapProps {
@@ -153,7 +153,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI]);
 
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
-  const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
+  const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
       return { top: 50, bottom: 50, left: 50, right: 50 };
     }
@@ -167,13 +167,27 @@ export const Map = forwardRef<MapRef, MapProps>(({
         : !isSidebarCollapsed;
 
     if (shouldBeOpen) {
-        const isEditingPoint = !!hotkeyRefs.current.selectedTrip;
-        heightOffset = isEditingPoint || hotkeyRefs.current.selectedPOI ? Math.min(window.innerHeight * 0.50, 400) : 150;
+        if (targetView === 'trip') {
+            heightOffset = Math.min(window.innerHeight * 0.70 + 30, window.innerHeight - 100);
+        } else if (targetView === 'poi') {
+            heightOffset = Math.min(window.innerHeight * 0.50 + 30, window.innerHeight - 100);
+        } else if (targetView === 'manager') {
+            heightOffset = 150;
+        } else {
+            const isEditingPoint = !!hotkeyRefs.current.selectedTrip;
+            if (isEditingPoint) {
+                heightOffset = Math.min(window.innerHeight * 0.70 + 30, window.innerHeight - 100);
+            } else if (hotkeyRefs.current.selectedPOI) {
+                heightOffset = Math.min(window.innerHeight * 0.50 + 30, window.innerHeight - 100);
+            } else {
+                heightOffset = 150;
+            }
+        }
     }
     return { top: 50, bottom: heightOffset, left: 50, right: 50 };
   };
 
-  const zoomToTrip = (trip: Trip, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
+  const zoomToTrip = (trip: Trip, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (!mapRef.current) return;
 
     // Find waypoint and neighbors
@@ -199,7 +213,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     const bounds = new LngLatBounds(allWps[0].coordinates, allWps[0].coordinates);
     allWps.forEach(wp => bounds.extend(wp.coordinates));
 
-    const paddingLayer = getPadding(targetSidebarState);
+    const paddingLayer = getPadding(targetSidebarState, targetView);
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
@@ -215,7 +229,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const zoomToSegment = (seg: Segment, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
+  const zoomToSegment = (seg: Segment, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (!mapRef.current) return;
 
     const allWps: { id: string, coordinates: [number, number] }[] = [];
@@ -239,7 +253,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const targetPadding = getPadding(targetSidebarState);
+      const targetPadding = getPadding(targetSidebarState, targetView);
       const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
         mapRef.current.flyTo({
@@ -252,9 +266,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current') => {
+const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (!selectedTrip || !mapRef.current) return;
-    
+
     // Find waypoint and neighbors
     const allWps: { id: string, coordinates: [number, number] }[] = [];
     selectedTrip.segments.forEach(seg => {
@@ -273,7 +287,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     const targetCoord = allWps[wpIndex].coordinates;
     const bounds = new LngLatBounds(targetCoord, targetCoord);
 
-    // Make the bounds symmetrical around the target so centering stays exact
+    // Make the bounds symmetrical around the target so centering stays exact 
     const extendSymmetrically = (coord: [number, number]) => {
       const dLng = coord[0] - targetCoord[0];
       const dLat = coord[1] - targetCoord[1];
@@ -286,13 +300,14 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      const camera = mapRef.current.cameraForBounds(bounds, { padding: getPadding(targetSidebarState) });
+      const targetPadding = getPadding(targetSidebarState, targetView);
+      const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
           center: targetCoord,
           zoom: Math.min(camera.zoom || 15, 15),
-          padding: getPadding(targetSidebarState),
+          padding: targetPadding,
           duration: 1200,
           essential: true
         });
@@ -300,10 +315,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
     });
   };
 
-  const flyTo = (lon: number, lat: number, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', onlyIfNotVisible: boolean = false) => {
+  const flyTo = (lon: number, lat: number, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', onlyIfNotVisible: boolean = false, targetView?: 'trip' | 'poi' | 'manager') => {
     if (!mapRef.current) return;
 
-    const padding = getPadding(targetSidebarState);
+    const padding = getPadding(targetSidebarState, targetView);
 
     if (onlyIfNotVisible && window.innerWidth > 768) {
       const container = mapRef.current.getContainer();
@@ -905,7 +920,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
                 setSelectedSegmentId(null);
 
                 if (window.innerWidth <= 768 && wp.coordinates) {
-                   flyTo(wp.coordinates[0], wp.coordinates[1], 'open');
+                   setTimeout(() => {
+                     flyTo(wp.coordinates![0], wp.coordinates![1], 'open', false, 'trip');
+                   }, 350);
                 }
               }
             });

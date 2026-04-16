@@ -373,6 +373,7 @@ export default function App() {
     setSelectedTrip(newTrip);
     setSelectedSegmentId(null);
     setSelectedWaypointId(null);
+    setIsSidebarCollapsed(false);
 
     // Give it a bit of time to render the new trip editor
     setTimeout(() => {
@@ -547,6 +548,7 @@ export default function App() {
       setResolvingTripId(trip.id);
       return;
     }
+    setIsStatusOpen(false);
     setSelectedWaypointId(null);
     setSelectedSegmentId(null);
     setSelectedTrip(trip);
@@ -559,7 +561,7 @@ export default function App() {
       if (mapComponentRef.current) {
         mapComponentRef.current.zoomToTrip(trip, 'collapsed');
       }
-    }, 100);
+    }, 350);
   };
 
   const handleUpdateExternalTrips = (updatedTrips: Trip[]) => {
@@ -641,9 +643,9 @@ export default function App() {
             onGoBack={() => setIsSearchOpen(false)}
             onResultClick={(result) => {
               if (Array.isArray(result)) {
-                  mapComponentRef.current?.flyTo(result[0], result[1], 'open', true);
-                } else {
-                  mapComponentRef.current?.flyTo(parseFloat(result.lon), parseFloat(result.lat), 'open', true);
+                    mapComponentRef.current?.flyTo(result[0], result[1], 'open', true, 'poi');
+                  } else {
+                    mapComponentRef.current?.flyTo(parseFloat(result.lon), parseFloat(result.lat), 'open', true, 'poi');
                 const newPoi = {
                   id: `search-${result.osm_type}-${result.osm_id}`,
                   name: result.name || result.display_name.split(',')[0],
@@ -681,7 +683,7 @@ export default function App() {
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}
             onHoverCoordinate={setHoveredCoordinate}
-            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg, window.innerWidth <= 768 ? (!isSidebarCollapsed ? 'open' : 'collapsed') : 'current')}
+            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg, window.innerWidth <= 768 ? (!isSidebarCollapsed ? 'open' : 'collapsed') : 'current', 'trip')}
           />
         ) : selectedWaypointId && selectedTrip ? (
           <WaypointInfo 
@@ -699,7 +701,10 @@ export default function App() {
               onReloadTrips={loadTrips}              isTripsLoading={isLoadingTrips}
             unsavedTripIds={unsavedTripIds}              conflictedTripIds={conflictedTripIds}            onSaveAll={handleSaveAllUnsaved}
             onCreateTrip={handleCreateTrip}
-            onOpenStatus={() => setIsStatusOpen(true)}
+            onOpenStatus={() => {
+              setIsStatusOpen(true);
+              setIsSidebarCollapsed(false);
+            }}
           />
         ) : (
           <TripEditor
@@ -710,11 +715,11 @@ export default function App() {
             onSelectWaypoint={setSelectedWaypointId}
             onZoomToTrip={() => {
               setIsSidebarCollapsed(true);
-              mapComponentRef.current?.zoomToTrip(selectedTrip, 'collapsed');
+              setTimeout(() => { mapComponentRef.current?.zoomToTrip(selectedTrip, 'collapsed', 'trip'); }, 350);
             }}
             onJumpToWaypoint={(id) => {
               setIsSidebarCollapsed(true);
-              mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed');
+              setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
             highlightedWaypointId={highlightedWaypointId}
             onUndo={handleUndo}
@@ -749,8 +754,9 @@ export default function App() {
         selectedPOI={selectedPOI}
         setSelectedPOI={(poi) => {
           setSelectedPOI(poi);
+          if (poi) setIsStatusOpen(false);
           if (poi && mapComponentRef.current && poi.coordinates) {
-             mapComponentRef.current.flyTo(poi.coordinates[0], poi.coordinates[1], 'open', true);
+             mapComponentRef.current.flyTo(poi.coordinates[0], poi.coordinates[1], 'open', true, 'poi');
           }
           if (poi) setIsSidebarCollapsed(false);
         }}
@@ -759,6 +765,7 @@ export default function App() {
         isSidebarCollapsed={isSidebarCollapsed}
         onSearchClick={() => {
           setIsSearchOpen(true);
+          setIsStatusOpen(false);
           setIsSidebarCollapsed(false);
         }}
         onSelectTrip={handleSelectTrip}
