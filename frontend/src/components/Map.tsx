@@ -44,6 +44,8 @@ export interface MapRef {
     zoomToSegment: (segment: Segment, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
     handleJumpToWaypoint: (waypointId: string, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
     flyTo: (lon: number, lat: number, targetSidebarState?: 'open' | 'collapsed' | 'current', onlyIfNotVisible?: boolean, targetView?: 'trip' | 'poi' | 'manager') => void;
+    setHome: () => void;
+    zoomToHome: () => void;
 }
 
 export interface MapProps {
@@ -63,6 +65,7 @@ export interface MapProps {
     onHoverCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
     onSearchClick: () => void;
     onSelectTrip?: (trip: Trip) => void;
+    onEmptyClick?: () => void;
     isSidebarCollapsed?: boolean;
 }
 
@@ -83,6 +86,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onHoverCoordinate,
     onSearchClick,
     onSelectTrip,
+    onEmptyClick,
     isSidebarCollapsed
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -117,7 +121,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     localStorage.setItem('showHiddenSegments', String(showHiddenSegments));
   }, [showHiddenSegments]);
 
-  const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI });
+const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick });
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -149,9 +153,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
   }, [waitingWaypointId, waitingWaypointIdRef]);
 
   useEffect(() => {
-    hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI };
-  }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI]);
-
+      hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick };
+    }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick]);
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
@@ -342,22 +345,52 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     });
   };
 
+  const setHome = () => {
+    if (!mapRef.current) return;
+    const center = mapRef.current.getCenter();
+    localStorage.setItem('homeMapPosition', JSON.stringify({ center: [center.lng, center.lat], zoom: mapRef.current.getZoom() }));
+  };
+
+  const zoomToHome = () => {
+    if (!mapRef.current) return;
+    const homeRaw = localStorage.getItem('homeMapPosition');
+    if (homeRaw) {
+      try {
+        const home = JSON.parse(homeRaw);
+        mapRef.current.flyTo({ center: home.center, zoom: home.zoom, duration: 1200, bearing: 0, pitch: 0 });
+      } catch(e) {}
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     zoomToTrip,
     zoomToSegment,
     handleJumpToWaypoint,
-    flyTo
+    flyTo,
+    setHome,
+    zoomToHome
   }));
 
   useEffect(() => {
     if (!mapContainer.current) return;
     if (mapRef.current) return;
-    
+
+    let initCenter: [number, number] = [11.3933, 47.2692];
+    let initZoom = 9;
+    const homeRaw = localStorage.getItem('homeMapPosition');
+    if (homeRaw) {
+      try {
+        const home = JSON.parse(homeRaw);
+        initCenter = home.center;
+        initZoom = home.zoom;
+      } catch(e) {}
+    }
+
     mapRef.current = new MapLibreMap({
       container: mapContainer.current,
       style: 'https://tiles.openfreemap.org/styles/liberty', // Free basemap
-      center: [11.3933, 47.2692],
-      zoom: 9
+      center: initCenter,
+      zoom: initZoom
     });
     mapRef.current.addControl(new NavigationControl({}), 'top-right');
 
@@ -719,6 +752,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             }
           } else if (poiData) {
             hotkeyRefs.current.setSelectedPOI(poiData);
+          } else {
+            hotkeyRefs.current.setSelectedPOI(null);
+            if (hotkeyRefs.current.onEmptyClick) {
+              hotkeyRefs.current.onEmptyClick();
+            }
           }
         });
 

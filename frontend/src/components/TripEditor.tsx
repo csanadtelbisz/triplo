@@ -18,6 +18,7 @@ interface TripEditorProps {
   onZoomToTrip: () => void;
   onJumpToWaypoint: (waypointId: string) => void;
   highlightedWaypointId?: string | null;
+  onClearHighlight?: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -33,7 +34,7 @@ const tripEditorScrollPositions: Record<string, number> = {};
 
 export function TripEditor({
   trip, onGoBack, onSelectSegment, onSelectWaypoint,
-  onZoomToTrip, onJumpToWaypoint, highlightedWaypointId,
+  onZoomToTrip, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
   onWaitingForCoords, allTrips
 }: TripEditorProps) {
@@ -164,6 +165,7 @@ export function TripEditor({
           highlightTargets.forEach(target => {
             target.style.backgroundColor = '';
           });
+          if (onClearHighlight) onClearHighlight();
         }, 1000);
       }, window.innerWidth <= 768 ? 350 : 0);
     }

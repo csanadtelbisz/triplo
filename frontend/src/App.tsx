@@ -21,6 +21,7 @@ import { POIInfo } from './components/POIInfo';
 import { SearchPanel } from './components/SearchPanel';
 import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
+import PreferencesPanel from './components/PreferencesPanel';
 import { persistingManager } from './persisting/PersistingManager';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
@@ -37,6 +38,7 @@ export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
@@ -549,6 +551,7 @@ export default function App() {
       return;
     }
     setIsStatusOpen(false);
+    setIsPreferencesOpen(false);
     setSelectedWaypointId(null);
     setSelectedSegmentId(null);
     setSelectedTrip(trip);
@@ -632,7 +635,13 @@ export default function App() {
       <div className="layout">
       <div {...sidebarProps}>
         <div className="mobile-drag-handle"></div>
-        {isStatusOpen ? (
+        {isPreferencesOpen ? (
+          <PreferencesPanel
+            onGoBack={() => setIsPreferencesOpen(false)}
+            onSetHome={() => mapComponentRef.current?.setHome?.()}
+            onZoomHome={() => mapComponentRef.current?.zoomToHome?.()}
+          />
+        ) : isStatusOpen ? (
           <StatusPanel
             onGoBack={() => setIsStatusOpen(false)}
             trips={trips}
@@ -703,6 +712,12 @@ export default function App() {
             onCreateTrip={handleCreateTrip}
             onOpenStatus={() => {
               setIsStatusOpen(true);
+              setIsPreferencesOpen(false);
+              setIsSidebarCollapsed(false);
+            }}
+            onOpenSettings={() => {
+              setIsPreferencesOpen(true);
+              setIsStatusOpen(false);
               setIsSidebarCollapsed(false);
             }}
           />
@@ -722,6 +737,7 @@ export default function App() {
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
             highlightedWaypointId={highlightedWaypointId}
+            onClearHighlight={() => setHighlightedWaypointId(null)}
             onUndo={handleUndo}
             onRedo={handleRedo}
             canUndo={!!histories[selectedTrip.id]?.past.length}
@@ -754,7 +770,10 @@ export default function App() {
         selectedPOI={selectedPOI}
         setSelectedPOI={(poi) => {
           setSelectedPOI(poi);
-          if (poi) setIsStatusOpen(false);
+            if (poi) {
+              setIsStatusOpen(false);
+              setIsPreferencesOpen(false);
+            }
           if (poi && mapComponentRef.current && poi.coordinates) {
              mapComponentRef.current.flyTo(poi.coordinates[0], poi.coordinates[1], 'open', true, 'poi');
           }
@@ -762,10 +781,12 @@ export default function App() {
         }}
         hoveredCoordinate={hoveredCoordinate}
         onHoverCoordinate={setHoveredCoordinate}
+        onEmptyClick={() => setIsSidebarCollapsed(true)}
         isSidebarCollapsed={isSidebarCollapsed}
         onSearchClick={() => {
           setIsSearchOpen(true);
           setIsStatusOpen(false);
+          setIsPreferencesOpen(false);
           setIsSidebarCollapsed(false);
         }}
         onSelectTrip={handleSelectTrip}

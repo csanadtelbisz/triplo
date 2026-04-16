@@ -15,12 +15,13 @@ interface TripManagerProps {
   onSaveAll: () => Promise<void> | void;
   onCreateTrip: () => void;
   onOpenStatus: () => void;
+  onOpenSettings: () => void;
   isTripsLoading?: boolean;
 }
 
 let tripManagerScrollPos = 0;
 
-export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, isTripsLoading }: TripManagerProps) {
+export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, isTripsLoading }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -82,7 +83,7 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
            >
              <MaterialIcon name={isSavingAll ? "sync" : "save"} size={20} className={isSavingAll ? "spinning" : undefined} />
            </button>
-           <button className="iconButton" title="Preferences"><MaterialIcon name="build" size={20} /></button>
+           <button className="iconButton" title="Preferences" onClick={onOpenSettings}><MaterialIcon name="build" size={20} /></button>
            <button className="iconButton" title="New Trip" onClick={onCreateTrip}><MaterialIcon name="add" size={20} /></button>
         </div>
       </div>
