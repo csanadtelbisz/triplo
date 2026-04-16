@@ -702,9 +702,10 @@ export default function App() {
             onOpenStatus={() => setIsStatusOpen(true)}
           />
         ) : (
-          <TripEditor 
-            trip={selectedTrip} 
-            onGoBack={handleGoBackTripEditor} 
+          <TripEditor
+            trip={selectedTrip}
+            allTrips={trips}
+            onGoBack={handleGoBackTripEditor}
             onSelectSegment={setSelectedSegmentId}
             onSelectWaypoint={setSelectedWaypointId}
             onZoomToTrip={() => {

@@ -7,6 +7,8 @@ import { routingManager } from '../routing/RoutingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { Dialog } from './Dialog';
 import { exportTripGPX, exportTripGeoJSON, downloadFile } from '../utils/exportUtils';
+import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
+import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
 
 interface TripEditorProps {
   trip: Trip;
@@ -53,7 +55,12 @@ export function TripEditor({
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [exportMinify, setExportMinify] = useState(false);
 
-  const [copyColorOffer, setCopyColorOffer] = useState<{ color: string, icon: string, mode: string, segmentId: string, newName: string } | null>(null);
+  const {
+    sectionMetadataOffer,
+    applySectionMetadataOffer,
+    cancelSectionMetadataOffer,
+    handleNameChange,
+  } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
 
   const [isSaving, setIsSaving] = useState(false);
   const handleSaveWrapper = async () => {
@@ -772,33 +779,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                onBlur={(e) => {
                                  const newValue = e.target.value;
                                  if (newValue !== (seg.name || seg.transportMode) && newValue !== seg.name) {
-                                   let colorToCopy: string | undefined;
-                                   let iconToCopy: string | undefined;
-                                   let modeToCopy: string | undefined;
-                                   if (newValue.trim() !== '') {
-                                      let found = trip.segments.find(s => s.id !== seg.id && s.name?.toLowerCase() === newValue.toLowerCase());
-                                      if (!found && allTrips) {
-                                         for (const t of allTrips) {
-                                            found = t.segments.find(s => s.name?.toLowerCase() === newValue.toLowerCase());
-                                            if (found) break;
-                                         }
-                                      }
-                                      if (found) {
-                                         colorToCopy = found.customColor;
-                                         iconToCopy = found.customIcon;
-                                         modeToCopy = found.transportMode;
-                                      }
-                                   }
-
-                                   if (modeToCopy && newValue.trim() !== '') {
-                                      setCopyColorOffer({
-                                         color: colorToCopy || ModeThemes[modeToCopy as any as import('../../../shared/types').TransportMode]?.color || '#000000',
-                                         icon: iconToCopy || '',
-                                         mode: modeToCopy,
-                                         segmentId: seg.id,
-                                         newName: newValue
-                                      });
-                                   } else {
+                                   if (!handleNameChange(seg.id, seg.name, newValue)) {
                                      const newSegments = [...trip.segments];
                                      newSegments[segIndex] = { ...seg, name: newValue };
                                      onUpdateTrip({ ...trip, segments: newSegments });
@@ -1117,68 +1098,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
           </div>
         </div>
       </Dialog>
-      {copyColorOffer && (
-        <Dialog
-          isOpen={true}
-          title="Apply Style Settings?"
-          onClose={() => setCopyColorOffer(null)}
-          actions={
-            <>
-              <button
-                className="dialog-btn dialog-btn-cancel"
-                onClick={() => {
-                  const newSegments = [...trip.segments];
-                  const segIndex = trip.segments.findIndex(s => s.id === copyColorOffer.segmentId);
-                  if (segIndex !== -1) {
-                    newSegments[segIndex] = { ...trip.segments[segIndex], name: copyColorOffer.newName };
-                    onUpdateTrip({ ...trip, segments: newSegments });
-                  }
-                  setCopyColorOffer(null);
-                }}
-              >
-                No, leave as is
-              </button>
-              <button
-                className="dialog-btn dialog-btn-primary"
-                onClick={() => {
-                  const newSegments = [...trip.segments];
-                  const segIndex = trip.segments.findIndex(s => s.id === copyColorOffer.segmentId);
-                  if (segIndex !== -1) {
-                    newSegments[segIndex] = {
-                      ...trip.segments[segIndex],
-                      name: copyColorOffer.newName,
-                      customColor: copyColorOffer.color,
-                      customIcon: copyColorOffer.icon,
-                      transportMode: copyColorOffer.mode as any
-                    };
-                    onUpdateTrip({ ...trip, segments: newSegments });
-                  }
-                  setCopyColorOffer(null);
-                }}
-              >
-                Apply Style
-              </button>
-            </>
-          }
-        >
-          <div style={{ marginBottom: "16px" }}>
-            A segment with the name <strong>{copyColorOffer.newName}</strong> already exists.
-            Would you like to copy its transport mode, color, and icon?
-          </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
-            <strong>Icon:</strong>
-            <span style={{ color: copyColorOffer.color }}>
-              {copyColorOffer.mode === 'other' && copyColorOffer.icon ? <MaterialIcon name={copyColorOffer.icon} size={24} /> : getModeIcon(copyColorOffer.mode as any, 24)}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <strong>Color:</strong>
-            <div style={{ padding: "4px 8px", backgroundColor: copyColorOffer.color, color: "#fff", borderRadius: "4px" }}>
-              {copyColorOffer.color}
-            </div>
-          </div>
-        </Dialog>
-      )}
+      <CopySectionMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer()} onCancel={cancelSectionMetadataOffer} />
     </>
   );
 }

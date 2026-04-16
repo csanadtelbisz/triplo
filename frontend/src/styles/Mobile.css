@@ -60,6 +60,10 @@
     overscroll-behavior-y: contain;
   }
 
+  .hover-tooltip {
+    display: none !important;
+  }
+
   /* Prevent map showing under the panel when mobile browser UI hides and resizes */
   .sidebar::after {
     content: '';
