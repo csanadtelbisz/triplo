@@ -18,9 +18,19 @@ export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): P
 
   if (validCoords.length < 2) return undefined;
 
+  const newCoordsStrs = validCoords.map(c => `${c[0]},${c[1]}`);
+  const hasDuplicates = new Set(newCoordsStrs).size !== validCoords.length;
+
+  const oldCoordsStrs = oldSeg?.waypoints
+    .filter(w => w.coordinates && w.coordinates.length === 2)
+    .map(w => `${(w.coordinates as [number, number])[0]},${(w.coordinates as [number, number])[1]}`) || [];
+  const hasOldDuplicates = new Set(oldCoordsStrs).size !== oldCoordsStrs.length;
+
   // Need full route if no old segment, no old geometry, or routing properties changed
   if (
     !oldSeg ||
+    hasDuplicates ||
+    hasOldDuplicates ||
     !oldSeg.geometry ||
     !oldSeg.geometry.coordinates ||
     oldSeg.geometry.coordinates.length < 2 ||
