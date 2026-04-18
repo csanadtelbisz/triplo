@@ -58,6 +58,7 @@ export interface MapProps {
     handleCoordinateChange: (trip: Trip, wpId: string, coords: [number, number]) => Promise<void>;
     setSelectedWaypointId: (id: string | null) => void;
     setHighlightedWaypointId: (id: string | null) => void;
+    selectedSegmentId: string | null;
     setSelectedSegmentId: (id: string | null) => void;
     selectedPOI: any | null;
     setSelectedPOI: (poi: any | null) => void;
@@ -79,6 +80,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     handleCoordinateChange,
     setSelectedWaypointId,
     setHighlightedWaypointId,
+    selectedSegmentId,
     setSelectedSegmentId,
     selectedPOI,
     setSelectedPOI,
@@ -856,7 +858,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 type: 'line',
                 source: 'route-source',
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': ['get', 'color'], 'line-width': 4 }
+                paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': ['coalesce', ['get', 'opacity'], 1.0] }
               });
             }
 
@@ -906,11 +908,22 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       } else {
         const features: GeoJSON.Feature[] = selectedTrip.segments
           .filter(seg => !seg.isHidden || showHiddenSegments)
-          .map(seg => ({
-          type: 'Feature',
-          properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
-          geometry: getRenderGeometry(seg) as any
-        }));
+          .map(seg => {
+            let opacity = 1.0;
+            if (selectedSegmentId && selectedSegmentId !== seg.id) {
+              opacity = 0.4;
+            }
+            return {
+              type: 'Feature',
+              properties: { 
+                segmentId: seg.id, 
+                mode: seg.transportMode, 
+                color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff',
+                opacity
+              },
+              geometry: getRenderGeometry(seg) as any
+            };
+          });
         source.setData({
           type: 'FeatureCollection',
           features
@@ -937,8 +950,9 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             else if (isBordering) pref = 2;
 
             const el = document.createElement('div');
-            
-            if (wp.icon) {
+              const isWaypointInSelectedSegment = selectedSegmentId ? selectedTrip.segments.find(s => s.id === selectedSegmentId)?.waypoints.some(w => w.id === wp.id) : true;
+
+              if (wp.icon) {
               // Classic map pin with Material Icon
               el.style.width = '32px';
               el.style.height = '32px';
@@ -997,6 +1011,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             const marker = new Marker({ element: el, draggable: true, anchor: wp.icon ? 'bottom' : 'center' })
               .setLngLat(wp.coordinates as [number, number])
               .addTo(mapRef.current!);
+
+            if (selectedSegmentId && !isWaypointInSelectedSegment) {
+              marker.getElement().classList.add('faded-marker');
+            } else if (selectedSegmentId) {
+              marker.getElement().classList.remove('faded-marker');
+            }
 
             marker.on('dragstart', () => {
               setHoverInfo(null);
@@ -1091,7 +1111,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {

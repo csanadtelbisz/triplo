@@ -766,6 +766,7 @@ export default function App() {
           setHighlightedWaypointId(id);
           if (id) setIsSidebarCollapsed(false);
         }}
+        selectedSegmentId={selectedSegmentId}
         setSelectedSegmentId={setSelectedSegmentId}
         selectedPOI={selectedPOI}
         setSelectedPOI={(poi) => {

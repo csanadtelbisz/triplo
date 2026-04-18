@@ -87,3 +87,8 @@
   font-size: 14px;
   color: #333;
 }
+
+.faded-marker {
+  opacity: 0.4 !important;
+  transition: opacity 0.2s ease;
+}
