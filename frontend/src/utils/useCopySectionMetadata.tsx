@@ -16,8 +16,7 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
   const [sectionMetadataOffer, setSectionMetadataOffer] = useState<CopySectionMetadataData | null>(null);
 
   const handleNameChange = (segmentId: string, currentName: string | undefined, newValue: string) => {
-    console.log('handleNameChange called with', segmentId, newValue, 'current', currentName);
-if (newValue !== (currentName || '') && newValue.trim() !== '') {
+    if (newValue !== (currentName || '') && newValue.trim() !== '') {
       let colorToCopy: string | undefined;
       let iconToCopy: string | undefined;
       let modeToCopy: string | undefined;

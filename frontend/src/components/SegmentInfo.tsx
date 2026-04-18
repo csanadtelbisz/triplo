@@ -140,6 +140,20 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
               style={{ color: seg.isHidden ? '#999' : 'inherit' }}
             >
               <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={20} />
+            </button>
+            <button
+                className="iconButton"
+                onClick={() => {
+                  if (onZoomToSegment) {
+                    onZoomToSegment(seg);
+                    if (window.innerWidth <= 768) {
+                      onGoBack();
+                    }
+                  }
+                }}
+                title="Focus to Segment"
+            >
+              <MaterialIcon name="my_location" size={20} />
             </button>          <button className="iconButton" onClick={handleImportGPX} title="Import GPX">
             <MaterialIcon name="file_upload" size={20} />
           </button>

@@ -631,6 +631,7 @@ export function TripEditor({
     const secondPart = {
       ...seg,
       id: newId,
+      name: '',
       waypoints: seg.waypoints.slice(wpIndex)
     };
 
@@ -826,12 +827,18 @@ export function TripEditor({
                         <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)} onPointerDown={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
                            <div className="segment-toolbox">
                              <textarea 
+                               key={`seg-title-${seg.id}-${seg.name || ''}`}
                                className="segment-title-textarea"
-                               defaultValue={seg.name || seg.transportMode}
+                               placeholder={seg.transportMode}
+                               defaultValue={seg.name || ''}
                                onKeyDown={handleSegmentTitleKeyDown}
                                onBlur={(e) => {
-                                 const newValue = e.target.value;
-                                 if (newValue !== (seg.name || seg.transportMode) && newValue !== seg.name) {
+                                 let newValue = e.target.value;
+                                 if (!newValue.trim()) {
+                                   newValue = '';
+                                   e.target.value = '';
+                                 }
+                                 if (newValue !== (seg.name || '')) {
                                    if (!handleNameChange(seg.id, seg.name, newValue)) {
                                      const newSegments = [...trip.segments];
                                      newSegments[segIndex] = { ...seg, name: newValue };
