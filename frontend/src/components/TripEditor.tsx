@@ -346,14 +346,11 @@ export function TripEditor({
       e.currentTarget.releasePointerCapture(dragContext.current.pointerId);
     } catch (err) {}
     
-    const { originalGlobalIndex, currentGlobalIndex, activeId } = dragRender;
+    const { originalGlobalIndex, currentGlobalIndex } = dragRender;
     const items = dragContext.current.items;
-    
-    // Prevent border dragging anomalies
-    const targetId = globalWaypoints[currentGlobalIndex]?.id;
-    const isBoundaryDrag = targetId && boundaryIds.includes(activeId) && boundaryIds.includes(targetId) && activeId !== targetId;
-    
-    if (originalGlobalIndex !== currentGlobalIndex && !isBoundaryDrag) {
+
+    // Allow border dragging since applyGlobalWaypoints has been patched
+    if (originalGlobalIndex !== currentGlobalIndex) {
       let targetDeltaY = 0;
       if (items && items.length > 0) {
         targetDeltaY = items[currentGlobalIndex].top - items[originalGlobalIndex].top;
@@ -384,48 +381,49 @@ export function TripEditor({
   const applyGlobalWaypoints = async (newGlobalWaypoints: Waypoint[]) => {
     const newSegments = [];
 
-    let boundaryIndices = [];
-    for (let i = 1; i < trip.segments.length; i++) {
-      let idx = newGlobalWaypoints.findIndex(w => w.id === trip.segments[i].waypoints[0].id);
-      
-      if (idx <= i - 1) {
-        idx = -1;
-      }
-      
-      if (idx === -1 && trip.segments[i].waypoints.length > 1) {
-        idx = newGlobalWaypoints.findIndex(w => w.id === trip.segments[i].waypoints[1].id);
-        if (idx > 0) idx = idx - 1;
-      }
-      
-      if (idx <= 0) {
-         idx = trip.segments.slice(0, i).reduce((sum, seg) => sum + seg.waypoints.length - 1, 0);
-      }
-      
-      boundaryIndices.push(idx);
-    }
-    const validBoundaries = boundaryIndices.filter(idx => idx > 0).sort((a, b) => a - b);
+    // Find the original start waypoint IDs for each segment
+    const startWpIds = trip.segments.map(s => s.waypoints[0]?.id).filter(Boolean);
 
-    let currentStartIndex = 0;
-    for (let i = 0; i < trip.segments.length; i++) {
+    // Find their new indices in the newGlobalWaypoints array
+    let startIndices = startWpIds
+        .map(id => newGlobalWaypoints.findIndex(w => w.id === id))
+        .filter(idx => idx !== -1);
+
+    // Ensure 0 is always a start index
+    if (!startIndices.includes(0) && newGlobalWaypoints.length > 0) {
+        // If 0 is not natively a segment boundary, we forcefully add it.
+        // To offset adding a new segment arbitrary, we drop the boundary
+        // of the original first waypoint (which pushed inwards).
+        const originalFirstId = trip.segments[0]?.waypoints[0]?.id;
+        if (originalFirstId) {
+            const oldFirstIdxInNewArray = newGlobalWaypoints.findIndex(w => w.id === originalFirstId);
+            startIndices = startIndices.filter(idx => idx !== oldFirstIdxInNewArray);
+        }
+        startIndices.push(0);
+    }
+
+    // Sort to get boundaries in order linearly
+    startIndices.sort((a, b) => a - b);
+    
+    // Remove duplicates
+    startIndices = [...new Set(startIndices)];
+
+    for (let i = 0; i < startIndices.length; i++) {
+        const currentStartIndex = startIndices[i];
         let endIndex;
-        if (i === trip.segments.length - 1) {
+        if (i === startIndices.length - 1) {
             endIndex = newGlobalWaypoints.length - 1;
         } else {
-            endIndex = validBoundaries[i] !== undefined ? validBoundaries[i] : currentStartIndex + 1;
-            if (endIndex <= currentStartIndex) {
-                endIndex = currentStartIndex + 1;
-            }
-            if (endIndex >= newGlobalWaypoints.length) {
-                endIndex = Math.max(currentStartIndex, newGlobalWaypoints.length - 1);
-            }
+            endIndex = startIndices[i + 1];
         }
 
+        // Expected waypoints from this start to the next start (inclusive on both bounds, because segments share boundaries)
         const expectedWaypoints = newGlobalWaypoints.slice(currentStartIndex, endIndex + 1);
         
         const startWpId = expectedWaypoints[0].id;
         const oldSegByStart = trip.segments.find(s => s.waypoints.length > 0 && s.waypoints[0].id === startWpId);
         
-        const segToMutate = oldSegByStart || trip.segments[i];
+        const segToMutate = oldSegByStart || trip.segments[i] || trip.segments[0];
 
         const changed = expectedWaypoints.length !== segToMutate.waypoints.length ||
                         expectedWaypoints.some((w, idx) => w.id !== segToMutate.waypoints[idx].id);
@@ -435,7 +433,6 @@ export function TripEditor({
         } else {
             newSegments.push(segToMutate);
         }
-        currentStartIndex = endIndex;
     }
     onUpdateTrip({ ...trip, segments: newSegments });
 };
@@ -656,7 +653,7 @@ export function TripEditor({
         <div className="toolbar-actions">
            <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>
            <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
-           <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="zoom_out_map" size={20} /></button>
+           <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
            <button className="iconButton" title="Save" onClick={handleSaveWrapper} disabled={!canSave || isSaving} style={{ color: (canSave && !isSaving) ? '#007bff' : 'inherit' }}><MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} /></button>
            <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
