@@ -209,10 +209,11 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
                         const isGpx = newSegments[segIndex].routingService === 'gpx';
-                        const updatedSeg = { 
-                          ...newSegments[segIndex], 
-                          transportMode: m, 
-                          routingService: isGpx ? 'gpx' : defRouter.serviceName, 
+                        const updatedSeg = {
+                          ...newSegments[segIndex],
+                          customColor: undefined,
+                          transportMode: m,
+                          routingService: isGpx ? 'gpx' : defRouter.serviceName,
                           routingProfile: isGpx ? newSegments[segIndex].routingProfile : defRouter.profile 
                         };
                         

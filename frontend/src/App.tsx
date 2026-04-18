@@ -283,7 +283,7 @@ export default function App() {
         return next;
       });
       
-      if (isNew) {
+      if (selectedTrip && selectedTrip.id === oldId) {
          setSelectedTrip(newTripState);
       }
       return true;
@@ -323,6 +323,13 @@ export default function App() {
         });
         return next;
       });
+
+      if (selectedTrip) {
+        const updatedSelected = nextTrips.find(n => n.id === selectedTrip.id);
+        if (updatedSelected) {
+          setSelectedTrip(updatedSelected);
+        }
+      }
     } catch (e) {
       console.error(e);
       alert('Failed to save some trips');
