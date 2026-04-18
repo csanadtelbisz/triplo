@@ -470,7 +470,44 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     });
     mapRef.current.on('load', () => {
       if (!mapRef.current) return;
-      
+
+        let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+        let touchStartPt: { x: number; y: number } | null = null;
+
+        mapRef.current.on('touchstart', (e) => {
+          if (e.originalEvent.touches.length > 1) return;
+          if (!hotkeyRefs.current.selectedTrip) return;
+          
+          touchStartPt = e.point;
+          
+          longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            const touch = e.originalEvent.touches[0];
+            setContextMenu({ x: touch.clientX, y: touch.clientY, lngLat: [e.lngLat.lng, e.lngLat.lat] });
+          }, 600);
+        });
+
+        mapRef.current.on('touchmove', (e) => {
+          if (longPressTimer && touchStartPt) {
+            const dx = e.point.x - touchStartPt.x;
+            const dy = e.point.y - touchStartPt.y;
+            if (dx * dx + dy * dy > 100) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          }
+        });
+
+        const cancelLongPress = () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        };
+
+        mapRef.current.on('touchend', cancelLongPress);
+        mapRef.current.on('touchcancel', cancelLongPress);
+
         mapRef.current.on('contextmenu', (e) => {
           e.preventDefault();
           if (!hotkeyRefs.current.selectedTrip) return;
@@ -710,8 +747,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               const poi = poiFeatures[0];
               if (poi.geometry.type === 'Point') {
                 poiCoord = poi.geometry.coordinates as [number, number];
-                poiData = { ...poi.properties, coordinates: poiCoord, id: poi.id || `poi` };
+              } else {
+                poiCoord = [e.lngLat.lng, e.lngLat.lat];
               }
+              poiData = { ...poi.properties, coordinates: poiCoord, id: poi.id || `poi` };
             }
           } catch (err) {}
 
@@ -726,6 +765,15 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             setWaitingWaypointId(null);
             waitingWaypointIdRef.current = null;
 
+            let fetchedDetails: any = null;
+            if (poiData) {
+              try {
+                const acceptLanguage = navigator.language || 'en';
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${coords[1]}&lon=${coords[0]}&format=jsonv2&zoom=18&accept-language=${acceptLanguage}`);
+                fetchedDetails = await r.json();
+              } catch (e) {}
+            }
+
             const currentTrip = hotkeyRefs.current.selectedTrip;
             const newSegments = [...currentTrip.segments];
             let changed = false;
@@ -734,8 +782,24 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               const seg = { ...newSegments[i] };
               const wpIdx = seg.waypoints.findIndex(w => w.id === wpId);
               if (wpIdx > -1) {
-                seg.waypoints = seg.waypoints.map(w => w.id === wpId ? { ...w, coordinates: coords } : w);
-                
+                seg.waypoints = seg.waypoints.map(w => {
+                  if (w.id === wpId) {
+                    const newWp: any = { ...w, coordinates: coords };
+                    if (poiData) {
+                      newWp.name = poiData.name || fetchedDetails?.name || fetchedDetails?.display_name || 'POI';
+                      newWp.poi = {
+                        id: poiData.id || fetchedDetails?.osm_id || `poi-${Date.now()}`,
+                        name: poiData.name || fetchedDetails?.name || fetchedDetails?.display_name || 'POI',
+                        type: poiData.class || poiData.type,
+                        details: fetchedDetails || poiData
+                      };
+                      newWp.icon = w.icon;
+                    }
+                    return newWp;
+                  }
+                  return w;
+                });
+
                 if (seg.source === 'router') {
                     const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
                     if (validCoords.length >= 2) {
@@ -946,8 +1010,58 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               }
             });
 
-            marker.getElement().addEventListener('click', (e) => {
+            marker.getElement().addEventListener('click', async (e) => {
               e.stopPropagation();
+
+              if (waitingWaypointIdRef.current && hotkeyRefs.current.selectedTrip) {
+                const wpId = waitingWaypointIdRef.current;
+                if (wpId === wp.id) return; // Prevent clicking itself
+                
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+
+                setWaitingWaypointId(null);
+                waitingWaypointIdRef.current = null;
+
+                const currentTrip = hotkeyRefs.current.selectedTrip;
+                const newSegments = [...currentTrip.segments];
+                let changed = false;
+
+                for (let i = 0; i < newSegments.length; i++) {
+                  const seg = { ...newSegments[i] };
+                  const wpIdx = seg.waypoints.findIndex(w => w.id === wpId);
+                  if (wpIdx > -1) {
+                    seg.waypoints = seg.waypoints.map(w => {
+                      if (w.id === wpId) {
+                        return {
+                          ...w,
+                          coordinates: wp.coordinates,
+                          name: wp.name || w.name,
+                          icon: wp.icon || w.icon,
+                          ...(wp.poi ? { poi: wp.poi } : {})
+                        };
+                      }
+                      return w;
+                    });
+                    
+                    if (seg.source === 'router') {
+                        const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
+                        if (validCoords.length >= 2) {
+                           seg.geometry = await optimizeSegmentRoute(seg, currentTrip.segments[i]) as any;
+                        }
+                    }
+                    newSegments[i] = seg;
+                    changed = true;
+                  }
+                }
+
+                if (changed) {
+                  hotkeyRefs.current.updateTripState(currentTrip.id, { ...currentTrip, segments: newSegments });
+                }
+                return;
+              }
+
               if (e.ctrlKey || e.metaKey) {
                 setSelectedWaypointId(wp.id);
                 setHighlightedWaypointId(null);
