@@ -857,9 +857,10 @@ export function TripEditor({
                                    const nextMode = TRANSPORT_MODES[(currentIndex + 1) % TRANSPORT_MODES.length];
                                    const newSegments = [...trip.segments];
                                    const defRouter = routingManager.getDefaultRouter(nextMode as any);
-                                   newSegments[segIndex] = await updateSegmentRoute({ 
-                                     ...seg, 
+                                   newSegments[segIndex] = await updateSegmentRoute({
+                                     ...seg,
                                      transportMode: nextMode as any,
+                                     customColor: undefined,
                                      routingService: defRouter.serviceName,
                                      routingProfile: defRouter.profile
                                    });
