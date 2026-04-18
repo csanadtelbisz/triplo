@@ -383,44 +383,68 @@ export function TripEditor({
 
   const applyGlobalWaypoints = async (newGlobalWaypoints: Waypoint[]) => {
     const newSegments = [];
-    for (let i = 0; i < trip.segments.length; i++) {
-      const seg = trip.segments[i];
-let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
-      let startIndex = newGlobalWaypoints.findIndex(w => w.id === startId);
-      if (startIndex === -1 && seg.waypoints.length > 1) {
-        startId = seg.waypoints[1].id;
-        startIndex = newGlobalWaypoints.findIndex(w => w.id === startId);
-      }
 
-      let endIndex = i === trip.segments.length - 1
-        ? newGlobalWaypoints.length - 1
-        : newGlobalWaypoints.findIndex(w => w.id === trip.segments[i + 1].waypoints[0].id);
-
-      if (endIndex === -1 && i + 1 < trip.segments.length && trip.segments[i + 1].waypoints.length > 1) {
-        endIndex = newGlobalWaypoints.findIndex(w => w.id === trip.segments[i + 1].waypoints[1].id);
-      }
-
-      const expectedWaypoints = newGlobalWaypoints.slice(startIndex, endIndex + 1);
+    let boundaryIndices = [];
+    for (let i = 1; i < trip.segments.length; i++) {
+      let idx = newGlobalWaypoints.findIndex(w => w.id === trip.segments[i].waypoints[0].id);
       
-      const changed = expectedWaypoints.length !== seg.waypoints.length || 
-                      expectedWaypoints.some((w, idx) => w.id !== seg.waypoints[idx].id);
-
-      if (changed) {
-        newSegments.push(await updateSegmentRoute({ ...seg, waypoints: expectedWaypoints }));
-      } else {
-        newSegments.push(seg);
+      if (idx <= i - 1) {
+        idx = -1;
       }
+      
+      if (idx === -1 && trip.segments[i].waypoints.length > 1) {
+        idx = newGlobalWaypoints.findIndex(w => w.id === trip.segments[i].waypoints[1].id);
+        if (idx > 0) idx = idx - 1;
+      }
+      
+      if (idx <= 0) {
+         idx = trip.segments.slice(0, i).reduce((sum, seg) => sum + seg.waypoints.length - 1, 0);
+      }
+      
+      boundaryIndices.push(idx);
+    }
+    const validBoundaries = boundaryIndices.filter(idx => idx > 0).sort((a, b) => a - b);
+
+    let currentStartIndex = 0;
+    for (let i = 0; i < trip.segments.length; i++) {
+        let endIndex;
+        if (i === trip.segments.length - 1) {
+            endIndex = newGlobalWaypoints.length - 1;
+        } else {
+            endIndex = validBoundaries[i] !== undefined ? validBoundaries[i] : currentStartIndex + 1;
+            if (endIndex <= currentStartIndex) {
+                endIndex = currentStartIndex + 1;
+            }
+            if (endIndex >= newGlobalWaypoints.length) {
+                endIndex = Math.max(currentStartIndex, newGlobalWaypoints.length - 1);
+            }
+        }
+
+        const expectedWaypoints = newGlobalWaypoints.slice(currentStartIndex, endIndex + 1);
+        
+        const startWpId = expectedWaypoints[0].id;
+        const oldSegByStart = trip.segments.find(s => s.waypoints.length > 0 && s.waypoints[0].id === startWpId);
+        
+        const segToMutate = oldSegByStart || trip.segments[i];
+
+        const changed = expectedWaypoints.length !== segToMutate.waypoints.length ||
+                        expectedWaypoints.some((w, idx) => w.id !== segToMutate.waypoints[idx].id);
+
+        if (changed) {
+            newSegments.push(await updateSegmentRoute({ ...segToMutate, waypoints: expectedWaypoints }));
+        } else {
+            newSegments.push(segToMutate);
+        }
+        currentStartIndex = endIndex;
     }
     onUpdateTrip({ ...trip, segments: newSegments });
-  };
+};
 
   const handleMoveWaypointEarlier = async (wpId: string) => {
     const idx = globalWaypoints.findIndex(w => w.id === wpId);
     if (idx <= 0) return;
 
-    const currIsBoundary = boundaryIds.includes(wpId);
-    const prevIsBoundary = boundaryIds.includes(globalWaypoints[idx - 1].id);
-    if (currIsBoundary && prevIsBoundary) return;
+    
 
     const newGlobal = [...globalWaypoints];
     const temp = newGlobal[idx - 1];
@@ -434,9 +458,7 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
     const idx = globalWaypoints.findIndex(w => w.id === wpId);
     if (idx < 0 || idx >= globalWaypoints.length - 1) return;
 
-    const currIsBoundary = boundaryIds.includes(wpId);
-    const nextIsBoundary = boundaryIds.includes(globalWaypoints[idx + 1].id);
-    if (currIsBoundary && nextIsBoundary) return;
+    
 
     const newGlobal = [...globalWaypoints];
     const temp = newGlobal[idx + 1];
@@ -726,8 +748,8 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                  const bottomLineColor = currSegColor;
 
                  const globalIndex = baseGlobalIndex + wpIndex;
-                 const canMoveEarlier = globalIndex > 0 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex - 1]?.id));
-                 const canMoveLater = globalIndex >= 0 && globalIndex < globalWaypoints.length - 1 && !(boundaryIds.includes(wp.id) && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id));
+                 const canMoveEarlier = globalIndex > 0;
+                 const canMoveLater = globalIndex >= 0 && globalIndex < globalWaypoints.length - 1;
                  const canRemove = !(isFirstInSeg && boundaryIds.includes(globalWaypoints[globalIndex + 1]?.id)) && !(isLastOfTrip && isFirstInSeg);
 
                  const distanceStats = seg.waypointDistances?.[wpIndex] || null;
