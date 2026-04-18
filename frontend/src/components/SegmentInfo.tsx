@@ -146,9 +146,6 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                 onClick={() => {
                   if (onZoomToSegment) {
                     onZoomToSegment(seg);
-                    if (window.innerWidth <= 768) {
-                      onGoBack();
-                    }
                   }
                 }}
                 title="Focus to Segment"

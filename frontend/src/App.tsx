@@ -699,7 +699,14 @@ export default function App() {
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}
             onHoverCoordinate={setHoveredCoordinate}
-            onZoomToSegment={(seg) => mapComponentRef.current?.zoomToSegment(seg, window.innerWidth <= 768 ? (!isSidebarCollapsed ? 'open' : 'collapsed') : 'current', 'trip')}
+            onZoomToSegment={(seg) => {
+              if (window.innerWidth <= 768) {
+                mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
+                setIsSidebarCollapsed(true);
+              } else {
+                mapComponentRef.current?.zoomToSegment(seg, 'current', 'trip');
+              }
+            }}
           />
         ) : selectedWaypointId && selectedTrip ? (
           <WaypointInfo 
