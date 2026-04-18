@@ -507,41 +507,73 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
     };
 
   const handleStartEarlier = async (segIndex: number) => {
-    if (segIndex === 0) return;
+    if (segIndex <= 0) return;
     const prevSeg = trip.segments[segIndex - 1];
-    if (prevSeg.waypoints.length <= 2) return;
 
     const newSegments = [...trip.segments];
-    const newPrevSeg = { ...prevSeg, waypoints: [...prevSeg.waypoints] };
-    const newCurrSeg = { ...newSegments[segIndex], waypoints: [...newSegments[segIndex].waypoints] };
+    const currSeg = newSegments[segIndex];
 
+    if (prevSeg.waypoints.length <= 2) {
+        // Swap prevSeg and currSeg cleanly
+        const currWaypoints = [...currSeg.waypoints];
+        const prevWaypoints = [...prevSeg.waypoints];
+
+        // Give currSeg the visual properties of currSeg, but assign it prevSegs waypoints.
+        // Wait, if they swap, the segment that was at segIndex (currSeg) is now at segIndex - 1.
+        // So the segment at segIndex - 1 should be the exact same currSeg object, but with prevSegs waypoints!
+        const newPrevSeg = { ...currSeg, waypoints: prevWaypoints };  
+        const newCurrSeg = { ...prevSeg, waypoints: currWaypoints };  
+
+        newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);      
+        newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
+        onUpdateTrip({ ...trip, segments: newSegments });
+        return;
+    }
+
+    const newPrevSeg = { ...prevSeg, waypoints: [...prevSeg.waypoints] };      
+    const newCurrSeg = { ...currSeg, waypoints: [...currSeg.waypoints] };
     const boundaryWaypoint = newPrevSeg.waypoints[newPrevSeg.waypoints.length - 2];
-    
     newPrevSeg.waypoints.pop();
     newCurrSeg.waypoints.unshift(boundaryWaypoint);
 
-    newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);
+    newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);        
     newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
     onUpdateTrip({ ...trip, segments: newSegments });
   };
 
   const handleStartLater = async (segIndex: number) => {
-    if (segIndex === 0) return;
-    const currSeg = trip.segments[segIndex];
-    if (currSeg.waypoints.length <= 2) return;
+      if (segIndex < 0 || segIndex >= trip.segments.length) return;
 
-    const newSegments = [...trip.segments];
-    const newPrevSeg = { ...newSegments[segIndex - 1], waypoints: [...newSegments[segIndex - 1].waypoints] };
-    const newCurrSeg = { ...currSeg, waypoints: [...currSeg.waypoints] };
+      const currSeg = trip.segments[segIndex];
+      const newSegments = [...trip.segments];
 
-    const boundaryWaypoint = newCurrSeg.waypoints[1];
+      if (currSeg.waypoints.length <= 2 && segIndex + 1 < trip.segments.length) {
+          const nextSeg = newSegments[segIndex + 1];
 
-    newPrevSeg.waypoints.push(boundaryWaypoint);
-    newCurrSeg.waypoints.shift();
+          // cleanly swap properties but keep spatial waypoints
+          const newCurrSeg = { ...nextSeg, waypoints: [...currSeg.waypoints] };
+          const newNextSeg = { ...currSeg, waypoints: [...nextSeg.waypoints] };
 
-    newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);
-    newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
-    onUpdateTrip({ ...trip, segments: newSegments });
+          newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);        
+          newSegments[segIndex + 1] = await updateSegmentRoute(newNextSeg);    
+          onUpdateTrip({ ...trip, segments: newSegments });
+          return;
+      }
+
+      if (segIndex === 0) return;
+      if (currSeg.waypoints.length <= 1) return;
+
+      const newPrevSeg = { ...newSegments[segIndex - 1], waypoints: [...newSegments[segIndex - 1].waypoints] };
+      const newCurrSeg = { ...currSeg, waypoints: [...currSeg.waypoints] };    
+
+      const boundaryWaypoint = newCurrSeg.waypoints[1];
+
+      newPrevSeg.waypoints.push(boundaryWaypoint);
+      newCurrSeg.waypoints.shift();
+
+      newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);        
+      newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
+      onUpdateTrip({ ...trip, segments: newSegments });
   };
 
   const handleDeleteSegment = async (segIndex: number) => {
@@ -827,10 +859,10 @@ let startId = i === 0 ? newGlobalWaypoints[0].id : seg.waypoints[0].id;
                                </button>
                              </div>
                              <div className="segment-tools-grid">
-                               <button className="iconButton small" title="Start earlier" disabled={segIndex === 0 || trip.segments[segIndex - 1].waypoints.length <= 2} onClick={() => handleStartEarlier(segIndex)}>
+                               <button className="iconButton small" title="Start earlier" disabled={segIndex === 0} onClick={() => handleStartEarlier(segIndex)}>
                                  <MaterialIcon name="arrow_upward" size={18} />
                                </button>
-                               <button className="iconButton small" title="Start later" disabled={segIndex === 0 || seg.waypoints.length <= 2} onClick={() => handleStartLater(segIndex)}>
+                               <button className="iconButton small" title="Start later" disabled={segIndex === trip.segments.length - 1 && seg.waypoints.length <= 1 || segIndex === 0 && (seg.waypoints.length > 2 || trip.segments.length === 1)} onClick={() => handleStartLater(segIndex)}>
                                  <MaterialIcon name="arrow_downward" size={18} />
                                </button>
                                <button className="iconButton small" title="Delete segment" disabled={segIndex === 0} onClick={() => handleDeleteSegment(segIndex)}>
