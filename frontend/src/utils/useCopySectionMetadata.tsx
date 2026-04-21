@@ -85,7 +85,7 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
               name: sectionMetadataOffer.newName,
               customIcon: sectionMetadataOffer.icon,
               transportMode: sectionMetadataOffer.mode as any,
-              ...(sectionMetadataOffer.routingService ? { routingService: sectionMetadataOffer.routingService } : {}),
+              ...(sectionMetadataOffer.routingService ? { routingService: sectionMetadataOffer.routingService, source: (sectionMetadataOffer.routingService === 'gpx' ? 'gpx' : 'router') as 'gpx' | 'router' } : {}),
               ...(sectionMetadataOffer.routingProfile ? { routingProfile: sectionMetadataOffer.routingProfile } : {})
             } : {})
           };

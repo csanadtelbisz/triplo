@@ -247,7 +247,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                }
                const newSegments = [...trip.segments];
                const segIndex = newSegments.findIndex(s => s.id === segmentId);
-               const updatedSeg = { ...newSegments[segIndex], routingService: service, routingProfile: profile };
+                 const updatedSeg = { ...newSegments[segIndex], routingService: service, routingProfile: profile, source: 'router' as const };
                if (updatedSeg.source === 'router') {
                  const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
                  if (coords.length >= 2) {

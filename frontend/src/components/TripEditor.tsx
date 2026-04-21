@@ -862,7 +862,8 @@ export function TripEditor({
                                      transportMode: nextMode as any,
                                      customColor: undefined,
                                      routingService: defRouter.serviceName,
-                                     routingProfile: defRouter.profile
+                                     routingProfile: defRouter.profile,
+                                     source: 'router' as const
                                    });
                                    onUpdateTrip({ ...trip, segments: newSegments });
                                  }}
