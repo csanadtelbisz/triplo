@@ -26,6 +26,49 @@ import { persistingManager } from './persisting/PersistingManager';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 
+const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
+
+const initDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('TriploDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains('trips')) {
+        db.createObjectStore('trips');
+      }
+    };
+  });
+};
+
+const saveTripCache = async (trips: Trip[]) => {
+  try {
+    const cached = trips.map(t => ({
+      ...t,
+      metadata: { ...t.metadata, _isCached: true }
+    }));
+    const db = await initDB();
+    const tx = db.transaction('trips', 'readwrite');
+    const store = tx.objectStore('trips');
+    store.put(cached, TRIP_CACHE_KEY);
+  } catch(e) { console.warn("Cache save failed", e); }
+};
+
+const getTripCache = async (): Promise<Trip[]> => {
+  try {
+    const db = await initDB();
+    const tx = db.transaction('trips', 'readonly');
+    const store = tx.objectStore('trips');
+    const request = store.get(TRIP_CACHE_KEY);
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  } catch(e) { }
+  return [];
+};
+
 export default function App() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [histories, setHistories] = useState<Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }>>({});
@@ -57,6 +100,13 @@ export default function App() {
   const loadTrips = async () => {
     setIsLoadingTrips(true);
     try {
+      if (trips.length === 0) {
+          const localCache = await getTripCache();
+          if (localCache.length > 0) {
+              setTrips(localCache);
+          }
+      }
+
       const apiTrips = await TripAPI.getTrips();
       const remoteTrips = await persistingManager.loadAllTrips();
 
@@ -129,8 +179,33 @@ export default function App() {
       setTripConflicts(conflictsFound);
 
       const fetchedTrips = Array.from(tripsMap.values());
-      const cachedTrips = fetchedTrips.map(computeTripCaches);
+
+        let oldCache = [ ...trips ];
+        if (oldCache.length === 0) {
+           oldCache = await getTripCache();
+        }
+
+        const cachedTrips: Trip[] = [];
+        for (const trip of fetchedTrips) {
+          // Yield to UI thread to prevent freezing on heavy local geometry compute
+          await new Promise(resolve => setTimeout(resolve, 0));
+          
+          const existing = oldCache.find(t => t.id === trip.id);
+          const { _isCached, ...freshMetadata } = trip.metadata || { _isCached: false };
+          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary) {
+             cachedTrips.push({
+                ...existing,
+                metadata: { ...existing.metadata, ...freshMetadata, _isCached: false }
+             });
+          } else {
+             const newlyComputed = computeTripCaches(trip);
+             newlyComputed.metadata = { ...newlyComputed.metadata, ...freshMetadata, _isCached: false };
+             cachedTrips.push(newlyComputed);
+          }
+        }
+
       setTrips(cachedTrips);
+      saveTripCache(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
       cachedTrips.forEach(t => {
         initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(t) };
@@ -267,7 +342,7 @@ export default function App() {
         return prev.map(t => t.id === newTripState.id ? newTripState : t);
       });
       
-      TripAPI.saveTrip(newTripState);
+      await TripAPI.saveTrip(newTripState);
 
       setHistories(prev => {
         const h = prev[oldId] || { past: [], future: [], lastSavedStr: '' };
@@ -312,7 +387,7 @@ export default function App() {
         return matching ? matching : t;
       }));
       
-      nextTrips.forEach(t => TripAPI.saveTrip(t));
+      await Promise.all(nextTrips.map(t => TripAPI.saveTrip(t)));
 
       setHistories(prev => {
         const next = { ...prev };
@@ -515,6 +590,12 @@ export default function App() {
     loadTrips();
   }, []);
 
+  useEffect(() => {
+    if (!isLoadingTrips) {
+      saveTripCache(trips);
+    }
+  }, [trips, isLoadingTrips]);
+
   const mapComponentRef = useRef<MapRef>(null);
 
   const handleDeleteTrip = async (tripId: string) => {
@@ -585,7 +666,7 @@ export default function App() {
       });
       return next;
     });
-    updatedTrips.forEach(t => TripAPI.saveTrip(t));
+    Promise.all(updatedTrips.map(t => TripAPI.saveTrip(t)));
   };
 
   const isMobileSearchOpen = isSearchOpen;
@@ -756,7 +837,7 @@ export default function App() {
             onRedo={handleRedo}
             canUndo={!!histories[selectedTrip.id]?.past.length}
             canRedo={!!histories[selectedTrip.id]?.future.length}
-            onSave={() => {handleSave();}}
+            onSave={async () => { await handleSave(); }}
             canSave={histories[selectedTrip.id]?.lastSavedStr !== stripMeta(selectedTrip)}
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             onWaitingForCoords={(wpId) => {

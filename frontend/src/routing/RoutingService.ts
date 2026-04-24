@@ -40,12 +40,12 @@ class RoutingServiceManager {
       run: { serviceName: this.graphHopper.name, profile: 'foot' },
       bike: { serviceName: this.graphHopper.name, profile: 'bike' },
       car: { serviceName: this.graphHopper.name, profile: 'car' },
-      flight: { serviceName: this.flight.name, profile: 'flight' },
-      rail: { serviceName: this.rail.name, profile: 'rail' },
-      bus: { serviceName: this.graphHopper.name, profile: 'car' },
       taxi: { serviceName: this.graphHopper.name, profile: 'car' },
+      bus: { serviceName: this.graphHopper.name, profile: 'car' },
+      rail: { serviceName: this.rail.name, profile: 'rail' },
+      subway: { serviceName: this.rail.name, profile: 'rail' },
+      flight: { serviceName: this.flight.name, profile: 'flight' },
       ferry: { serviceName: this.straightLine.name, profile: 'straight' },
-      waterway: { serviceName: this.straightLine.name, profile: 'straight' },
       other: { serviceName: this.straightLine.name, profile: 'straight' }
     };
 

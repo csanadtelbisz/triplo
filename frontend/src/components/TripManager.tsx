@@ -132,6 +132,7 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
 
           const isUnsaved = unsavedTripIds.has(trip.id);
           const isConflicted = conflictedTripIds.has(trip.id);
+          const isCached = trip.metadata?._isCached;
           const syncedServiceNames = trip.metadata?.syncedServices || [];
           const matchedServices = availablePersistingServices.filter(s => syncedServiceNames.includes(s.name));
 
@@ -153,7 +154,9 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
                 </h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    {matchedServices.length > 0 ? (
+                    {isCached ? (
+                      <MaterialIcon name="cached" size={16} style={{ color: '#6c757d' }} />
+                    ) : matchedServices.length > 0 ? (
                       matchedServices.map(s => (
                         <img
                           key={s.name}

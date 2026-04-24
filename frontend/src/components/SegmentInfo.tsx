@@ -205,16 +205,16 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                         const defRouter = routingManager.getDefaultRouter(m);
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
-                        const isGpx = newSegments[segIndex].routingService === 'gpx';
                         const updatedSeg = {
                           ...newSegments[segIndex],
                           customColor: undefined,
                           transportMode: m,
-                          routingService: isGpx ? 'gpx' : defRouter.serviceName,
-                          routingProfile: isGpx ? newSegments[segIndex].routingProfile : defRouter.profile 
+                          routingService: defRouter.serviceName,
+                          routingProfile: defRouter.profile,
+                          source: 'router' as const
                         };
-                        
-                        if (updatedSeg.source === 'router' && !isGpx) {
+
+                        if (updatedSeg.source === 'router') {
                           const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
                           if (coords.length >= 2) {
                             updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);

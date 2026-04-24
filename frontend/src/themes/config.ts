@@ -6,11 +6,11 @@ export const ModeThemes: Record<TransportMode, { color: string }> = {
   hike: { color: '#08813b' },  // dark green
   bike: { color: '#f39c12' }, // orange
   car: { color: '#3498db' },  // blue
-  flight: { color: '#9b59b6' }, // purple
-  rail: { color: '#e74c3c' }, // red
-  bus: { color: '#1173b5' }, // blue
   taxi: { color: '#ffce08' }, // yellow
+  bus: { color: '#1173b5' }, // blue
+  rail: { color: '#e74c3c' }, // red
+  subway: { color: '#d35400' }, // orange-red
+  flight: { color: '#9b59b6' }, // purple
   ferry: { color: '#00cec9' }, // teal
-  waterway: { color: '#0984e3' }, // dark teal
   other: { color: '#95a5a6' }, // gray
 };
