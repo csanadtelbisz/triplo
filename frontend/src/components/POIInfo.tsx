@@ -5,7 +5,7 @@ import '../styles/POIInfo.css';
 // Removed unused route import
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getPOIEmoji } from '../utils/poiUtils';
-import { getLanguagePreferences, OSM_LANGUAGES } from '../utils/languagePreferences';
+import { getLanguagePreferences, getLanguageName } from '../utils/languagePreferences';
 
 interface POIInfoProps {
   poi: any;
@@ -69,8 +69,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
     for (const lang of langPrefs) {
       const pName = poi[`name:${lang}`];
       if (pName && !addedValues.has(pName)) {
-         const langInfo = OSM_LANGUAGES.find(l => l.code === lang);
-         prefOpts.push({ id: lang, label: langInfo ? langInfo.name : lang, value: pName });
+         prefOpts.push({ id: lang, label: getLanguageName(lang), value: pName });
          addedValues.add(pName);
       }
     }
@@ -80,9 +79,8 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
         const lang = key.split(':')[1];
         const pName = poi[key];
         if (pName && !addedValues.has(pName)) {
-           const langInfo = OSM_LANGUAGES.find(l => l.code === lang);
            // Handle cases where lang code resolves nicely or fallback to raw key suffix
-           otherOpts.push({ id: lang, label: langInfo ? langInfo.name : lang, value: pName });
+           otherOpts.push({ id: lang, label: getLanguageName(lang), value: pName });
            addedValues.add(pName);
         }
       }

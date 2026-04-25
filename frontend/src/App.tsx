@@ -764,7 +764,8 @@ export default function App() {
                   class: result.class,
                   subclass: result.type,
                   coordinates: [parseFloat(result.lon), parseFloat(result.lat)],
-                  properties: { name: result.name || result.display_name.split(',')[0] }
+                    properties: { name: result.name || result.display_name.split(',')[0] },
+                    ...(result.namedetails || {})
                 };
                 setSelectedPOI(newPoi);
                 setIsSearchOpen(false);

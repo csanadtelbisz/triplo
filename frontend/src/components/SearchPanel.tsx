@@ -11,6 +11,7 @@ export interface NominatimResult {
   class: string;
   type: string;
   name?: string;
+  namedetails?: Record<string, string>;
 }
 
 interface SearchPanelProps {
@@ -53,7 +54,7 @@ export const SearchPanel = ({ onGoBack, onResultClick }: SearchPanelProps) => {
       setIsSearching(true);
       setError(null);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&namedetails=1&q=${encodeURIComponent(query)}`);
         const data = await res.json();
         setResults(data);
       } catch (err) {
