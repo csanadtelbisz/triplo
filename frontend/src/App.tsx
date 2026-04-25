@@ -596,6 +596,21 @@ export default function App() {
     }
   }, [trips, isLoadingTrips]);
 
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasUnsavedChanges = trips.some(
+        t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t)
+      );
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [trips, histories]);
+
   const mapComponentRef = useRef<MapRef>(null);
 
   const handleDeleteTrip = async (tripId: string) => {

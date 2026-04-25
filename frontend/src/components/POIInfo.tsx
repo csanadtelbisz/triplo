@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Trip, Segment } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/POIInfo.css';
 // Removed unused route import
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getPOIEmoji } from '../utils/poiUtils';
+import { getLanguagePreferences, OSM_LANGUAGES } from '../utils/languagePreferences';
 
 interface POIInfoProps {
   poi: any;
@@ -52,17 +53,71 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
     return () => { active = false; };
   }, [poi]);
 
+  const langPrefs = getLanguagePreferences();
+
+  const { preferredOptions, otherOptions } = useMemo(() => {
+    const rawDefault = poi.name || poi.name_int || details?.name;
+    const prefOpts: { id: string, label: string, value: string }[] = [];
+    const otherOpts: { id: string, label: string, value: string }[] = [];
+    const addedValues = new Set<string>();
+    
+    if (rawDefault) {
+      prefOpts.push({ id: 'default', label: 'Default (local)', value: rawDefault });
+      addedValues.add(rawDefault);
+    }
+    
+    for (const lang of langPrefs) {
+      const pName = poi[`name:${lang}`];
+      if (pName && !addedValues.has(pName)) {
+         const langInfo = OSM_LANGUAGES.find(l => l.code === lang);
+         prefOpts.push({ id: lang, label: langInfo ? langInfo.name : lang, value: pName });
+         addedValues.add(pName);
+      }
+    }
+
+    Object.keys(poi).forEach(key => {
+      if (key.startsWith('name:')) {
+        const lang = key.split(':')[1];
+        const pName = poi[key];
+        if (pName && !addedValues.has(pName)) {
+           const langInfo = OSM_LANGUAGES.find(l => l.code === lang);
+           // Handle cases where lang code resolves nicely or fallback to raw key suffix
+           otherOpts.push({ id: lang, label: langInfo ? langInfo.name : lang, value: pName });
+           addedValues.add(pName);
+        }
+      }
+    });
+
+    return { preferredOptions: prefOpts, otherOptions: otherOpts };
+  }, [poi, details, langPrefs]);
+
+  const autoPrefValue = useMemo(() => {
+      const fallbackName = poi.name || poi.name_int || details?.name || 'Point of Interest';
+      for (const lang of langPrefs) {
+        const match = preferredOptions.find(o => o.id === lang);
+        if (match) return match.value;
+      }
+      return preferredOptions.find(o => o.id === 'default')?.value || fallbackName;
+  }, [preferredOptions, langPrefs, poi, details]);
+
+  const [selectedName, setSelectedName] = useState<string>(autoPrefValue);
+  const [showOtherLangs, setShowOtherLangs] = useState(false);
+
+  useEffect(() => {
+    setSelectedName(autoPrefValue);
+  }, [autoPrefValue]);
+
   const handleAddToTrip = async () => {
     if (!trip || trip.segments.length === 0) return;
     
     const newWaypoint = {
       id: 'wp-' + Date.now(),
-      name: poi.name || details?.name || details?.display_name || 'POI',
+      name: selectedName || details?.display_name || 'POI',
       coordinates: poi.coordinates,
       importance: 'normal' as 'normal',
       poi: {
         id: poi.id || poi.properties?.id || details?.osm_id,
-        name: poi.name || details?.name || details?.display_name,
+        name: selectedName || details?.display_name,
         type: poi.class,
         details: details
       }
@@ -103,15 +158,23 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
           <button className="iconButton" onClick={onGoBack} title="Close POI">  
             <MaterialIcon name="arrow_back" size={20} />
           </button>
-          <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{poi.name || details?.name || 'Point of Interest'}</h2>
+          <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{selectedName}</h2>
           <div style={{ width: 28 }}></div>
         </div>
 
       <div className="poi-info-content content">
+
         <div className="form-group">
            <label className="form-label">Coordinates</label>
            <div className="form-text-value">{poi.coordinates[1].toFixed(5)}, {poi.coordinates[0].toFixed(5)}</div>
         </div>
+
+        {poi.ele && (
+            <div className="form-group">
+               <label className="form-label">Elevation</label>
+               <div className="form-text-value">{poi.ele} m</div>
+            </div>
+        )}
 
         {poi.class && (
             <div className="form-group">
@@ -144,24 +207,76 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
         {trip ? (
             <div className="actions-group" style={{marginTop: '20px'}}>
                 <button 
-                  className="action-button primary"
                   onClick={handleAddToTrip}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)' }}
                 >
-                    <MaterialIcon name="add_location" /> Add to Trip
+                    <MaterialIcon name="add_location" /> Add {selectedName} to Trip
                 </button>
             </div>
         ) : (
             <div className="actions-group" style={{marginTop: '20px'}}>
                 <button
-                  className="action-button primary"
-                  onClick={() => onStartNewTrip && onStartNewTrip(poi, details)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  onClick={() => onStartNewTrip && onStartNewTrip({ ...poi, name: selectedName }, details)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)' }}
                 >
                     <MaterialIcon name="add_location" /> Start new trip here
                 </button>
             </div>
         )}
+
+        {(preferredOptions.length > 1 || otherOptions.length > 0) && (
+            <div className="form-group" style={{ marginTop: '24px' }}>
+                <label className="form-label" style={{ marginBottom: '8px' }}>Alternative Names</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {preferredOptions.map(opt => (
+                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease' }}>
+                            <input 
+                                type="radio" 
+                                name="poiSelectedName" 
+                                value={opt.value}
+                                checked={selectedName === opt.value}
+                                onChange={() => setSelectedName(opt.value)}
+                                style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span style={{ fontSize: '1rem', fontWeight: selectedName === opt.value ? '600' : '400', color: '#333' }}>{opt.value}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{opt.label}</span>
+                            </div>
+                        </label>
+                    ))}
+                    
+                    {otherOptions.length > 0 && !showOtherLangs && (
+                        <button onClick={() => setShowOtherLangs(true)} style={{ background: 'none', border: 'none', color: '#1976d2', padding: '8px', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
+                            Show {otherOptions.length} other alternative(s)
+                        </button>
+                    )}
+
+                    {showOtherLangs && otherOptions.map(opt => (
+                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease' }}>
+                            <input 
+                                type="radio" 
+                                name="poiSelectedName" 
+                                value={opt.value}
+                                checked={selectedName === opt.value}
+                                onChange={() => setSelectedName(opt.value)}
+                                style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span style={{ fontSize: '1rem', fontWeight: selectedName === opt.value ? '600' : '400', color: '#333' }}>{opt.value}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{opt.label}</span>
+                            </div>
+                        </label>
+                    ))}
+                    
+                    {showOtherLangs && (
+                        <button onClick={() => setShowOtherLangs(false)} style={{ background: 'none', border: 'none', color: '#666', padding: '8px', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
+                            Hide alternatives
+                        </button>
+                    )}
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );
