@@ -34,6 +34,7 @@ export class MapyRouter implements IRoutingService {
       case 'car':
       case 'bus':
       case 'taxi':
+      case 'ferry':
         return ['car_fast', 'car_short'];
       case 'other':
         return ['foot_fast', 'foot_hiking', 'bike_road', 'bike_mountain', 'car_fast', 'car_short'];

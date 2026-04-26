@@ -45,7 +45,7 @@ class RoutingServiceManager {
       rail: { serviceName: this.rail.name, profile: 'rail' },
       subway: { serviceName: this.rail.name, profile: 'rail' },
       flight: { serviceName: this.flight.name, profile: 'flight' },
-      ferry: { serviceName: this.straightLine.name, profile: 'straight' },
+      ferry: { serviceName: this.graphHopper.name, profile: 'car' },
       other: { serviceName: this.straightLine.name, profile: 'straight' }
     };
 
