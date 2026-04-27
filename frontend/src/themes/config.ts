@@ -11,6 +11,6 @@ export const ModeThemes: Record<TransportMode, { color: string }> = {
   rail: { color: '#e74c3c' }, // red
   subway: { color: '#d35400' }, // orange-red
   flight: { color: '#9b59b6' }, // purple
-  ferry: { color: '#00cec9' }, // teal
+  ferry: { color: '#113db5' }, // teal
   other: { color: '#95a5a6' }, // gray
 };

@@ -49,6 +49,7 @@ export interface MapRef {
 }
 
 export interface MapProps {
+    isReadOnly?: boolean;
     trips: Trip[];
     selectedTrip: Trip | null;
     waitingWaypointId: string | null;
@@ -71,6 +72,7 @@ export interface MapProps {
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
+    isReadOnly = false,
     trips,
     selectedTrip,
     waitingWaypointId,
@@ -123,7 +125,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     localStorage.setItem('showHiddenSegments', String(showHiddenSegments));
   }, [showHiddenSegments]);
 
-const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick });
+const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick });
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -155,8 +157,8 @@ const hotkeyRefs = useRef({ selectedTrip, updateTripState, handleCoordinateChang
   }, [waitingWaypointId, waitingWaypointIdRef]);
 
   useEffect(() => {
-      hotkeyRefs.current = { selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick };
-    }, [selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick]);
+      hotkeyRefs.current = { isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick };
+    }, [isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick]);
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
@@ -484,6 +486,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
           
           longPressTimer = setTimeout(() => {
             longPressTimer = null;
+            if (hotkeyRefs.current.isReadOnly) return;
             const touch = e.originalEvent.touches[0];
             setContextMenu({ x: touch.clientX, y: touch.clientY, lngLat: [e.lngLat.lng, e.lngLat.lat] });
           }, 600);
@@ -512,7 +515,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
         mapRef.current.on('contextmenu', (e) => {
           e.preventDefault();
-          if (!hotkeyRefs.current.selectedTrip) return;
+          if (hotkeyRefs.current.isReadOnly || !hotkeyRefs.current.selectedTrip) return;
           setContextMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, lngLat: [e.lngLat.lng, e.lngLat.lat] });
         });
         mapRef.current.on('dragstart', () => setContextMenu(null));
@@ -631,7 +634,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.4)';
                 el.style.cursor = 'pointer';
                 
-                ghostMarkerRef.current = new Marker({ element: el, draggable: true })
+                ghostMarkerRef.current = new Marker({ element: el, draggable: !isReadOnly })
                   .setLngLat(snapped.geometry!.coordinates as [number, number])
                   .addTo(mapRef.current!);
                   
@@ -1008,7 +1011,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             });
 
 
-            const marker = new Marker({ element: el, draggable: true, anchor: wp.icon ? 'bottom' : 'center' })
+            const marker = new Marker({ element: el, draggable: !isReadOnly, anchor: wp.icon ? 'bottom' : 'center' })
               .setLngLat(wp.coordinates as [number, number])
               .addTo(mapRef.current!);
 
@@ -1111,7 +1114,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {

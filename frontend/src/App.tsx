@@ -70,6 +70,7 @@ const getTripCache = async (): Promise<Trip[]> => {
 };
 
 export default function App() {
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [histories, setHistories] = useState<Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }>>({});
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
@@ -211,6 +212,9 @@ export default function App() {
         initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(t) };
       });
       setHistories(initHistories);
+      if (localStorage.getItem('defaultReadOnly') !== 'true') {
+        setIsReadOnly(false);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -773,7 +777,7 @@ export default function App() {
             }}
           />
         ) : selectedPOI ? (
-          <POIInfo
+          <POIInfo isReadOnly={isReadOnly}
             poi={selectedPOI}
             trip={selectedTrip}
             onGoBack={handleGoBackPOI}
@@ -788,7 +792,7 @@ export default function App() {
             }}
           />
         ) : selectedSegmentId && selectedTrip ? (
-          <SegmentInfo 
+          <SegmentInfo isReadOnly={isReadOnly} 
             segmentId={selectedSegmentId} 
             trip={selectedTrip} 
             allTrips={trips}
@@ -806,14 +810,15 @@ export default function App() {
             }}
           />
         ) : selectedWaypointId && selectedTrip ? (
-          <WaypointInfo 
+          <WaypointInfo isReadOnly={isReadOnly} 
             waypointId={selectedWaypointId} 
             trip={selectedTrip} 
             onGoBack={handleGoBackWaypoint} 
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
           />
         ) : !selectedTrip ? (
-          <TripManager
+          <TripManager isReadOnly={isReadOnly}
+            onToggleReadOnly={() => setIsReadOnly(!isReadOnly)}
             trips={trips}
             onSelectTrip={handleSelectTrip}
             onDeleteTrip={handleDeleteTrip}
@@ -833,7 +838,8 @@ export default function App() {
             }}
           />
         ) : (
-          <TripEditor
+          <TripEditor isReadOnly={isReadOnly}
+            onToggleReadOnly={() => setIsReadOnly(!isReadOnly)}
             trip={selectedTrip}
             allTrips={trips}
             onGoBack={handleGoBackTripEditor}
@@ -842,6 +848,10 @@ export default function App() {
             onZoomToTrip={() => {
               setIsSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.zoomToTrip(selectedTrip, 'collapsed', 'trip'); }, 350);
+            }}
+            onZoomToSegment={(seg) => {
+              setIsSidebarCollapsed(true);
+              setTimeout(() => { mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip'); }, 350);
             }}
             onJumpToWaypoint={(id) => {
               setIsSidebarCollapsed(true);
@@ -863,7 +873,7 @@ export default function App() {
           />
         )}
       </div>
-      <Map
+      <Map isReadOnly={isReadOnly}
         ref={mapComponentRef}
         trips={trips}
         selectedTrip={selectedTrip}

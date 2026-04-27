@@ -14,6 +14,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const [langPrefs, setLangPrefs] = useState<string[]>([]);
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
+  const [defaultReadOnly, setDefaultReadOnly] = useState(() => localStorage.getItem('defaultReadOnly') === 'true');
 
   useEffect(() => {
     setLangPrefs(getLanguagePreferences());
@@ -58,6 +59,12 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     setTimeout(() => setShowSavedMsg(false), 2000);
   };
 
+  const handleToggleDefaultReadOnly = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setDefaultReadOnly(isChecked);
+    localStorage.setItem('defaultReadOnly', isChecked ? 'true' : 'false');
+  };
+
   return (
     <>
       <div className="toolbar">
@@ -69,7 +76,20 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
       </div>
 
       <div className="content status-panel-content">
-        <h3 className="status-panel-section-title first">Map Home Position</h3>      
+        <h3 className="status-panel-section-title first">Default Read-Only Mode</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+            <input 
+              type="checkbox" 
+              checked={defaultReadOnly} 
+              onChange={handleToggleDefaultReadOnly} 
+              style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }}
+            />
+            Stay in read-only mode after loading trips
+          </label>
+        </div>
+
+        <h3 className="status-panel-section-title">Map Home Position</h3>      
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
             Set the default map view that loads when opening the application. Pan and zoom to your desired location, then click 'Set current view as home'. 

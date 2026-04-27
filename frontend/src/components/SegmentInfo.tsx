@@ -10,6 +10,7 @@ import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
 import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
 
 interface SegmentInfoProps {
+  isReadOnly?: boolean;
   segmentId: string;
   trip: Trip;
   allTrips?: Trip[];
@@ -20,7 +21,7 @@ interface SegmentInfoProps {
   onZoomToSegment?: (segment: Segment) => void;
 }
 
-export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
+export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
   
@@ -128,7 +129,9 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 className="toolbar-title">Segment Info</h2>
-        <div className="toolbar-actions">            <button
+        <div className="toolbar-actions">
+          {!isReadOnly && (
+            <button
               className="iconButton"
               onClick={() => {
                 const newSegments = trip.segments.map(s =>
@@ -141,6 +144,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
             >
               <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={20} />
             </button>
+          )}
             <button
                 className="iconButton"
                 onClick={() => {
@@ -151,7 +155,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                 title="Focus to Segment"
             >
               <MaterialIcon name="my_location" size={20} />
-            </button>          <button className="iconButton" onClick={handleImportGPX} title="Import GPX">
+            </button>          <button className="iconButton" onClick={handleImportGPX} disabled={isReadOnly} title="Import GPX">
             <MaterialIcon name="file_upload" size={20} />
           </button>
           <button className="iconButton" onClick={() => {
@@ -171,6 +175,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
              key={`segname-${seg.name || ''}`}
              type="text" 
              defaultValue={seg.name || ''} 
+             disabled={isReadOnly}
              className="form-input" 
              onBlur={(e) => {
                const newValue = e.target.value;
@@ -195,10 +200,14 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                   <button
                     key={m}
                     title={m}
+                    disabled={isReadOnly}
                     className="mode-button"
                     style={{
                       border: isSelected ? `2px solid ${theme?.color || '#007bff'}` : '1px solid #ddd',
                       background: isSelected ? `${theme?.color || '#007bff'}22` : 'white',
+                      color: theme?.color,
+                      opacity: isSelected || !isReadOnly ? 1 : 0.3,
+                      cursor: isReadOnly ? 'default' : 'pointer',
                     }}
                     onClick={async () => {
                       if (!isSelected) {
@@ -238,6 +247,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
            <label className="form-label">Routing Profile</label>
            <select 
              className="form-input" 
+             disabled={isReadOnly}
              value={seg.routingService === 'gpx' ? 'gpx|Imported GPX' : `${seg.routingService}|${seg.routingProfile}`}
              onChange={async (e) => {
                const [service, profile] = e.target.value.split('|');
@@ -306,17 +316,19 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                <input 
                  type="color" 
                  value={seg.customColor || ModeThemes[seg.transportMode]?.color || '#000000'} 
+                 disabled={isReadOnly}
                  onChange={(e) => {
                    const newSegments = trip.segments.map(s => 
                      s.id === segmentId ? { ...s, customColor: e.target.value } : s
                    );
                    onUpdateTrip({ ...trip, segments: newSegments });
                  }}
-                 style={{ width: '36px', height: '36px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                 style={{ width: '36px', height: '36px', padding: 0, border: 'none', borderRadius: '4px', cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }}
                />
                <button 
                  className="iconButton" 
                  title="Reset Color" 
+                 disabled={isReadOnly}
                  onClick={() => {
                    const newSegments = trip.segments.map(s => {
                      if (s.id === segmentId) {
@@ -342,6 +354,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                    type="text" 
                    placeholder="Custom icon name..." 
                    className="form-input" 
+                   disabled={isReadOnly}
                    value={customIconInput}
                    onChange={(e) => {
                      setCustomIconInput(e.target.value);
@@ -375,6 +388,7 @@ export function SegmentInfo({ segmentId, trip, allTrips, onGoBack, onUpdateTrip,
                  <button 
                    className="iconButton" 
                    title="Clear Icon" 
+                   disabled={isReadOnly}
                    onClick={() => {
                      setCustomIconInput('');
                      if (!seg?.customIcon) return;

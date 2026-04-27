@@ -5,6 +5,8 @@ import { ConfirmDialog } from './Dialog';
 import { persistingManager } from '../persisting/PersistingManager';
 
 interface TripManagerProps {
+  isReadOnly?: boolean;
+  onToggleReadOnly?: () => void;
   trips: Trip[];
   onSelectTrip: (trip: Trip) => void;
   onDeleteTrip: (tripId: string) => void;
@@ -21,7 +23,7 @@ interface TripManagerProps {
 
 let tripManagerScrollPos = 0;
 
-export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, isTripsLoading }: TripManagerProps) {
+export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, isTripsLoading }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -70,21 +72,40 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
           Triplo Manager
         </h1>
         <div className="toolbar-actions">
-           <button className="iconButton" title="Status" onClick={onOpenStatus}><MaterialIcon name="info" size={20} /></button>
-           <button
-             className="iconButton"
-             title="Save All Unsaved Trips"
-             onClick={handleSaveAllWrapper}
-             disabled={unsavedTripIds.size === 0 || isSavingAll}
-             style={{
-               opacity: unsavedTripIds.size > 0 ? 1 : 0.3,
-               color: (unsavedTripIds.size > 0 && !isSavingAll) ? '#007bff' : 'inherit'
-             }}
-           >
-             <MaterialIcon name={isSavingAll ? "sync" : "save"} size={20} className={isSavingAll ? "spinning" : undefined} />
-           </button>
+           {!isReadOnly && (
+             <button className="iconButton" title="New Trip" onClick={onCreateTrip}><MaterialIcon name="add" size={20} /></button>
+           )}
+           {isReadOnly ? (
+             <button
+               className="iconButton"
+               title="Turn Off Read-Only Mode"
+               onClick={onToggleReadOnly}
+               disabled={isTripsLoading}
+             >
+               <MaterialIcon name="lock" size={20} />
+             </button>
+           ) : unsavedTripIds.size === 0 ? (
+             <button
+               className="iconButton"
+               title="Turn On Read-Only Mode"
+               onClick={onToggleReadOnly}
+               disabled={isTripsLoading}
+             >
+               <MaterialIcon name="lock_open" size={20} />
+             </button>
+           ) : (
+             <button
+               className="iconButton"
+               title="Save All Unsaved Trips"
+               onClick={handleSaveAllWrapper}
+               disabled={isSavingAll}
+               style={{ color: isSavingAll ? 'inherit' : '#007bff' }}
+             >
+               <MaterialIcon name={isSavingAll ? "sync" : "save"} size={20} className={isSavingAll ? "spinning" : undefined} />
+             </button>
+           )}
            <button className="iconButton" title="Preferences" onClick={onOpenSettings}><MaterialIcon name="build" size={20} /></button>
-           <button className="iconButton" title="New Trip" onClick={onCreateTrip}><MaterialIcon name="add" size={20} /></button>
+           <button className="iconButton" title="Status" onClick={onOpenStatus}><MaterialIcon name="info" size={20} /></button>
         </div>
       </div>
       <div
@@ -183,12 +204,18 @@ export function TripManager({ trips, onSelectTrip, onDeleteTrip, onUploadTrip, o
                       </button>
                     ) : null}
                   </div>
-                  <button className="iconButton" onClick={(e) => {
-                    e.stopPropagation();
-                    setTripToDelete(trip);
-                  }} style={{ padding: 2 }}>
-                    <MaterialIcon name="delete" size={18} />
-                  </button>
+                  {isReadOnly ? (
+                    <button className="iconButton" disabled title="Read-Only Mode Active" style={{ padding: 2, opacity: 0.3 }}>
+                      <MaterialIcon name="lock" size={18} />
+                    </button>
+                  ) : (
+                    <button className="iconButton" onClick={(e) => {
+                      e.stopPropagation();
+                      setTripToDelete(trip);
+                    }} style={{ padding: 2 }}>
+                      <MaterialIcon name="delete" size={18} />
+                    </button>
+                  )}
                 </div>
               </div>
               <p className="trip-card-desc">

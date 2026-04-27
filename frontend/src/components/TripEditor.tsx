@@ -11,11 +11,14 @@ import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
 import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
 
 interface TripEditorProps {
+  isReadOnly?: boolean;
+  onToggleReadOnly?: () => void;
   trip: Trip;
   onGoBack: () => void;
   onSelectSegment: (segmentId: string) => void;
   onSelectWaypoint: (waypointId: string) => void;
   onZoomToTrip: () => void;
+  onZoomToSegment: (segment: Segment) => void;
   onJumpToWaypoint: (waypointId: string) => void;
   highlightedWaypointId?: string | null;
   onClearHighlight?: () => void;
@@ -33,8 +36,8 @@ interface TripEditorProps {
 const tripEditorScrollPositions: Record<string, number> = {};
 
 export function TripEditor({
-  trip, onGoBack, onSelectSegment, onSelectWaypoint,
-  onZoomToTrip, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
+  isReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
+  onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
   onWaitingForCoords, allTrips
 }: TripEditorProps) {
@@ -650,12 +653,40 @@ export function TripEditor({
     <>
       <div className="toolbar">
         <button className="iconButton" onClick={onGoBack}><MaterialIcon name="arrow_back" size={20} /></button>
-        <h2 className="toolbar-title">Edit Trip</h2>
+        <h2 className="toolbar-title">{isReadOnly ? 'View Trip' : 'Edit Trip'}</h2>
         <div className="toolbar-actions">
-           <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>
-           <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>
+           {!isReadOnly && <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>}
+           {!isReadOnly && <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
-           <button className="iconButton" title="Save" onClick={handleSaveWrapper} disabled={!canSave || isSaving} style={{ color: (canSave && !isSaving) ? '#007bff' : 'inherit' }}><MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} /></button>
+           {isReadOnly ? (
+             <button
+               className="iconButton"
+               title="Turn Off Read-Only Mode"
+               onClick={onToggleReadOnly}
+               disabled={!onToggleReadOnly}
+             >
+               <MaterialIcon name="lock" size={20} />
+             </button>
+           ) : !canSave ? (
+             <button
+               className="iconButton"
+               title="Turn On Read-Only Mode"
+               onClick={onToggleReadOnly}
+               disabled={!onToggleReadOnly}
+             >
+               <MaterialIcon name="lock_open" size={20} />
+             </button>
+           ) : (
+             <button
+               className="iconButton"
+               title="Save"
+               onClick={handleSaveWrapper}
+               disabled={isSaving}
+               style={{ color: isSaving ? 'inherit' : '#007bff' }}
+             >
+               <MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} />
+             </button>
+           )}
            <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>
@@ -668,6 +699,7 @@ export function TripEditor({
             key={`title-${trip.name}`}
             className="form-input title-input"
             defaultValue={trip.name}
+            disabled={isReadOnly}
             onBlur={(e) => {
               if (e.target.value !== trip.name) {
                 onUpdateTrip({ ...trip, name: e.target.value });
@@ -678,6 +710,7 @@ export function TripEditor({
             key={`desc-${trip.description}`}
             className="form-textarea"
             defaultValue={trip.description}
+            disabled={isReadOnly}
             onBlur={(e) => {
               if (e.target.value !== trip.description) {
                 onUpdateTrip({ ...trip, description: e.target.value });
@@ -691,6 +724,7 @@ export function TripEditor({
                type="date" 
                className="form-input"
                defaultValue={trip.startDate ? trip.startDate.split('T')[0] : ''}
+               disabled={isReadOnly}
                onChange={(e) => {
                  onUpdateTrip({ ...trip, startDate: e.target.value });
                }}
@@ -702,6 +736,7 @@ export function TripEditor({
                type="date" 
                className="form-input"
                defaultValue={trip.endDate ? trip.endDate.split('T')[0] : ''}
+               disabled={isReadOnly}
                onChange={(e) => {
                  onUpdateTrip({ ...trip, endDate: e.target.value });
                }}
@@ -716,13 +751,15 @@ export function TripEditor({
                  <td className="segment-col"></td>
                  <td className="timeline-col gap-col">
                    <div className="timeline-line bottom" style={{ background: trip.segments[0].customColor || ModeThemes[trip.segments[0].transportMode]?.color || '#007bff' }}></div>
-                   <div 
-                     className="timeline-plus" 
-                     title="Add Waypoint Here"
-                     onClick={() => handleInsertWaypoint(trip.segments[0].waypoints[0].id, 'before')}
-                   >
-                     <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
-                   </div>
+                   {!isReadOnly && (
+                     <div 
+                       className="timeline-plus" 
+                       title="Add Waypoint Here"
+                       onClick={() => handleInsertWaypoint(trip.segments[0].waypoints[0].id, 'before')}
+                     >
+                       <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
+                     </div>
+                   )}
                  </td>
                  <td className="waypoint-col gap-col"></td>
                </tr>
@@ -818,10 +855,10 @@ export function TripEditor({
                       className={`waypoint-row-tr ${isDragged ? 'dragged' : ''}`}
                       ref={(el) => { waypointRefs.current[wp.id] = el; }}
                       data-wpid={wp.id}
-                      onPointerDown={(e) => handlePointerDown(e, wp.id, globalIndex)}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
-                      onPointerCancel={handlePointerUp}
+                      onPointerDown={isReadOnly ? undefined : (e) => handlePointerDown(e, wp.id, globalIndex)}
+                      onPointerMove={isReadOnly ? undefined : handlePointerMove}
+                      onPointerUp={isReadOnly ? undefined : handlePointerUp}
+                      onPointerCancel={isReadOnly ? undefined : handlePointerUp}
                      >
                        {isFirstInSeg ? (
                         <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)} onPointerDown={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
@@ -831,6 +868,7 @@ export function TripEditor({
                                className="segment-title-textarea"
                                placeholder={seg.transportMode}
                                defaultValue={seg.name || ''}
+                               disabled={isReadOnly}
                                onKeyDown={handleSegmentTitleKeyDown}
                                onBlur={(e) => {
                                  let newValue = e.target.value;
@@ -850,8 +888,9 @@ export function TripEditor({
                              <div className="segment-tools-row">
                                <button 
                                  className="iconButton small" 
-                                 style={{ color: currSegColor }} 
-                                 title={`Switch mode: ${seg.transportMode}`}
+                                 style={{ color: currSegColor, opacity: 1 }} 
+                                 title={isReadOnly ? `Mode: ${seg.transportMode}` : `Switch mode: ${seg.transportMode}`}
+                                 disabled={isReadOnly}
                                  onClick={async () => {
                                    const currentIndex = TRANSPORT_MODES.indexOf(seg.transportMode);
                                    const nextMode = TRANSPORT_MODES[(currentIndex + 1) % TRANSPORT_MODES.length];
@@ -870,33 +909,47 @@ export function TripEditor({
                                >
                                {seg.transportMode !== 'other' ? getModeIcon(seg.transportMode, 18) : (seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18))}
                                </button>
-                               <button
-                                 className="iconButton small"
-                                 title={seg.isHidden ? "Show Segment" : "Hide Segment"}
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   const newSegments = trip.segments.map(s => 
-                                     s.id === seg.id ? { ...s, isHidden: !s.isHidden } : s
-                                   );
-                                   onUpdateTrip({ ...trip, segments: newSegments });
-                                 }}>
-                                 <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={18} style={{ color: seg.isHidden ? '#999' : 'inherit' }} />
-                               </button>
+                               {isReadOnly ? (
+                                 <button
+                                   className="iconButton small"
+                                   title="Focus Segment"
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     onZoomToSegment(seg);
+                                   }}>
+                                   <MaterialIcon name="my_location" size={18} />
+                                 </button>
+                               ) : (
+                                 <button
+                                   className="iconButton small"
+                                   title={seg.isHidden ? "Show Segment" : "Hide Segment"}
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     const newSegments = trip.segments.map(s => 
+                                       s.id === seg.id ? { ...s, isHidden: !s.isHidden } : s
+                                     );
+                                     onUpdateTrip({ ...trip, segments: newSegments });
+                                   }}>
+                                   <MaterialIcon name={seg.isHidden ? "visibility_off" : "visibility"} size={18} style={{ color: seg.isHidden ? '#999' : 'inherit' }} />
+                                 </button>
+                               )}
                                <button className="iconButton small" title="Segment Info" onClick={() => onSelectSegment(seg.id)}>
                                  <MaterialIcon name="info" size={18} />
                                </button>
                              </div>
-                             <div className="segment-tools-grid">
-                               <button className="iconButton small" title="Start earlier" disabled={segIndex === 0} onClick={() => handleStartEarlier(segIndex)}>
-                                 <MaterialIcon name="arrow_upward" size={18} />
-                               </button>
-                               <button className="iconButton small" title="Start later" disabled={segIndex === trip.segments.length - 1 && seg.waypoints.length <= 1 || segIndex === 0 && (seg.waypoints.length > 2 || trip.segments.length === 1)} onClick={() => handleStartLater(segIndex)}>
-                                 <MaterialIcon name="arrow_downward" size={18} />
-                               </button>
-                               <button className="iconButton small" title="Delete segment" disabled={segIndex === 0} onClick={() => handleDeleteSegment(segIndex)}>
-                                 <MaterialIcon name="delete" size={18} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
-                               </button>
-                             </div>
+                             {!isReadOnly && (
+                               <div className="segment-tools-grid">
+                                 <button className="iconButton small" title="Start earlier" disabled={segIndex === 0} onClick={() => handleStartEarlier(segIndex)}>
+                                   <MaterialIcon name="arrow_upward" size={18} />
+                                 </button>
+                                 <button className="iconButton small" title="Start later" disabled={segIndex === trip.segments.length - 1 && seg.waypoints.length <= 1 || segIndex === 0 && (seg.waypoints.length > 2 || trip.segments.length === 1)} onClick={() => handleStartLater(segIndex)}>
+                                   <MaterialIcon name="arrow_downward" size={18} />
+                                 </button>
+                                 <button className="iconButton small" title="Delete segment" disabled={segIndex === 0} onClick={() => handleDeleteSegment(segIndex)}>
+                                   <MaterialIcon name="delete" size={18} style={{ color: segIndex === 0 ? 'inherit' : '#d9534f' }} />
+                                 </button>
+                               </div>
+                             )}
                            </div>
                          </td>
                        ) : (
@@ -912,7 +965,7 @@ export function TripEditor({
                            background: isDragged ? targetDotColor : ((isFirstInSeg && segIndex > 0) ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)` : currSegColor), 
                            border: isDragged ? `3px solid white` : 'none',
                            boxShadow: isDragged ? `0 0 0 2px ${targetDotColor}` : 'none',
-                           cursor: isDragged ? 'grabbing' : 'grab',
+                           cursor: isReadOnly ? 'default' : (isDragged ? 'grabbing' : 'grab'),
                            color: 'white'
                          }}>
                            {wp.icon && <MaterialIcon name={wp.icon} size={16} />}
@@ -929,6 +982,7 @@ export function TripEditor({
                                className="waypoint-title-input"
                                style={{ flex: 1 }}
                                data-wpid={wp.id}
+                               disabled={isReadOnly}
                                onChange={(e) => {
                                  if (!wp.coordinates || (wp.coordinates as any).length < 2) {
                                    setWpSearchState({ wpId: wp.id, query: e.target.value });
@@ -997,11 +1051,15 @@ export function TripEditor({
                            </div>
                            <div className="waypoint-tools">
                              <button className="iconButton small" title="Jump to point" onClick={() => onJumpToWaypoint(wp.id)}><MaterialIcon name="my_location" size={16} /></button>
-                             <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || (wpIndex === seg.waypoints.length - 1 && !(segIndex === trip.segments.length - 1 && seg.waypoints.length > 1))} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
-                             <button className="iconButton small" title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>
-                             <button className="iconButton small" title="Move Later" disabled={!canMoveLater} onClick={() => handleMoveWaypointLater(wp.id)}><MaterialIcon name="arrow_downward" size={16} /></button>
-                             <button className="iconButton small" title="Remove waypoint" disabled={!canRemove} onClick={() => handleRemoveWaypoint(wp.id)}><MaterialIcon name="delete" size={16} style={{ color: canRemove ? '#d9534f' : 'inherit' }} /></button>
                              <button className="iconButton small" title="Waypoint Info" onClick={() => onSelectWaypoint(wp.id)}><MaterialIcon name="info" size={16} /></button>
+                             {!isReadOnly && (
+                               <>
+                                 <button className="iconButton small" title="Split segment" disabled={wpIndex === 0 || (wpIndex === seg.waypoints.length - 1 && !(segIndex === trip.segments.length - 1 && seg.waypoints.length > 1))} onClick={() => handleSplitSegment(segIndex, wpIndex)}><MaterialIcon name="content_cut" size={16} /></button>
+                                 <button className="iconButton small" title="Move Earlier" disabled={!canMoveEarlier} onClick={() => handleMoveWaypointEarlier(wp.id)}><MaterialIcon name="arrow_upward" size={16} /></button>
+                                 <button className="iconButton small" title="Move Later" disabled={!canMoveLater} onClick={() => handleMoveWaypointLater(wp.id)}><MaterialIcon name="arrow_downward" size={16} /></button>
+                                 <button className="iconButton small" title="Remove waypoint" disabled={!canRemove} onClick={() => handleRemoveWaypoint(wp.id)}><MaterialIcon name="delete" size={16} style={{ color: canRemove ? '#d9534f' : 'inherit' }} /></button>
+                               </>
+                             )}
                            </div>
                          </div>
                        </td>
@@ -1010,6 +1068,7 @@ export function TripEditor({
                        {isLastOfTrip && <td className="segment-col"></td>}
                        <td className="timeline-col gap-col">
                          <div className={`timeline-line ${isLastOfTrip ? 'top' : 'full'}`} style={{ background: bottomLineColor }}></div>
+                         {!isReadOnly && (
                            <div 
                              className="timeline-plus" 
                              title="Add Waypoint Here"
@@ -1017,6 +1076,7 @@ export function TripEditor({
                            >
                              <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
                            </div>
+                         )}
                        </td>
                        <td className="waypoint-col gap-col">
                          {!isLastOfTrip && distanceStats ? (

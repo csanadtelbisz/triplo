@@ -4,13 +4,14 @@ import { MaterialIcon } from './MaterialIcon';
 import { getPOIEmoji, SUGGESTED_WAYPOINT_ICONS } from '../utils/poiUtils';
 
 interface WaypointInfoProps {
+  isReadOnly?: boolean;
   waypointId: string;
   trip: Trip;
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
 }
 
-export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: WaypointInfoProps) {
+export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateTrip }: WaypointInfoProps) {
   let wp: typeof trip.segments[0]['waypoints'][0] | undefined;
   trip.segments.forEach(seg => {
     const found = seg.waypoints.find(w => w.id === waypointId);
@@ -55,6 +56,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
              type="text" 
              defaultValue={wp.name || ''} 
              className="form-input" 
+             disabled={isReadOnly}
              onBlur={(e) => {
                if (e.target.value !== (wp?.name || '')) {
                  const newSegments = trip.segments.map(s => ({
@@ -72,6 +74,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
              key={`wpdate-${wp.date || ''}`}
              type="datetime-local" 
              defaultValue={wp.date ? wp.date.slice(0, 16) : ''} 
+             disabled={isReadOnly}
              className="form-input" 
            />
         </div>
@@ -80,6 +83,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
            <textarea 
              key={`wpdesc-${wp.description || ''}`}
              defaultValue={wp.description || ''} 
+             disabled={isReadOnly}
              className="form-textarea" 
              onBlur={(e) => {
                if (e.target.value !== (wp?.description || '')) {
@@ -99,6 +103,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
                <div 
                  key={`${iconName}-${iconIndex}`}
                  onClick={() => {
+                   if (isReadOnly) return;
                    const newSegments = trip.segments.map(s => ({
                      ...s,
                      waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, icon: wp?.icon === iconName ? undefined : iconName } : w)
@@ -107,9 +112,10 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
                  }}
                  style={{ 
                    width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                   cursor: 'pointer', borderRadius: '4px', 
+                   cursor: isReadOnly ? 'default' : 'pointer', borderRadius: '4px', 
                    border: wp?.icon === iconName ? '2px solid #007bff' : '1px solid #ccc',
-                   background: wp?.icon === iconName ? '#e6f2ff' : '#f9f9f9'
+                   background: wp?.icon === iconName ? '#e6f2ff' : '#f9f9f9',
+                   opacity: isReadOnly ? 0.7 : 1
                  }}
                  title={iconName}
                >
@@ -122,6 +128,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
                type="text" 
                placeholder="Custom material icon name..." 
                className="form-input" 
+               disabled={isReadOnly}
                value={customIconInput}
                onChange={(e) => {
                  setCustomIconInput(e.target.value);
@@ -151,6 +158,7 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
              </a>
              <button 
                className="iconButton" 
+               disabled={isReadOnly}
                title="Clear Icon" 
                onClick={() => {
                  setCustomIconInput('');
@@ -176,11 +184,11 @@ export function WaypointInfo({ waypointId, trip, onGoBack, onUpdateTrip }: Waypo
         <div className="form-row align-end">
            <div className="form-col">
              <label className="form-label">Latitude</label>
-             <input type="number" step="any" defaultValue={wp.coordinates[1]} className="form-input" style={{ height: '36px' }} />
+             <input type="number" step="any" defaultValue={wp.coordinates[1]} disabled={isReadOnly} className="form-input" style={{ height: '36px' }} />
            </div>
            <div className="form-col">
              <label className="form-label">Longitude</label>
-             <input type="number" step="any" defaultValue={wp.coordinates[0]} className="form-input" style={{ height: '36px' }} />
+             <input type="number" step="any" defaultValue={wp.coordinates[0]} disabled={isReadOnly} className="form-input" style={{ height: '36px' }} />
            </div>
            <button 
              className="iconButton" 

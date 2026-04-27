@@ -8,6 +8,7 @@ import { getPOIEmoji } from '../utils/poiUtils';
 import { getLanguagePreferences, getLanguageName } from '../utils/languagePreferences';
 
 interface POIInfoProps {
+  isReadOnly?: boolean;
   poi: any;
   trip: Trip | null;
   onGoBack: () => void;
@@ -16,7 +17,7 @@ interface POIInfoProps {
   onStartNewTrip?: (poi: any, details?: any) => void;
 }
 
-export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip }: POIInfoProps) => {
+export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip }: POIInfoProps) => {
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -202,7 +203,7 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
             </>
         )}
 
-        {trip ? (
+        {trip && !isReadOnly && (
             <div className="actions-group" style={{marginTop: '20px'}}>
                 <button 
                   onClick={handleAddToTrip}
@@ -211,7 +212,8 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
                     <MaterialIcon name="add_location" /> Add {selectedName} to Trip
                 </button>
             </div>
-        ) : (
+        )}
+        {!trip && !isReadOnly && (
             <div className="actions-group" style={{marginTop: '20px'}}>
                 <button
                   onClick={() => onStartNewTrip && onStartNewTrip({ ...poi, name: selectedName }, details)}
@@ -227,12 +229,13 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
                 <label className="form-label" style={{ marginBottom: '8px' }}>Alternative Names</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {preferredOptions.map(opt => (
-                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease' }}>
+                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isReadOnly ? 'default' : 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease', opacity: isReadOnly ? 0.7 : 1 }}>
                             <input 
                                 type="radio" 
                                 name="poiSelectedName" 
                                 value={opt.value}
                                 checked={selectedName === opt.value}
+                                disabled={isReadOnly}
                                 onChange={() => setSelectedName(opt.value)}
                                 style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
                             />
@@ -250,12 +253,13 @@ export const POIInfo = ({ poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onSt
                     )}
 
                     {showOtherLangs && otherOptions.map(opt => (
-                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease' }}>
+                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isReadOnly ? 'default' : 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease', opacity: isReadOnly ? 0.7 : 1 }}>
                             <input 
                                 type="radio" 
                                 name="poiSelectedName" 
                                 value={opt.value}
                                 checked={selectedName === opt.value}
+                                disabled={isReadOnly}
                                 onChange={() => setSelectedName(opt.value)}
                                 style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
                             />
