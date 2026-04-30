@@ -842,6 +842,8 @@ export default function App() {
             onToggleReadOnly={() => setIsReadOnly(!isReadOnly)}
             trip={selectedTrip}
             allTrips={trips}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onSelectTrip={handleSelectTrip}
             onGoBack={handleGoBackTripEditor}
             onSelectSegment={setSelectedSegmentId}
             onSelectWaypoint={setSelectedWaypointId}

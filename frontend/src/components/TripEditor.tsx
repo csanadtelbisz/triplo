@@ -31,6 +31,8 @@ interface TripEditorProps {
   onUpdateTrip: (newTrip: Trip) => void;
   onWaitingForCoords: (waypointId: string | null) => void;
   allTrips?: Trip[];
+  isSidebarCollapsed?: boolean;
+  onSelectTrip?: (trip: Trip) => void;
 }
 
 const tripEditorScrollPositions: Record<string, number> = {};
@@ -39,7 +41,7 @@ export function TripEditor({
   isReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
-  onWaitingForCoords, allTrips
+  onWaitingForCoords, allTrips, isSidebarCollapsed, onSelectTrip
 }: TripEditorProps) {
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const contentRef = useRef<HTMLDivElement>(null);
@@ -53,6 +55,7 @@ export function TripEditor({
   const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
   const [wpSearchResults, setWpSearchResults] = useState<any[]>([]);
   const [isWpSearching, setIsWpSearching] = useState(false);
+  const [swipeAnim, setSwipeAnim] = useState<{ direction: 'left' | 'right', phase: 'out' | 'in' } | null>(null);
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
@@ -108,6 +111,77 @@ export function TripEditor({
       document.removeEventListener('touchmove', preventDefault);
     }
   }, [dragRender !== null]);
+
+  useEffect(() => {
+    if (!isReadOnly || !isSidebarCollapsed || !allTrips || allTrips.length <= 1 || window.innerWidth > 768 || !onSelectTrip) return;
+
+    const sidebar = contentRef.current?.closest('.sidebar') as HTMLElement;
+    if (!sidebar) return;
+
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const dx = endX - startX;
+      const dy = endY - startY;
+
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        const sortedTrips = [...allTrips].sort((a, b) => {
+          const dateA = a.endDate || a.startDate;
+          const dateB = b.endDate || b.startDate;
+          if (dateA && dateB) {
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+          } else if (dateA) {
+            return -1;
+          } else if (dateB) {
+            return 1;
+          } else {
+            return (a.name || '').localeCompare(b.name || '');
+          }
+        });
+
+        const currentIndex = sortedTrips.findIndex(t => t.id === trip.id);
+        if (currentIndex === -1) return;
+
+        if (dx < 0) {
+          // Swipe Left -> Next in list (older)
+          if (currentIndex < sortedTrips.length - 1) {
+            setSwipeAnim({ direction: 'left', phase: 'out' });
+            setTimeout(() => {
+              onSelectTrip(sortedTrips[currentIndex + 1]);
+              setSwipeAnim({ direction: 'left', phase: 'in' });
+              setTimeout(() => setSwipeAnim(null), 50);
+            }, 150);
+          }
+        } else {
+          // Swipe Right -> Prev in list (newer)
+          if (currentIndex > 0) {
+            setSwipeAnim({ direction: 'right', phase: 'out' });
+            setTimeout(() => {
+              onSelectTrip(sortedTrips[currentIndex - 1]);
+              setSwipeAnim({ direction: 'right', phase: 'in' });
+              setTimeout(() => setSwipeAnim(null), 50);
+            }, 150);
+          }
+        }
+      }
+    };
+
+    sidebar.addEventListener('touchstart', handleTouchStart);
+    sidebar.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      sidebar.removeEventListener('touchstart', handleTouchStart);
+      sidebar.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [trip.id, allTrips, isReadOnly, isSidebarCollapsed, onSelectTrip]);
 
   useEffect(() => {
     if (!wpSearchState) {
@@ -649,14 +723,39 @@ export function TripEditor({
 
   const tripSummary = trip.tripDistanceSummary || { totalDistance: 0, distanceByMode: {} };
 
+  const titleStyle: React.CSSProperties = {
+    display: 'flex', flexDirection: 'column', lineHeight: '1.2', alignItems: 'center', width: '100%', overflow: 'hidden',
+    transition: swipeAnim?.phase === 'in' ? 'none' : 'transform 0.15s ease-out, opacity 0.15s ease-out',
+    ...((swipeAnim?.phase === 'out' && swipeAnim.direction === 'left') ? { opacity: 0, transform: 'translateX(-40px)' } : {}),
+    ...((swipeAnim?.phase === 'out' && swipeAnim.direction === 'right') ? { opacity: 0, transform: 'translateX(40px)' } : {}),
+    ...((swipeAnim?.phase === 'in' && swipeAnim.direction === 'left') ? { opacity: 0, transform: 'translateX(40px)' } : {}),
+    ...((swipeAnim?.phase === 'in' && swipeAnim.direction === 'right') ? { opacity: 0, transform: 'translateX(-40px)' } : {}),
+  };
+
   return (
     <>
       <div className="toolbar">
         <button className="iconButton" onClick={onGoBack}><MaterialIcon name="arrow_back" size={20} /></button>
-        <h2 className="toolbar-title">{isReadOnly ? 'View Trip' : 'Edit Trip'}</h2>
+        <h2 className="toolbar-title">
+          {isReadOnly && isSidebarCollapsed && window.innerWidth <= 768 ? (
+            <div style={titleStyle}>
+              <span style={{ fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center' }}>{trip.name || 'Unnamed Trip'}</span>
+              {(trip.startDate || trip.endDate) && (
+                 <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>
+                   {trip.startDate ? new Date(trip.startDate).toLocaleDateString() : ''} 
+                   {trip.startDate && trip.endDate ? ' - ' : ''}
+                   {trip.endDate ? new Date(trip.endDate).toLocaleDateString() : ''}
+                 </span>
+              )}
+            </div>
+          ) : isReadOnly ? 'View Trip' : 'Edit Trip'}
+        </h2>
         <div className="toolbar-actions">
            {!isReadOnly && <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>}
            {!isReadOnly && <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>}
+           {!(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
+             <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
+           )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
            {isReadOnly ? (
              <button
@@ -687,7 +786,6 @@ export function TripEditor({
                <MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} />
              </button>
            )}
-           <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
         </div>
       </div>
       <div

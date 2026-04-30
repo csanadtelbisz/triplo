@@ -191,7 +191,7 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
             }
         }
     }
-    return { top: 50, bottom: heightOffset, left: 50, right: 50 };
+    return { top: 25, bottom: heightOffset, left: 25, right: 25 };
   };
 
   const zoomToTrip = (trip: Trip, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
