@@ -310,10 +310,14 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const targetPadding = getPadding(targetSidebarState, targetView);
       const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
+        const computedZoom = Math.min(camera.zoom || 15, 15);
+        const currentZoom = mapRef.current.getZoom();
+        const targetZoom = Math.max(currentZoom, Math.max(computedZoom, 14));
+
         mapRef.current.flyTo({
           ...camera,
           center: targetCoord,
-          zoom: Math.min(camera.zoom || 15, 15),
+          zoom: targetZoom,
           padding: targetPadding,
           duration: 1200,
           essential: true
@@ -341,9 +345,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       if (isVisible) return;
     }
 
+    const currentZoom = mapRef.current.getZoom();
+    const targetZoom = Math.max(currentZoom, 14);
+
     mapRef.current.flyTo({
       center: [lon, lat],
-      zoom: 14,
+      zoom: targetZoom,
       padding,
       essential: true
     });

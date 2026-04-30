@@ -1123,17 +1123,25 @@ export function TripEditor({
                      const targetIcon = isOther ? mode.split(':')[1] : undefined;
 
                      let displayName = mode.replace('_', ' ');
+                     let customSummaryColor: string | undefined;
                      if (isOther) {
                        const matchingSegs = trip.segments.filter(s => s.transportMode === 'other' && s.customIcon === targetIcon);
                        const allNames = matchingSegs.map(s => s.name?.trim()).filter(n => typeof n === 'string' && n !== '');
                        const commonName = allNames.length === matchingSegs.length && new Set(allNames).size === 1 ? allNames[0] : null;
                        displayName = commonName || 'Other';
+
+                       const allColors = matchingSegs.map(s => s.customColor).filter(c => typeof c === 'string' && c !== '');
+                       if (allColors.length === matchingSegs.length && new Set(allColors).size === 1) {
+                         customSummaryColor = allColors[0];
+                       }
                      }
+                     
+                     const finalColor = customSummaryColor || ModeThemes[actualMode as keyof typeof ModeThemes]?.color || '#666';
 
                      return (
                        <tr key={mode} className="trip-summary-row">
                          <td className="trip-summary-td">
-                           <span style={{ color: ModeThemes[actualMode as keyof typeof ModeThemes]?.color || '#666' }}>
+                           <span style={{ color: finalColor }}>
                              {isOther && targetIcon ? <MaterialIcon name={targetIcon} size={16} /> : getModeIcon(actualMode as any, 16)}
                            </span>
                            {displayName}

@@ -33,38 +33,50 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentId, seg?.customIcon]);
   
-  const handleImportGPX = () => {
+  const handleImportTrack = () => {
     if (!seg) return;
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.gpx';
+    fileInput.accept = '.gpx,.geojson,.json';
     fileInput.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const text = await file.text();
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(text, "text/xml");
       
       const coords: [number, number, number][] = [];
-      const trkpts = xmlDoc.getElementsByTagName("trkpt");
-      for (let i = 0; i < trkpts.length; i++) {
-        const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
-        const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
-        const eleTag = trkpts[i].getElementsByTagName("ele")[0];
-        const ele = eleTag && eleTag.textContent ? parseFloat(eleTag.textContent) : undefined;
-        if (ele !== undefined && !isNaN(ele)) {
-          coords.push([lon, lat, ele]);
-        } else {
-          coords.push([lon, lat, 0]);
+
+      if (file.name.toLowerCase().endsWith('.geojson') || file.name.toLowerCase().endsWith('.json') || text.trim().startsWith('{')) {
+        try {
+          const geojson = JSON.parse(text);
+          const extractCoords = (geometry: any) => {
+            if (geometry.type === 'LineString') {
+               geometry.coordinates.forEach((c: any) => coords.push([c[0], c[1], c[2] || 0]));
+            } else if (geometry.type === 'MultiLineString') {
+               geometry.coordinates.forEach((line: any) => line.forEach((c: any) => coords.push([c[0], c[1], c[2] || 0])));
+            }
+          };
+          if (geojson.type === 'FeatureCollection') {
+            geojson.features.forEach((f: any) => {
+              if (f.geometry) extractCoords(f.geometry);
+            });
+          } else if (geojson.type === 'Feature') {
+            if (geojson.geometry) extractCoords(geojson.geometry);
+          } else if (geojson.type === 'LineString' || geojson.type === 'MultiLineString') {
+            extractCoords(geojson);
+          }
+        } catch (e) {
+          console.error(e);
+          alert("Could not parse GeoJSON file.");
+          return;
         }
-      }
-      
-      if (coords.length === 0) {
-        const rtepts = xmlDoc.getElementsByTagName("rtept");
-        for (let i = 0; i < rtepts.length; i++) {
-          const lat = parseFloat(rtepts[i].getAttribute("lat") || "0");
-          const lon = parseFloat(rtepts[i].getAttribute("lon") || "0");
-          const eleTag = rtepts[i].getElementsByTagName("ele")[0];
+      } else {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, "text/xml");
+        const trkpts = xmlDoc.getElementsByTagName("trkpt");
+        for (let i = 0; i < trkpts.length; i++) {
+          const lat = parseFloat(trkpts[i].getAttribute("lat") || "0");
+          const lon = parseFloat(trkpts[i].getAttribute("lon") || "0");
+          const eleTag = trkpts[i].getElementsByTagName("ele")[0];
           const ele = eleTag && eleTag.textContent ? parseFloat(eleTag.textContent) : undefined;
           if (ele !== undefined && !isNaN(ele)) {
             coords.push([lon, lat, ele]);
@@ -72,10 +84,25 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
             coords.push([lon, lat, 0]);
           }
         }
+        
+        if (coords.length === 0) {
+          const rtepts = xmlDoc.getElementsByTagName("rtept");
+          for (let i = 0; i < rtepts.length; i++) {
+            const lat = parseFloat(rtepts[i].getAttribute("lat") || "0");
+            const lon = parseFloat(rtepts[i].getAttribute("lon") || "0");
+            const eleTag = rtepts[i].getElementsByTagName("ele")[0];
+            const ele = eleTag && eleTag.textContent ? parseFloat(eleTag.textContent) : undefined;
+            if (ele !== undefined && !isNaN(ele)) {
+              coords.push([lon, lat, ele]);
+            } else {
+              coords.push([lon, lat, 0]);
+            }
+          }
+        }
       }
 
       if (coords.length < 2) {
-        alert("Could not find valid route coordinates in GPX file.");
+        alert("Could not find valid route coordinates in file.");
         return;
       }
 
@@ -84,7 +111,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
       const updatedSeg = { 
           ...newSegments[segIndex], 
           routingService: 'gpx', 
-          routingProfile: 'Imported GPX',
+          routingProfile: 'Imported Track',
           source: 'gpx' as const,
           geometry: { type: 'LineString' as const, coordinates: coords }
       };
@@ -155,7 +182,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                 title="Focus to Segment"
             >
               <MaterialIcon name="my_location" size={20} />
-            </button>          <button className="iconButton" onClick={handleImportGPX} disabled={isReadOnly} title="Import GPX">
+            </button>          <button className="iconButton" onClick={handleImportTrack} disabled={isReadOnly} title="Import Track">
             <MaterialIcon name="file_upload" size={20} />
           </button>
           <button className="iconButton" onClick={() => {
@@ -248,11 +275,11 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
            <select 
              className="form-input" 
              disabled={isReadOnly}
-             value={seg.routingService === 'gpx' ? 'gpx|Imported GPX' : `${seg.routingService}|${seg.routingProfile}`}
+             value={seg.routingService === 'gpx' ? 'gpx|Imported Track' : `${seg.routingService}|${seg.routingProfile}`}
              onChange={async (e) => {
                const [service, profile] = e.target.value.split('|');
                if (service === 'gpx') {
-                 handleImportGPX();
+                 handleImportTrack();
                  return;
                }
                const newSegments = [...trip.segments];
@@ -277,7 +304,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                    </option>
                  ))
              )}
-             <option value="gpx|Imported GPX">Imported GPX</option>
+             <option value="gpx|Imported Track">Imported Track</option>
            </select>
            {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && (
              <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
@@ -285,27 +312,50 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              </div>
            )}
            {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && seg.routingService === 'Rail Router' && (
-             <button
-               onClick={() => {
-                 const pointsParams = seg.waypoints.map(wp => `point=${wp.coordinates[1]}%2C${wp.coordinates[0]}`).join('&');
-                 window.open(`https://routing.openrailrouting.org/maps/?${pointsParams}&locale=en-GB&elevation=false&profile=all_tracks&use_miles=false&layer=OSM%20Carto`, '_blank');
-               }}
-               style={{
-                 marginTop: '8px',
-                 padding: '6px 12px',
-                 backgroundColor: '#f0f0f0',
-                 border: '1px solid #ccc',
-                 borderRadius: '4px',
-                 cursor: 'pointer',
-                 fontSize: '0.85rem',
-                 display: 'flex',
-                 alignItems: 'center',
-                 gap: '6px'
-               }}
-               title="Open route in openrailrouting.org"
-             >
-               <MaterialIcon name="open_in_new" size={16} /> Open in openrailrouting.org
-             </button>
+             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+               <button
+                 onClick={() => {
+                   const pointsParams = seg.waypoints.map(wp => `point=${wp.coordinates[1]}%2C${wp.coordinates[0]}`).join('&');
+                   window.open(`https://routing.openrailrouting.org/maps/?${pointsParams}&locale=en-GB&elevation=false&profile=all_tracks&use_miles=false&layer=OSM%20Carto`, '_blank');
+                 }}
+                 style={{
+                   marginTop: '8px',
+                   padding: '6px 12px',
+                   backgroundColor: '#f0f0f0',
+                   border: '1px solid #ccc',
+                   borderRadius: '4px',
+                   cursor: 'pointer',
+                   fontSize: '0.85rem',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '6px'
+                 }}
+                 title="Open route in openrailrouting.org"
+               >
+                 <MaterialIcon name="open_in_new" size={16} /> Open in openrailrouting.org
+               </button>
+               <button
+                 onClick={() => {
+                   const pointsParams = seg.waypoints.map(wp => `${wp.coordinates[1]},${wp.coordinates[0]}`).join(';');
+                   window.open(`https://signal.eu.org/osm/#locs=${pointsParams}`, '_blank');
+                 }}
+                 style={{
+                   marginTop: '8px',
+                   padding: '6px 12px',
+                   backgroundColor: '#f0f0f0',
+                   border: '1px solid #ccc',
+                   borderRadius: '4px',
+                   cursor: 'pointer',
+                   fontSize: '0.85rem',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '6px'
+                 }}
+                 title="Open route in signal.eu.org"
+               >
+                 <MaterialIcon name="open_in_new" size={16} /> Open in signal.eu.org
+               </button>
+             </div>
            )}
         </div>
 
@@ -445,7 +495,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
       <ConfirmDialog
         isOpen={gpxImportData !== null}
         title="Adjust Waypoints"
-        message="Do you want to adjust the first and last waypoints of this segment to match the newly imported GPX track?"
+        message="Do you want to adjust the first and last waypoints of this segment to match the newly imported track?"
         confirmLabel="Yes, adjust them"
         cancelLabel="No, keep them"
         onConfirm={() => handleConfirmGPXWaypoints(true)}
