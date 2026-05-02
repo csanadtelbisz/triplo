@@ -103,6 +103,20 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const ghostMarkerDataRef = useRef<{ segmentId: string, originalWaypoints: any[], insertIndex: number } | null>(null);
   const isDraggingGhostRef = useRef(false);
   const isHoveringWaypointRef = useRef(false);
+  const multiTouchRef = useRef(false);
+
+  // Track multi-touch for preventing weird zooming + dragging marker intersections
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => { if (e.touches.length > 1) multiTouchRef.current = true; };
+    const handleTouchEnd = (e: TouchEvent) => { if (e.touches.length <= 1) setTimeout(() => multiTouchRef.current = false, 200); };
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
+
   const layerSelectorRef = useRef<HTMLDivElement>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -645,13 +659,50 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   .setLngLat(snapped.geometry!.coordinates as [number, number])
                   .addTo(mapRef.current!);
                   
+                let originalGhostCoords: [number, number] | null = null;
+                let abortGhostDrag = false;
+                const handleGhostZoom = () => { abortGhostDrag = true; };
+                
+                // Capture coordinates before MapLibre mutates them internally during drag setup
+                el.addEventListener('mousedown', () => {
+                  if (!isDraggingGhostRef.current && ghostMarkerRef.current) {
+                    originalGhostCoords = [ghostMarkerRef.current.getLngLat().lng, ghostMarkerRef.current.getLngLat().lat];
+                    abortGhostDrag = false;
+                  }
+                });
+                el.addEventListener('touchstart', () => {
+                  if (!isDraggingGhostRef.current && ghostMarkerRef.current) {
+                    originalGhostCoords = [ghostMarkerRef.current.getLngLat().lng, ghostMarkerRef.current.getLngLat().lat];
+                    abortGhostDrag = false;
+                  }
+                }, { passive: true });
+
                 ghostMarkerRef.current.on('dragstart', () => {
+                  if (!originalGhostCoords) {
+                    originalGhostCoords = [ghostMarkerRef.current!.getLngLat().lng, ghostMarkerRef.current!.getLngLat().lat];
+                  }
+                  if (multiTouchRef.current === true) abortGhostDrag = true;
+                  mapRef.current?.on('zoom', handleGhostZoom);
                   isDraggingGhostRef.current = true;
                   setHoverInfo(null);
                 });
+
+                ghostMarkerRef.current.on('drag', () => {
+                  if (multiTouchRef.current) abortGhostDrag = true;
+                  if (abortGhostDrag && ghostMarkerRef.current && originalGhostCoords) {
+                    ghostMarkerRef.current.setLngLat(originalGhostCoords);
+                  }
+                });
                 
                 ghostMarkerRef.current.on('dragend', () => {
+                  mapRef.current?.off('zoom', handleGhostZoom);
                   isDraggingGhostRef.current = false;
+                  if (abortGhostDrag && ghostMarkerRef.current && originalGhostCoords) {
+                    ghostMarkerRef.current.setLngLat(originalGhostCoords);
+                    originalGhostCoords = null;
+                    return;
+                  }
+                  originalGhostCoords = null;
                   if (ghostMarkerRef.current && ghostMarkerDataRef.current) {
                      const wpCoords = ghostMarkerRef.current.getLngLat();
                      const { segmentId, insertIndex } = ghostMarkerDataRef.current;
@@ -1028,13 +1079,46 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               marker.getElement().classList.remove('faded-marker');
             }
 
+            let originalMarkerCoords: [number, number] | null = [wp.coordinates[0], wp.coordinates[1]];
+            let abortDrag = false;
+
+            // Capture initial coordinates before any potential MapLibre mutations
+            el.addEventListener('mousedown', () => {
+              originalMarkerCoords = [wp.coordinates[0], wp.coordinates[1]];
+              abortDrag = false;
+            });
+            el.addEventListener('touchstart', () => {
+              originalMarkerCoords = [wp.coordinates[0], wp.coordinates[1]];
+              abortDrag = false;
+            }, { passive: true });
+            
+            const handleZoomWhileDragging = () => { abortDrag = true; };
+
             marker.on('dragstart', () => {
+              // Intentionally NOT setting coords here, MapLibre has already mutated them when this fires!
+              if (multiTouchRef.current === true) abortDrag = true;
+              mapRef.current?.on('zoom', handleZoomWhileDragging);
               setHoverInfo(null);
             });
 
+            marker.on('drag', () => {
+              if (multiTouchRef.current) abortDrag = true;
+              
+              if (abortDrag && originalMarkerCoords) {
+                marker.setLngLat(originalMarkerCoords);
+              }
+            });
+
             marker.on('dragend', () => {
+              mapRef.current?.off('zoom', handleZoomWhileDragging);
+              if (abortDrag && originalMarkerCoords) {
+                marker.setLngLat(originalMarkerCoords);
+                originalMarkerCoords = null;
+                return;
+              }
               const lngLat = marker.getLngLat();
               const coords: [number, number] = [lngLat.lng, lngLat.lat];
+              originalMarkerCoords = null;
               if (hotkeyRefs.current.selectedTrip) {
                 hotkeyRefs.current.handleCoordinateChange(hotkeyRefs.current.selectedTrip, wp.id, coords);
               }
@@ -1330,40 +1414,84 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
           className="context-menu"
           style={{ 
             position: 'fixed', top: contextMenu.y, left: contextMenu.x, 
-            background: 'white', border: '1px solid #ccc', padding: '8px 12px', 
+            background: 'white', border: '1px solid #ccc', padding: '4px 0', 
             zIndex: 1000, boxShadow: '0 2px 5px rgba(0,0,0,0.2)', cursor: 'pointer',
-            borderRadius: '4px', fontSize: '14px', color: '#333'
-          }}
-          onClick={() => {
-            const lastSegment = selectedTrip.segments[selectedTrip.segments.length - 1];
-            if (lastSegment) {
-              const newWaypoint = {
-                id: 'wp-' + Date.now(),
-                name: '',
-                coordinates: contextMenu.lngLat,
-                importance: 'hidden' as 'hidden'
-              };
-              const newSegments = [...selectedTrip.segments];
-              const wpRef = newSegments[newSegments.length - 1];
-              newSegments[newSegments.length - 1] = {
-                ...wpRef,
-                waypoints: [...wpRef.waypoints, newWaypoint as any]
-              };
-              
-              hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
-              
-              const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-              if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                  optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
-                      newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
-                      hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
-                  });
-              }
-            }
-            setContextMenu(null);
+            borderRadius: '4px', fontSize: '14px', color: '#333', minWidth: '150px'
           }}
         >
-          Add to trip
+          <div 
+            style={{ padding: '8px 12px' }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+            onClick={() => {
+              const lastSegment = selectedTrip.segments[selectedTrip.segments.length - 1];
+              if (lastSegment) {
+                const newWaypoint = {
+                  id: 'wp-' + Date.now(),
+                  name: '',
+                  coordinates: contextMenu.lngLat,
+                  importance: 'hidden' as 'hidden'
+                };
+                const newSegments = [...selectedTrip.segments];
+                const wpRef = newSegments[newSegments.length - 1];
+                newSegments[newSegments.length - 1] = {
+                  ...wpRef,
+                  waypoints: [...wpRef.waypoints, newWaypoint as any]
+                };
+                
+                hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
+                
+                const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
+                if (validCoords.length >= 2 && lastSegment.source === 'router') {
+                    optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
+                        newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
+                        hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
+                    });
+                }
+              }
+              setContextMenu(null);
+            }}
+          >
+            Add to trip
+          </div>
+          <div 
+            style={{ padding: '8px 12px' }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+            onClick={() => {
+              const lastSegment = selectedTrip.segments[selectedTrip.segments.length - 1];
+              if (lastSegment && lastSegment.waypoints.length > 0) {
+                const newWaypoint = {
+                  id: 'wp-' + Date.now(),
+                  name: '',
+                  coordinates: contextMenu.lngLat,
+                  importance: 'hidden' as 'hidden'
+                };
+                const newSegments = [...selectedTrip.segments];
+                const wpRef = newSegments[newSegments.length - 1];
+                const newWaypoints = [...wpRef.waypoints];
+                newWaypoints.splice(newWaypoints.length - 1, 0, newWaypoint as any);
+
+                newSegments[newSegments.length - 1] = {
+                  ...wpRef,
+                  waypoints: newWaypoints
+                };
+                
+                hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
+                
+                const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
+                if (validCoords.length >= 2 && lastSegment.source === 'router') {
+                    optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
+                        newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
+                        hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
+                    });
+                }
+              }
+              setContextMenu(null);
+            }}
+          >
+            Add before last
+          </div>
         </div>
       )}
     </div>

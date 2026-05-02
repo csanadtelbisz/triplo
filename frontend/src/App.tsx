@@ -813,8 +813,9 @@ export default function App() {
           <WaypointInfo isReadOnly={isReadOnly} 
             waypointId={selectedWaypointId} 
             trip={selectedTrip} 
-            onGoBack={handleGoBackWaypoint} 
+            onGoBack={handleGoBackWaypoint}
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
+            setHighlightedWaypointId={setHighlightedWaypointId}
           />
         ) : !selectedTrip ? (
           <TripManager isReadOnly={isReadOnly}

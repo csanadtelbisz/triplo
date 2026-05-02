@@ -35,9 +35,9 @@ class RoutingServiceManager {
   ];
 
   private defaultRouters: Record<TransportMode, DefaultRouter> = {
-      walk: { serviceName: this.graphHopper.name, profile: 'foot' },
-      hike: { serviceName: this.graphHopper.name, profile: 'hike' },
-      run: { serviceName: this.graphHopper.name, profile: 'foot' },
+      walk: { serviceName: this.mapy.name, profile: 'foot_fast' },
+      hike: { serviceName: this.mapy.name, profile: 'foot_hiking' },
+      run: { serviceName: this.mapy.name, profile: 'foot_fast' },
       bike: { serviceName: this.graphHopper.name, profile: 'bike' },
       car: { serviceName: this.graphHopper.name, profile: 'car' },
       taxi: { serviceName: this.graphHopper.name, profile: 'car' },

@@ -3,15 +3,18 @@ import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import { getPOIEmoji, SUGGESTED_WAYPOINT_ICONS } from '../utils/poiUtils';
 
+import { optimizeSegmentRoute } from '../routing/routeOptimizer';
+
 interface WaypointInfoProps {
   isReadOnly?: boolean;
   waypointId: string;
   trip: Trip;
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
+  setHighlightedWaypointId?: (id: string | null) => void;
 }
 
-export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateTrip }: WaypointInfoProps) {
+export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateTrip, setHighlightedWaypointId }: WaypointInfoProps) {
   let wp: typeof trip.segments[0]['waypoints'][0] | undefined;
   trip.segments.forEach(seg => {
     const found = seg.waypoints.find(w => w.id === waypointId);
@@ -38,11 +41,52 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
   return (
     <>
       <div className="toolbar">
-        <button className="iconButton" onClick={onGoBack}>
-          <MaterialIcon name="arrow_back" size={20} />
-        </button>
-        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Waypoint Info</h2>
-        <div style={{ width: 28 }}></div>
+        <div style={{ width: 32, display: 'flex' }}>
+          <button className="iconButton" onClick={onGoBack}>
+            <MaterialIcon name="arrow_back" size={20} />
+          </button>
+        </div>
+        <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Waypoint Info</h2>
+        <div style={{ width: 32, display: 'flex', justifyContent: 'flex-end' }}>
+          {!isReadOnly && (
+            <button 
+              className="iconButton" 
+              title="Add point again as last waypoint" 
+              onClick={() => {
+                if (wp) {
+                  const newWaypoint = {
+                    ...wp,
+                    id: 'wp-' + Date.now(),
+                  };
+                  const newSegments = [...trip.segments];
+                  const lastSegIndex = newSegments.length - 1;
+                  const lastSegment = newSegments[lastSegIndex];
+                  if (lastSegment) {
+                    newSegments[lastSegIndex] = {
+                      ...lastSegment,
+                      waypoints: [...lastSegment.waypoints, newWaypoint]
+                    };
+                    onUpdateTrip({ ...trip, segments: newSegments });
+
+                    const validCoords = newSegments[lastSegIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
+                    if (validCoords.length >= 2 && lastSegment.source === 'router') {
+                        optimizeSegmentRoute(newSegments[lastSegIndex], lastSegment).then((geom: any) => {
+                            newSegments[lastSegIndex] = { ...newSegments[lastSegIndex], geometry: geom };
+                            onUpdateTrip({ ...trip, segments: [...newSegments] });
+                        });
+                    }
+                    if (setHighlightedWaypointId) {
+                      setHighlightedWaypointId(newWaypoint.id);
+                    }
+                    onGoBack();
+                  }
+                }
+              }}
+            >
+              <MaterialIcon name="add_location" size={20} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="content">
         <div className="form-group">
