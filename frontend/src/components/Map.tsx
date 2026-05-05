@@ -69,6 +69,7 @@ export interface MapProps {
     onSelectTrip?: (trip: Trip) => void;
     onEmptyClick?: () => void;
     isSidebarCollapsed?: boolean;
+    onDragStart?: () => void;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -91,7 +92,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onSearchClick,
     onSelectTrip,
     onEmptyClick,
-    isSidebarCollapsed
+    isSidebarCollapsed,
+    onDragStart
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -139,7 +141,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
     localStorage.setItem('showHiddenSegments', String(showHiddenSegments));
   }, [showHiddenSegments]);
 
-const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick });
+const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick, onDragStart });
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -171,8 +173,8 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
   }, [waitingWaypointId, waitingWaypointIdRef]);
 
   useEffect(() => {
-      hotkeyRefs.current = { isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick };
-    }, [isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick]);
+      hotkeyRefs.current = { isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick, onDragStart };
+    }, [isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick, onDragStart]);
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
@@ -536,11 +538,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
         mapRef.current.on('contextmenu', (e) => {
           e.preventDefault();
+          hotkeyRefs.current.onDragStart?.();
           if (hotkeyRefs.current.isReadOnly || !hotkeyRefs.current.selectedTrip) return;
           setContextMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, lngLat: [e.lngLat.lng, e.lngLat.lat] });
         });
-        mapRef.current.on('dragstart', () => setContextMenu(null));
-        mapRef.current.on('movestart', () => setContextMenu(null));
+        mapRef.current.on('dragstart', () => { setContextMenu(null); hotkeyRefs.current.onDragStart?.(); });
+        mapRef.current.on('movestart', () => { setContextMenu(null); hotkeyRefs.current.onDragStart?.(); });
         // Ghost marker logic
         mapRef.current.on('mousemove', (e) => {
           if (isDraggingGhostRef.current) return;
@@ -685,9 +688,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   mapRef.current?.on('zoom', handleGhostZoom);
                   isDraggingGhostRef.current = true;
                   setHoverInfo(null);
-                });
-
-                ghostMarkerRef.current.on('drag', () => {
+                    hotkeyRefs.current.onDragStart?.();
                   if (multiTouchRef.current) abortGhostDrag = true;
                   if (abortGhostDrag && ghostMarkerRef.current && originalGhostCoords) {
                     ghostMarkerRef.current.setLngLat(originalGhostCoords);
@@ -792,6 +793,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 if (trip && hotkeyRefs.current.onSelectTrip) {
                   setHoverInfo(null);
                   hotkeyRefs.current.onSelectTrip(trip);
+                  hotkeyRefs.current.onDragStart?.();
                 }
                 return;
               }
@@ -881,6 +883,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             hotkeyRefs.current.setSelectedPOI(poiData);
           } else {
             hotkeyRefs.current.setSelectedPOI(null);
+            hotkeyRefs.current.onDragStart?.();
             if (hotkeyRefs.current.onEmptyClick) {
               hotkeyRefs.current.onEmptyClick();
             }
@@ -1099,11 +1102,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               if (multiTouchRef.current === true) abortDrag = true;
               mapRef.current?.on('zoom', handleZoomWhileDragging);
               setHoverInfo(null);
-            });
-
-            marker.on('drag', () => {
-              if (multiTouchRef.current) abortDrag = true;
-              
+                hotkeyRefs.current.onDragStart?.();
               if (abortDrag && originalMarkerCoords) {
                 marker.setLngLat(originalMarkerCoords);
               }
@@ -1126,6 +1125,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
             marker.getElement().addEventListener('click', async (e) => {
               e.stopPropagation();
+              hotkeyRefs.current.onDragStart?.();
 
               if (waitingWaypointIdRef.current && hotkeyRefs.current.selectedTrip) {
                 const wpId = waitingWaypointIdRef.current;

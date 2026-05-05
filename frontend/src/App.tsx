@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './styles/App.css';
 import './styles/Shared.css';
 import './styles/TripManager.css';
@@ -23,6 +23,7 @@ import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import { persistingManager } from './persisting/PersistingManager';
+import { resolvePOIName } from './utils/poiUtils';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 
@@ -83,6 +84,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
@@ -243,6 +245,11 @@ export default function App() {
       setSelectedTrip(cachedTrip);
     }
   };
+
+  const handleSetHighlightedWaypointId = useCallback((id: string | null) => {
+    setHighlightedWaypointId(id);
+    if (id) setIsSidebarCollapsed(false);
+  }, []);
 
   const handleCoordinateChange = async (trip: Trip, wpId: string, coords: [number, number]) => {
     const newSegments = [...trip.segments];
@@ -533,11 +540,37 @@ export default function App() {
     setSelectedWaypointId(null);
     setHighlightedWaypointId(null);
     setSelectedPOI(null);
+    setAttachingPoiToWaypointId(null);
   };
 
   const handleGoBackSegment = () => setSelectedSegmentId(null);
-  const handleGoBackWaypoint = () => setSelectedWaypointId(null);
+  const handleGoBackWaypoint = () => { 
+    setSelectedWaypointId(null);
+    setAttachingPoiToWaypointId(null);
+  };
   const handleGoBackPOI = () => setSelectedPOI(null);
+
+  useEffect(() => {
+    if (
+      selectedSegmentId ||
+      selectedPOI ||
+      !selectedWaypointId ||
+      (attachingPoiToWaypointId && attachingPoiToWaypointId !== selectedWaypointId) ||
+      isPreferencesOpen ||
+      isStatusOpen ||
+      isSearchOpen
+    ) {
+      setAttachingPoiToWaypointId(null);
+    }
+  }, [
+    selectedSegmentId,
+    selectedPOI,
+    selectedWaypointId,
+    attachingPoiToWaypointId,
+    isPreferencesOpen,
+    isStatusOpen,
+    isSearchOpen
+  ]);
 
   const hotkeyRefs = useRef({ handleUndo, handleRedo, handleSave, handleSaveAllUnsaved, selectedTrip, selectedSegmentId, selectedWaypointId, handleGoBackTripEditor, handleGoBackSegment, handleGoBackWaypoint, updateTripState, handleCoordinateChange });
   useEffect(() => {
@@ -790,6 +823,32 @@ export default function App() {
               handleGoBackPOI();
               setHighlightedWaypointId(wpId);
             }}
+            selectedWaypointId={selectedWaypointId}
+            onAttachToWaypoint={(poi, details) => {
+              if (!selectedTrip || !selectedWaypointId) return;
+              const newSegments = selectedTrip.segments.map(seg => ({
+                ...seg,
+                waypoints: seg.waypoints.map(wp => {
+                  if (wp.id === selectedWaypointId) {
+                    const newName = wp.name || poi.name || details?.name || details?.display_name || '';
+                    return {
+                      ...wp,
+                      name: newName,
+                      poi: {
+                        id: poi.id || poi.properties?.id || details?.osm_id || `poi_${Date.now()}`,
+                        name: poi.name || details?.name || details?.display_name,
+                        type: poi.class,
+                        subtype: poi.subclass,
+                        details: details || {}
+                      }
+                    };
+                  }
+                  return wp;
+                })
+              }));
+              updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
+              setSelectedPOI(null); // automatically close POI info and go back to Waypoint info
+            }}
           />
         ) : selectedSegmentId && selectedTrip ? (
           <SegmentInfo isReadOnly={isReadOnly} 
@@ -816,6 +875,12 @@ export default function App() {
             onGoBack={handleGoBackWaypoint}
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             setHighlightedWaypointId={setHighlightedWaypointId}
+            attachingPoiToWaypointId={attachingPoiToWaypointId}
+            setAttachingPoiToWaypointId={setAttachingPoiToWaypointId}
+            onJumpToWaypoint={(id) => {
+              setIsSidebarCollapsed(true);
+              setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
+            }}
           />
         ) : !selectedTrip ? (
           <TripManager isReadOnly={isReadOnly}
@@ -886,14 +951,54 @@ export default function App() {
         updateTripState={updateTripState}
         handleCoordinateChange={handleCoordinateChange}
         setSelectedWaypointId={setSelectedWaypointId}
-        setHighlightedWaypointId={(id) => {
-          setHighlightedWaypointId(id);
-          if (id) setIsSidebarCollapsed(false);
-        }}
+        setHighlightedWaypointId={handleSetHighlightedWaypointId}
         selectedSegmentId={selectedSegmentId}
         setSelectedSegmentId={setSelectedSegmentId}
         selectedPOI={selectedPOI}
+        onDragStart={() => {
+          if (attachingPoiToWaypointId) setAttachingPoiToWaypointId(null);
+        }}
         setSelectedPOI={(poi) => {
+          if (attachingPoiToWaypointId && poi && selectedTrip) {
+            const processAttach = async () => {
+              let details = poi.details;
+              if (!details && poi.coordinates) {
+                try {
+                  const [lon, lat] = poi.coordinates;
+                  const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=jsonv2&zoom=18&accept-language=${navigator.language || 'en'}`);
+                  details = await r.json();
+                } catch (e) {
+                  // ignore
+                }
+              }
+              const newSegments = selectedTrip.segments.map(seg => ({
+                ...seg,
+                waypoints: seg.waypoints.map(wp => {
+                  if (wp.id === attachingPoiToWaypointId) {
+                    const resolvedPoiName = resolvePOIName(poi, details);
+                    const newName = wp.name || resolvedPoiName || '';
+                    return {
+                      ...wp,
+                      name: newName,
+                      poi: {
+                        id: poi.id || poi.properties?.id || details?.osm_id || `poi_${Date.now()}`,
+                        name: resolvedPoiName,
+                        type: poi.class,
+                        subtype: poi.subclass,
+                        details: details || {}
+                      }
+                    };
+                  }
+                  return wp;
+                })
+              }));
+              updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
+              setAttachingPoiToWaypointId(null);
+            };
+            processAttach();
+            return;
+          }
+
           setSelectedPOI(poi);
             if (poi) {
               setIsStatusOpen(false);

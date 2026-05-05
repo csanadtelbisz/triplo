@@ -12,9 +12,12 @@ interface WaypointInfoProps {
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
   setHighlightedWaypointId?: (id: string | null) => void;
+  attachingPoiToWaypointId?: string | null;
+  setAttachingPoiToWaypointId?: (id: string | null) => void;
+  onJumpToWaypoint?: (id: string) => void;
 }
 
-export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateTrip, setHighlightedWaypointId }: WaypointInfoProps) {
+export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateTrip, setHighlightedWaypointId, attachingPoiToWaypointId, setAttachingPoiToWaypointId, onJumpToWaypoint }: WaypointInfoProps) {
   let wp: typeof trip.segments[0]['waypoints'][0] | undefined;
   trip.segments.forEach(seg => {
     const found = seg.waypoints.find(w => w.id === waypointId);
@@ -47,7 +50,14 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
           </button>
         </div>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Waypoint Info</h2>
-        <div style={{ width: 32, display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ width: 64, display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button 
+            className="iconButton" 
+            title="Focus Waypoint" 
+            onClick={() => onJumpToWaypoint && onJumpToWaypoint(waypointId)}
+          >
+            <MaterialIcon name="my_location" size={20} />
+          </button>
           {!isReadOnly && (
             <button 
               className="iconButton" 
@@ -244,11 +254,35 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
            </button>
         </div>
 
-        {wp.poi && (
+        {wp.poi ? (
           <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--color-border, #eee)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-               <MaterialIcon name="place" size={20} />
-               <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--color-text-secondary, #666)' }}>Attached POI</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <MaterialIcon name="place" size={20} />
+                 <h3 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--color-text-secondary, #666)' }}>Attached POI</h3>
+               </div>
+               {!isReadOnly && (
+                 <button
+                   className="iconButton small"
+                   onClick={() => {
+                     const newSegments = trip.segments.map(s => ({
+                       ...s,
+                       waypoints: s.waypoints.map(w => {
+                         if (w.id === waypointId) {
+                           const { poi, ...rest } = w;
+                           return rest;
+                         }
+                         return w;
+                       })
+                     }));
+                     onUpdateTrip({ ...trip, segments: newSegments });
+                   }}
+                   title="Remove attached POI"
+                   style={{ color: '#d32f2f' }}
+                 >
+                   <MaterialIcon name="delete" size={18} />
+                 </button>
+               )}
             </div>
             
             <div className="form-group">
@@ -260,7 +294,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
               <div className="form-group">
                 <label className="form-label">Type</label>
                 <div style={{ textTransform: 'capitalize', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>{getPOIEmoji(wp.poi.type, wp.poi.details?.type || wp.poi.details?.extratags?.poi_subclass, wp.poi.name)}</span> <span>{wp.poi.type.replace(/_/g, ' ')}</span>
+                  <span>{getPOIEmoji(wp.poi.type, wp.poi.subtype, wp.poi.name)}</span> <span>{[wp.poi.type, wp.poi.subtype].filter(Boolean).join(' - ').replace(/_/g, ' ')}</span>
                 </div>
               </div>
             )}
@@ -278,7 +312,29 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                </div>
             )}
           </div>
-        )}
+        ) : !isReadOnly ? (
+          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--color-border, #eee)' }}>
+            {attachingPoiToWaypointId === waypointId ? (
+              <div style={{ background: '#e3f2fd', padding: '12px', borderRadius: '8px', fontSize: '0.9rem', color: '#1565c0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                 <span>Click any POI on the map to attach it.</span>
+                 <button 
+                   onClick={() => setAttachingPoiToWaypointId?.(null)}
+                   style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px solid #1565c0', color: '#1565c0', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: '500' }}
+                 >
+                   Cancel
+                 </button>
+              </div>
+            ) : (
+              <button
+                 className="dialog-btn"
+                 onClick={() => setAttachingPoiToWaypointId?.(waypointId)}
+                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', background: 'transparent', color: '#1976d2', border: '1px solid rgba(25, 118, 210, 0.5)', borderRadius: '6px', fontWeight: '500', cursor: 'pointer' }}
+              >
+                  <MaterialIcon name="place" size={18} /> Attach POI
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     </>
   );

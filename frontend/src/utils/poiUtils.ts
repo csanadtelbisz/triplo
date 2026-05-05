@@ -1,4 +1,6 @@
-﻿export const SUGGESTED_WAYPOINT_ICONS = [
+﻿import { getLanguagePreferences } from './languagePreferences';
+
+export const SUGGESTED_WAYPOINT_ICONS = [
   'landscape',
   'water',
   'beach_access',
@@ -14,6 +16,7 @@
   'mosque',
   'museum',
   'castle',
+  'restaurant',
 ];
 
 export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string => {
@@ -30,7 +33,11 @@ export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string =
     parking: '🅿️',
     information: 'ℹ️',
     shelter: '🛖',
+    aerodrome: '✈️',
     bus_stop: '🚌',
+    bus_station: '🚌',
+    tram_stop: '🚊',
+    subway: 'Ⓜ️',
     station: '🚉',
     bar: '🍻',
     supermarket: '🛒',
@@ -55,9 +62,24 @@ export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string =
     church: '⛪',
     mosque: '🕌',
     synagogue: '🕍',
-    hindu_temple: '🛕'
+    hindu_temple: '🛕',
+    shinto: '⛩️',
+    confucian: '🏯',
   };
 
   if ((cls === 'peak' || sub === 'peak') && (!name || name.trim() === '')) return emojiMap['rock'];
   return (sub && emojiMap[sub]) || (cls && emojiMap[cls]) || '📍';
+};
+
+export const resolvePOIName = (poi: any, details?: any): string => {
+  if (!poi) return 'Point of Interest';
+  const langPrefs = getLanguagePreferences();
+  const rawDefault = poi.name || poi.name_int || details?.name;
+  
+  for (const lang of langPrefs) {
+    const pName = poi[`name:${lang}`];
+    if (pName) return pName;
+  }
+  
+  return rawDefault || details?.display_name || 'Point of Interest';
 };

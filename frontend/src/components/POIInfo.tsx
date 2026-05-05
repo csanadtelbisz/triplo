@@ -4,7 +4,7 @@ import { MaterialIcon } from './MaterialIcon';
 import '../styles/POIInfo.css';
 // Removed unused route import
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
-import { getPOIEmoji } from '../utils/poiUtils';
+import { getPOIEmoji, resolvePOIName } from '../utils/poiUtils';
 import { getLanguagePreferences, getLanguageName } from '../utils/languagePreferences';
 
 interface POIInfoProps {
@@ -15,9 +15,11 @@ interface POIInfoProps {
   onUpdateTrip: (trip: Trip) => void;
   onAddedToTrip: (wpId: string) => void;
   onStartNewTrip?: (poi: any, details?: any) => void;
+  selectedWaypointId?: string | null;
+  onAttachToWaypoint?: (poi: any, details?: any) => void;
 }
 
-export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip }: POIInfoProps) => {
+export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip, selectedWaypointId, onAttachToWaypoint }: POIInfoProps) => {
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -91,13 +93,8 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
   }, [poi, details, langPrefs]);
 
   const autoPrefValue = useMemo(() => {
-      const fallbackName = poi.name || poi.name_int || details?.name || 'Point of Interest';
-      for (const lang of langPrefs) {
-        const match = preferredOptions.find(o => o.id === lang);
-        if (match) return match.value;
-      }
-      return preferredOptions.find(o => o.id === 'default')?.value || fallbackName;
-  }, [preferredOptions, langPrefs, poi, details]);
+    return resolvePOIName(poi, details);
+  }, [poi, details, langPrefs]);
 
   const [selectedName, setSelectedName] = useState<string>(autoPrefValue);
   const [showOtherLangs, setShowOtherLangs] = useState(false);
@@ -118,6 +115,7 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
         id: poi.id || poi.properties?.id || details?.osm_id,
         name: selectedName || details?.display_name,
         type: poi.class,
+        subtype: poi.subclass,
         details: details
       }
     };
@@ -205,6 +203,14 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
 
         {trip && !isReadOnly && (
             <div className="actions-group" style={{marginTop: '20px'}}>
+                {selectedWaypointId && onAttachToWaypoint && (
+                    <button 
+                      onClick={() => onAttachToWaypoint({ ...poi, name: selectedName }, details)}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)', marginBottom: '12px' }}
+                    >
+                        <MaterialIcon name="place" /> Attach {selectedName} to Waypoint
+                    </button>
+                )}
                 <button 
                   onClick={handleAddToTrip}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)' }}

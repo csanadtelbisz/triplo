@@ -22,6 +22,7 @@ export interface Waypoint {
     id: string | number;
     name?: string;
     type?: string;
+    subtype?: string;
     details?: any;
   };
 }
