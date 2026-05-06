@@ -196,7 +196,7 @@ export function TripEditor({
     const timerId = setTimeout(async () => {
       setIsWpSearching(true);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&namedetails=1&accept-language=${navigator.language || 'en'}&q=${encodeURIComponent(query)}`);
         const data = await res.json();
         setWpSearchResults(data);
       } catch (err) {
@@ -937,7 +937,7 @@ export function TripEditor({
                  const transformStyle: React.CSSProperties = {
                    transform: `translateY(${translateY}px)`,
                    transition: transitionStyle,
-                   zIndex: isDragged ? 100 : 1,
+                   zIndex: (isDragged || wpSearchState?.wpId === wp.id) ? 100 : 1,
                    position: 'relative'
                  };
                  
@@ -951,6 +951,7 @@ export function TripEditor({
                    <Fragment key={`${seg.id}-${wp.id}`}>
                      <tr 
                       className={`waypoint-row-tr ${isDragged ? 'dragged' : ''}`}
+                      style={{ position: 'relative', zIndex: (isDragged || wpSearchState?.wpId === wp.id) ? 100 : 'auto' }}
                       ref={(el) => { waypointRefs.current[wp.id] = el; }}
                       data-wpid={wp.id}
                       onPointerDown={isReadOnly ? undefined : (e) => handlePointerDown(e, wp.id, globalIndex)}
@@ -1070,7 +1071,7 @@ export function TripEditor({
                          </div>
                        </td>
                        <td className="waypoint-col">
-                         <div className="waypoint-card" style={{ ...transformStyle, position: 'relative' }}>
+                         <div className="waypoint-card" style={{ ...transformStyle, position: 'relative', zIndex: wpSearchState?.wpId === wp.id ? 1000 : 1 }}>
                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                              <input
                                key={`wpt-${wp.id}-${wp.name}`}
@@ -1130,7 +1131,8 @@ export function TripEditor({
                                                   id: res.osm_id ? `search-${res.osm_type}-${res.osm_id}` : res.place_id,
                                                   name: res.name || res.display_name.split(',')[0],
                                                   type: res.class,
-                                                  details: { subclass: res.type }
+                                                  subtype: res.type,
+                                                    details: res
                                                 }
                                               } : w)
                                             }));
