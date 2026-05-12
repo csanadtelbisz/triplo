@@ -1,6 +1,8 @@
 import { ConfirmDialog } from '../components/Dialog';
 import { MaterialIcon, getModeIcon } from '../components/MaterialIcon';
 import type { CopySectionMetadataData } from '../utils/useCopySectionMetadata';
+import { getCustomOtherModes } from '../utils/customModesPreferences';
+import { useMemo } from 'react';
 
 interface CopySectionMetadataDialogProps {
   offer: CopySectionMetadataData | null;
@@ -9,7 +11,13 @@ interface CopySectionMetadataDialogProps {
 }
 
 export function CopySectionMetadataDialog({ offer, onConfirm, onCancel }: CopySectionMetadataDialogProps) {
+  const customModes = useMemo(() => getCustomOtherModes(), [offer]);
+
   if (!offer) return null;
+
+  const displayMode = offer.mode === 'other' && offer.icon
+    ? customModes.find(m => m.icon === offer.icon)?.name || 'other'
+    : offer.mode;
 
   return (
     <ConfirmDialog
@@ -33,7 +41,7 @@ export function CopySectionMetadataDialog({ offer, onConfirm, onCancel }: CopySe
               </span>
               <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                 <div style={{ fontSize: "14px", fontWeight: "bold", textTransform: "capitalize" }}>
-                  {offer.mode}
+                  {displayMode}
                 </div>
                 {offer.routingProfile && (
                   <div style={{ fontSize: "12px", color: "#666", marginTop: "2px" }}>

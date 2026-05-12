@@ -75,6 +75,28 @@ export class PersistingManager {
       await service.delete(tripId);
     }
   }
+
+  async loadPreferences(): Promise<any | null> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      if (service.loadPreferences) {
+        const prefs = await service.loadPreferences();
+        if (prefs) {
+          return prefs;
+        }
+      }
+    }
+    return null;
+  }
+
+  async savePreferences(prefs: any): Promise<void> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      if (service.savePreferences) {
+        await service.savePreferences(prefs);
+      }
+    }
+  }
 }
 
 export const persistingManager = new PersistingManager();

@@ -221,6 +221,58 @@ export class GoogleDrivePersistingService implements PersistingService {
     }
   }
 
+  async loadPreferences(): Promise<any | null> {
+    if (!this.getAccessToken()) return null;
+    try {
+      const folderId = await this.getOrCreateFolder();
+      const fileName = 'preferences.json';
+      const q = encodeURIComponent(`'${folderId}' in parents and name='${fileName}' and trashed=false`);
+      const searchRes = await this.request(`files?q=${q}&spaces=drive&fields=files(id)`);
+      
+      if (!searchRes.files || searchRes.files.length === 0) return null;
+      
+      const fileId = searchRes.files[0].id;
+      const fileData = await this.request(`files/${fileId}?alt=media`);
+      return fileData;
+    } catch (e) {
+      console.error('Failed to load preferences from Google Drive:', e);
+      return null;
+    }
+  }
+
+  async savePreferences(prefs: any): Promise<void> {
+    if (!this.getAccessToken()) return;
+    try {
+      const folderId = await this.getOrCreateFolder();
+      const fileName = 'preferences.json';
+      const content = JSON.stringify(prefs, null, 2);
+
+      const q = encodeURIComponent(`'${folderId}' in parents and name='${fileName}' and trashed=false`);
+      const searchRes = await this.request(`files?q=${q}&spaces=drive`);
+      
+      let fileId;
+      if (searchRes.files && searchRes.files.length > 0) {
+        fileId = searchRes.files[0].id;
+      } else {
+        const createRes = await this.request('files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: fileName, parents: [folderId] })
+        });
+        fileId = createRes.id;
+      }
+
+      await this.request(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+      });
+    } catch (e) {
+      console.error('Failed to save preferences to Google Drive:', e);
+      throw e;
+    }
+  }
+
   isAvailable(): boolean {
     return this.getAccessToken() !== null;
   }

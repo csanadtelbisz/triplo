@@ -18,12 +18,13 @@ interface TripManagerProps {
   onCreateTrip: () => void;
   onOpenStatus: () => void;
   onOpenSettings: () => void;
+  onOpenAnalytics?: () => void;
   isTripsLoading?: boolean;
 }
 
 let tripManagerScrollPos = 0;
 
-export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, isTripsLoading }: TripManagerProps) {
+export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, onOpenAnalytics, isTripsLoading }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -69,12 +70,13 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
     <>
       <div className="toolbar">
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          Triplo Manager
+          Triplo
         </h1>
         <div className="toolbar-actions">
            {!isReadOnly && (
              <button className="iconButton" title="New Trip" onClick={onCreateTrip}><MaterialIcon name="add" size={20} /></button>
            )}
+           <button className="iconButton" title="Analytics" onClick={onOpenAnalytics}><MaterialIcon name="finance" size={20} /></button>
            {isReadOnly ? (
              <button
                className="iconButton"

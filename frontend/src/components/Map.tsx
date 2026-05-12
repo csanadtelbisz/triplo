@@ -9,6 +9,8 @@ import { ModeThemes } from '../themes/config';
 import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD } from '../config/mapStyles';
 import { getPOIEmoji } from '../utils/poiUtils';
+import { getCustomOtherModes } from '../utils/customModesPreferences';
+import { syncPreferencesToCloud } from '../utils/preferencesSync';
 
 
 function getRenderGeometry(seg: any) {
@@ -376,6 +378,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     if (!mapRef.current) return;
     const center = mapRef.current.getCenter();
     localStorage.setItem('homeMapPosition', JSON.stringify({ center: [center.lng, center.lat], zoom: mapRef.current.getZoom() }));
+    syncPreferencesToCloud();
   };
 
   const zoomToHome = () => {
@@ -581,12 +584,19 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             }
             
             mapRef.current!.getCanvas().style.cursor = 'pointer';
-            setHoverInfo({
-              x: e.originalEvent.clientX,
-              y: e.originalEvent.clientY,
-              name: tripName ? `${tripName} - ${segInfo?.name || ''}` : segInfo?.name || '',
-              mode: feature.properties.mode
-            });
+
+              let hoverMode = feature.properties.mode;
+              if (hoverMode === 'other' && segInfo?.customIcon) {
+                const cm = getCustomOtherModes().find(m => m.icon === segInfo.customIcon);
+                if (cm?.name) hoverMode = cm.name;
+              }
+
+              setHoverInfo({
+                x: e.originalEvent.clientX,
+                y: e.originalEvent.clientY,
+                name: tripName ? `${tripName} - ${segInfo?.name || ''}` : segInfo?.name || '',
+                mode: hoverMode
+              });
             
             if (hotkeyRefs.current.selectedTrip && segInfo && segInfo.geometry && segInfo.geometry.coordinates.length > 1) {
               const line = turf.lineString(segInfo.geometry.coordinates as [number, number][]);
@@ -1405,7 +1415,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               <strong>{hoverInfo.name}</strong><br />
             </>
           )}
-          <span style={{opacity: 0.8}}>{hoverInfo.mode}</span>
+          <span style={{opacity: 0.8}}>{hoverInfo.mode.toLowerCase()}</span>
         </div>
       )}
       

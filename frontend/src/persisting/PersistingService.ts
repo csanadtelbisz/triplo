@@ -27,6 +27,12 @@ export interface PersistingService {
   // deletes a trip from this service
   delete(tripId: string): Promise<void>;
 
+  // load synced preferences
+  loadPreferences?(): Promise<any | null>;
+
+  // save synced preferences
+  savePreferences?(prefs: any): Promise<void>;
+
   // check if the service is currently available
   isAvailable(): boolean;
 

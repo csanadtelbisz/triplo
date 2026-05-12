@@ -21,8 +21,10 @@ import { POIInfo } from './components/POIInfo';
 import { SearchPanel } from './components/SearchPanel';
 import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
+import { AnalyticsPanel } from './components/AnalyticsPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import { persistingManager } from './persisting/PersistingManager';
+import { loadPreferencesFromCloud } from './utils/preferencesSync';
 import { resolvePOIName } from './utils/poiUtils';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
@@ -83,6 +85,7 @@ export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -112,6 +115,8 @@ export default function App() {
 
       const apiTrips = await TripAPI.getTrips();
       const remoteTrips = await persistingManager.loadAllTrips();
+      // Load preferences from cloud
+      await loadPreferencesFromCloud();
 
       const variantsByTripId: Record<string, Trip[]> = {};
       const conflictsFound: Record<string, Trip[]> = {};
@@ -558,6 +563,7 @@ export default function App() {
       (attachingPoiToWaypointId && attachingPoiToWaypointId !== selectedWaypointId) ||
       isPreferencesOpen ||
       isStatusOpen ||
+      isAnalyticsOpen ||
       isSearchOpen
     ) {
       setAttachingPoiToWaypointId(null);
@@ -569,6 +575,7 @@ export default function App() {
     attachingPoiToWaypointId,
     isPreferencesOpen,
     isStatusOpen,
+    isAnalyticsOpen,
     isSearchOpen
   ]);
 
@@ -691,6 +698,7 @@ export default function App() {
       return;
     }
     setIsStatusOpen(false);
+    setIsAnalyticsOpen(false);
     setIsPreferencesOpen(false);
     setSelectedWaypointId(null);
     setSelectedSegmentId(null);
@@ -786,6 +794,11 @@ export default function App() {
             onGoBack={() => setIsStatusOpen(false)}
             trips={trips}
             onUpdateTrips={handleUpdateExternalTrips}
+          />
+        ) : isAnalyticsOpen ? (
+          <AnalyticsPanel
+            onGoBack={() => setIsAnalyticsOpen(false)}
+            trips={trips}
           />
         ) : isSearchOpen ? (
           <SearchPanel 
@@ -894,12 +907,20 @@ export default function App() {
             onCreateTrip={handleCreateTrip}
             onOpenStatus={() => {
               setIsStatusOpen(true);
+              setIsAnalyticsOpen(false);
               setIsPreferencesOpen(false);
               setIsSidebarCollapsed(false);
             }}
             onOpenSettings={() => {
               setIsPreferencesOpen(true);
               setIsStatusOpen(false);
+              setIsAnalyticsOpen(false);
+              setIsSidebarCollapsed(false);
+            }}
+            onOpenAnalytics={() => {
+              setIsAnalyticsOpen(true);
+              setIsStatusOpen(false);
+              setIsPreferencesOpen(false);
               setIsSidebarCollapsed(false);
             }}
           />

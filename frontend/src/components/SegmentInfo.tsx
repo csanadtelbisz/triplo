@@ -8,6 +8,8 @@ import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
 import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
 import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
+import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
+import type { CustomOtherMode } from '../utils/customModesPreferences';
 
 interface SegmentInfoProps {
   isReadOnly?: boolean;
@@ -27,7 +29,9 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
   
   const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
   const [customIconInput, setCustomIconInput] = useState<string>('');
-  
+  const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
+  const [showCustomModes] = useState(() => getShowCustomModesInDefault());
+
   useEffect(() => {
     setCustomIconInput(seg?.customIcon || '');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,7 +224,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
         <div className="form-group">
            <label className="form-label">Transport Mode</label>
            <div className="mode-selector">
-              {TRANSPORT_MODES.map(m => {
+              {TRANSPORT_MODES.filter(m => m !== 'other').map(m => {
                 const theme = ModeThemes[m];
                 const isSelected = seg.transportMode === m;
                 return (
@@ -264,7 +268,118 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                       }
                     }}
                   >
-                    {m === 'other' && isSelected && seg.customIcon ? <MaterialIcon name={seg.customIcon} size={24} /> : getModeIcon(m, 24)}
+                    {getModeIcon(m, 24)}
+                  </button>
+                );
+              })}
+              
+              {showCustomModes && customModes.map(cm => {
+                const isSelected = seg.transportMode === 'other' && seg.customIcon === cm.icon;
+                return (
+                  <button
+                    key={`custom-${cm.icon}`}
+                    title={cm.name || cm.icon}
+                    disabled={isReadOnly}
+                    className="mode-button"
+                    style={{
+                      border: isSelected ? `2px solid ${cm.color || '#007bff'}` : '1px solid #ddd',
+                      background: isSelected ? `${cm.color || '#007bff'}22` : 'white',
+                      color: cm.color,
+                      opacity: isSelected || !isReadOnly ? 1 : 0.3,
+                      cursor: isReadOnly ? 'default' : 'pointer',
+                    }}
+                    onClick={async () => {
+                      if (!isSelected) {
+                        const newSegments = [...trip.segments];
+                        const segIndex = newSegments.findIndex(s => s.id === segmentId);
+                        
+                        let service = 'Straight Line Router';
+                        let profile = 'straight_line';
+                        if (cm.routingProfile && cm.routingProfile.includes('|')) {
+                          [service, profile] = cm.routingProfile.split('|');
+                        } else if (cm.routingProfile) {
+                          profile = cm.routingProfile; // Fallback
+                        }
+
+                        const updatedSeg = {
+                          ...newSegments[segIndex],
+                          customColor: cm.color,
+                          transportMode: 'other' as const,
+                          customIcon: cm.icon,
+                          routingService: service,
+                          routingProfile: profile,
+                          source: 'router' as const
+                        };
+
+                        if (updatedSeg.source === 'router') {
+                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
+                          if (coords.length >= 2) {
+                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
+                          } else {
+                            delete (updatedSeg as any).geometry;
+                          }
+                        }
+                        
+                        newSegments[segIndex] = updatedSeg;
+                        onUpdateTrip({ ...trip, segments: newSegments });
+                      }
+                    }}
+                  >
+                    <MaterialIcon name={cm.icon} size={24} />
+                  </button>
+                );
+              })}
+
+              {/* Keep the original 'other' handler at the end */}
+              {TRANSPORT_MODES.filter(m => m === 'other').map(m => {
+                const theme = ModeThemes[m];
+                // Should only be indicated if customIcon doesn't match any custom modes, 
+                // but visually distinguishing it is nice if they selected a built-in other mode manually.
+                const isModeSelected = seg.transportMode === m;
+                const isBuiltinSelected = isModeSelected && (!showCustomModes || !customModes.some(cm => cm.icon === seg.customIcon));
+                return (
+                  <button
+                    key={m}
+                    title={m}
+                    disabled={isReadOnly}
+                    className="mode-button"
+                    style={{
+                      border: isBuiltinSelected ? `2px solid ${theme?.color || '#007bff'}` : '1px solid #ddd',
+                      background: isBuiltinSelected ? `${theme?.color || '#007bff'}22` : 'white',
+                      color: theme?.color,
+                      opacity: isBuiltinSelected || !isReadOnly ? 1 : 0.3,
+                      cursor: isReadOnly ? 'default' : 'pointer',
+                    }}
+                    onClick={async () => {
+                      if (!isBuiltinSelected) {
+                        const defRouter = routingManager.getDefaultRouter(m);
+                        const newSegments = [...trip.segments];
+                        const segIndex = newSegments.findIndex(s => s.id === segmentId);
+                        const updatedSeg = {
+                          ...newSegments[segIndex],
+                          customColor: undefined,
+                          transportMode: m,
+                          customIcon: undefined,
+                          routingService: defRouter.serviceName,
+                          routingProfile: defRouter.profile,
+                          source: 'router' as const
+                        };
+
+                        if (updatedSeg.source === 'router') {
+                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
+                          if (coords.length >= 2) {
+                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
+                          } else {
+                            delete (updatedSeg as any).geometry;
+                          }
+                        }
+                        
+                        newSegments[segIndex] = updatedSeg;
+                        onUpdateTrip({ ...trip, segments: newSegments });
+                      }
+                    }}
+                  >
+                    {isBuiltinSelected && seg.customIcon ? <MaterialIcon name={seg.customIcon} size={24} /> : getModeIcon(m, 24)}
                   </button>
                 );
               })}
@@ -308,7 +423,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
            </select>
            {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && (
              <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
-               This routing service is currently unavailable. Routes will default to straight lines.
+               Routing service currently unavailable: routes default to straight lines. Open an online routing service, download the route, and import it as GPX or GeoJSON here.
              </div>
            )}
            {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && seg.routingService === 'Rail Router' && (
@@ -357,6 +472,41 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                </button>
              </div>
            )}
+           {routingManager.getService(seg.routingService) && seg.routingService === 'GraphHopper Router' && seg.routingProfile === 'ferry' && (
+             <div>
+                <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
+                  Custom routing models are not available in the free GraphHopper API. You can calculate the route with custom models in GraphHopper's web version, export it as GPX, and import it here.
+                </div>
+                <button
+                  onClick={() => {
+                    const pointsParams = seg.waypoints.map(wp => `point=${wp.coordinates[1]}%2C${wp.coordinates[0]}`).join('&');
+                    const customModel = encodeURIComponent(JSON.stringify({
+                      priority: [
+                        {
+                          if: "road_environment!=FERRY",
+                          multiply_by: "0.1"
+                        }
+                      ]
+                    }));
+                    window.open(`https://graphhopper.com/maps/?${pointsParams}&profile=car&custom_model=${customModel}`, '_blank');
+                  }}
+                  style={{
+                    marginTop: '8px',
+                    padding: '6px 12px',
+                    backgroundColor: '#f0f0f0',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <MaterialIcon name="open_in_new" size={16} /> Open in GraphHopper Maps
+                </button>
+              </div>
+           )}
         </div>
 
         <div className="form-row">
@@ -382,8 +532,9 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                  onClick={() => {
                    const newSegments = trip.segments.map(s => {
                      if (s.id === segmentId) {
-                       const { customColor, ...rest } = s;
-                       return rest;
+                       if (s.transportMode === 'other' && s.customIcon) { const cm = customModes.find(m => m.icon === s.customIcon); if (cm) return { ...s, customColor: cm.color }; }
+                        const { customColor, ...rest } = s;
+                        return rest;
                      }
                      return s;
                    });
@@ -396,7 +547,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              </div>
           </div>
 
-          {seg.transportMode === 'other' && (
+          {seg.transportMode === 'other' && (!showCustomModes || !customModes.some(cm => cm.icon === seg.customIcon)) && (
             <div className="form-col" style={{ flex: 2 }}>
                <label className="form-label">Icon</label>
                <div style={{ display: 'flex', gap: '8px' }}>
@@ -409,9 +560,20 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                    onChange={(e) => {
                      setCustomIconInput(e.target.value);
                      if (e.target.value === '' && !seg?.customIcon) return;
-                     const newSegments = trip.segments.map(s => 
-                       s.id === segmentId ? { ...s, customIcon: e.target.value || undefined } : s
-                     );
+                     
+                     const typedIcon = e.target.value;
+                     const matchedMode = customModes.find(cm => cm.icon === typedIcon);
+                     
+                     const newSegments = trip.segments.map(s => {
+                       if (s.id === segmentId) {
+                         const updates: any = { customIcon: typedIcon || undefined };
+                         if (matchedMode) {
+                           updates.customColor = matchedMode.color;
+                         }
+                         return { ...s, ...updates };
+                       }
+                       return s;
+                     });
                      onUpdateTrip({ ...trip, segments: newSegments });
                    }}
                    onBlur={() => {
@@ -482,14 +644,14 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
            )}
         </div>
 
-        <div className="form-group" style={{ marginTop: 24 }}>
+        {/* <div className="form-group" style={{ marginTop: 24 }}>
           <label className="form-label">ID (Read-only)</label>
           <input type="text" readOnly value={seg.id} className="form-input" />
-        </div>
-        <div className="form-group">
+        </div> */}
+        {/* <div className="form-group">
            <label className="form-label">Source (Read-only)</label>
            <input type="text" readOnly value={seg.source} className="form-input" />
-        </div>
+        </div> */}
       </div>
 
       <ConfirmDialog

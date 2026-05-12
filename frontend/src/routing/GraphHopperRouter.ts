@@ -34,8 +34,9 @@ export class GraphHopperRouter implements IRoutingService {
       case 'car':
       case 'bus':
       case 'taxi':
-      case 'ferry':
         return ['car'];
+      case 'ferry':
+        return ['ferry'];
       case 'other':
         return ['foot', 'bike', 'car'];
       default:
@@ -59,13 +60,26 @@ export class GraphHopperRouter implements IRoutingService {
       const chunk = waypoints.slice(i, i + 5);
       
       const url = `https://graphhopper.com/api/1/route?key=${this.apiKey}`;
-      const payload = {
+      const payload: any = {
         points: chunk,
         profile: profile,
         elevation: true,
         points_encoded: false,
-        instructions: false
+        instructions: false,
       };
+
+      if (profile === 'ferry') {
+        payload.profile = 'car';
+        payload["ch.disable"] = true;
+        payload["custom_model"] = {
+          "priority": [
+            {
+              "if": "road_environment != FERRY",
+              "multiply_by": "0.1"
+            }
+          ]
+        };
+      }
 
       const response = await fetch(url, {
         method: 'POST',

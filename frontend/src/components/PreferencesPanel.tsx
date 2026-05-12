@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/StatusPanel.css';
 import { OSM_LANGUAGES, getLanguagePreferences, saveLanguagePreferences } from '../utils/languagePreferences';
+import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault, setShowCustomModesInDefault } from '../utils/customModesPreferences';
+import type { CustomOtherMode } from '../utils/customModesPreferences';
+import { routingManager } from '../routing/RoutingService';
+import { syncPreferencesToCloud } from '../utils/preferencesSync';
 
 interface PreferencesPanelProps {
   onGoBack: () => void;
@@ -15,14 +19,28 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
   const [defaultReadOnly, setDefaultReadOnly] = useState(() => localStorage.getItem('defaultReadOnly') === 'true');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
+  const [showCustomModes, setShowCustomModes] = useState(() => getShowCustomModesInDefault());
 
   useEffect(() => {
     setLangPrefs(getLanguagePreferences());
+    
+    const handlePreferencesUpdated = () => {
+      setLangPrefs(getLanguagePreferences());
+      setCustomModes(getCustomOtherModes());
+      setShowCustomModes(getShowCustomModesInDefault());
+    };
+    
+    window.addEventListener('preferences-updated', handlePreferencesUpdated);
+    return () => window.removeEventListener('preferences-updated', handlePreferencesUpdated);
   }, []);
 
   const updatePrefs = (newPrefs: string[]) => {
     setLangPrefs(newPrefs);
     saveLanguagePreferences(newPrefs);
+    syncPreferencesToCloud();
   };
 
   const moveUp = (index: number) => {
@@ -53,6 +71,12 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     setSelectedNewLang('');
   };
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    await syncPreferencesToCloud();
+    setIsSyncing(false);
+  };
+
   const handleSetHome = () => {
     onSetHome();
     setShowSavedMsg(true);
@@ -65,6 +89,35 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     localStorage.setItem('defaultReadOnly', isChecked ? 'true' : 'false');
   };
 
+  const handleUpdateCustomModes = (newModes: CustomOtherMode[]) => {
+    setCustomModes(newModes);
+    saveCustomOtherModes(newModes);
+    syncPreferencesToCloud();
+  };
+
+  const handleToggleShowCustomModes = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setShowCustomModes(val);
+    setShowCustomModesInDefault(val);
+    syncPreferencesToCloud();
+  };
+
+  const handleAddCustomMode = () => {
+    handleUpdateCustomModes([...customModes, { icon: '', name: '', color: '#000000', routingProfile: 'Straight Line Router|straight_line' }]);
+  };
+
+  const handleUpdateCustomMode = (index: number, updates: Partial<CustomOtherMode>) => {
+    const newModes = [...customModes];
+    newModes[index] = { ...newModes[index], ...updates };
+    handleUpdateCustomModes(newModes);
+  };
+
+  const handleDeleteCustomMode = (index: number) => {
+    const newModes = [...customModes];
+    newModes.splice(index, 1);
+    handleUpdateCustomModes(newModes);
+  };
+
   return (
     <>
       <div className="toolbar">
@@ -73,10 +126,22 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
         </button>
         <h2 className="status-panel-header-title">Preferences</h2>
         <div className="status-panel-header-spacer"></div>
+        <button 
+          className="iconButton" 
+          onClick={handleManualSync} 
+          title="Backup Preferences"
+          disabled={isSyncing}
+        >
+          <MaterialIcon name={isSyncing ? "sync" : "backup"} size={20} className={isSyncing ? "rotating" : ""} />
+        </button>
       </div>
 
       <div className="content status-panel-content">
-        <h3 className="status-panel-section-title first">Default Read-Only Mode</h3>
+        <h3 className="status-panel-section-title first">Default Read-Only Mode
+          <span title="Not synced preference">
+            <MaterialIcon name="cloud_off" size={16} style={{ marginLeft: '6px', verticalAlign: 'baseline' }} />
+          </span>
+        </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 12px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
             <input 
@@ -159,13 +224,72 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                       onClick={() => setAddingLang(true)}
                       style={{ background: 'none', border: 'none', color: '#1976d2', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '4px 0', fontSize: '0.85rem' }}
                     >
-                      <MaterialIcon name="add" size={16} /> Add Language
+                      <MaterialIcon name="add" size={16} /> Add language
                     </button>
                   )}
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <h3 className="status-panel-section-title">Other Transport Modes</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
+          <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
+            Define custom transport modes with an icon, name, color, and default routing profile.
+            <a href="https://fonts.google.com/icons?icon.style=Rounded" target="_blank" rel="noreferrer" style={{ color: '#1976d2', textDecoration: 'none', marginLeft: '4px' }}>
+              Search icons
+            </a>
+          </span>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+            <tbody>
+              {customModes.map((mode, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '6px 4px', verticalAlign: 'middle', width: '32px', textAlign: 'center' }}>
+                    <MaterialIcon name={mode.icon || 'help_outline'} size={24} style={{ color: mode.color }} />
+                  </td>
+                  <td style={{ padding: '6px 2px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                        <input type="text" value={mode.name} onChange={(e) => handleUpdateCustomMode(idx, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Name" title="Name" />
+                        <input type="text" value={mode.icon} onChange={(e) => handleUpdateCustomMode(idx, { icon: e.target.value })} style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Icon ID" title="Material Icon ID" />
+                        <input type="color" value={mode.color} onChange={(e) => handleUpdateCustomMode(idx, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', border: '1px solid #ccc', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Color" />
+                      </div>
+                      <select value={mode.routingProfile} onChange={(e) => handleUpdateCustomMode(idx, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} title="Default Routing Profile">
+                        <option value="Straight Line Router|straight_line">Straight Line</option>
+                        {routingManager.getServices().flatMap(svc => 
+                          svc.getRoutingProfiles('other').map(profile => (
+                            <option key={`${svc.name}|${profile}`} value={`${svc.name}|${profile}`}>
+                              {svc.name.replace(' Router', '')} [{profile}]
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </td>
+                  <td style={{ padding: '6px 4px', textAlign: 'right', verticalAlign: 'middle', width: '30px' }}>
+                    <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => handleDeleteCustomMode(idx)} title="Delete mode"><MaterialIcon name="delete" size={20} /></button>
+                  </td>
+                </tr>
+              ))}
+              <tr style={{ borderBottom: '1px solid #eee' }}>
+                <td colSpan={3} style={{ padding: '6px 4px' }}>
+                  <button 
+                    onClick={handleAddCustomMode}
+                    style={{ background: 'none', border: 'none', color: '#1976d2', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '4px 0', fontSize: '0.85rem' }}
+                  >
+                    <MaterialIcon name="add" size={16} /> Add other transport mode
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 12px', marginTop: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+              <input type="checkbox" checked={showCustomModes} onChange={handleToggleShowCustomModes} style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }} />
+              Show these extra modes among available transport modes
+            </label>
+          </div>
         </div>
 
       </div>

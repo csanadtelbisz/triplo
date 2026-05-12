@@ -1,4 +1,4 @@
-import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
+﻿import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -9,6 +9,9 @@ import { Dialog } from './Dialog';
 import { exportTripGPX, exportTripGeoJSON, downloadFile } from '../utils/exportUtils';
 import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
 import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
+import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
+import type { CustomOtherMode } from '../utils/customModesPreferences';
+import type { TransportMode } from '../../../shared/types';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -61,6 +64,9 @@ export function TripEditor({
   const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [exportMinify, setExportMinify] = useState(false);
+
+  const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
+  const [showCustomModes] = useState(() => getShowCustomModesInDefault());
 
   const {
     sectionMetadataOffer,
@@ -965,7 +971,7 @@ export function TripEditor({
                              <textarea 
                                key={`seg-title-${seg.id}-${seg.name || ''}`}
                                className="segment-title-textarea"
-                               placeholder={seg.transportMode}
+                               placeholder={seg.transportMode === 'other' ? (customModes.find(m => m.icon === seg.customIcon)?.name || 'other') : seg.transportMode}
                                defaultValue={seg.name || ''}
                                disabled={isReadOnly}
                                onKeyDown={handleSegmentTitleKeyDown}
@@ -991,16 +997,59 @@ export function TripEditor({
                                  title={isReadOnly ? `Mode: ${seg.transportMode}` : `Switch mode: ${seg.transportMode}`}
                                  disabled={isReadOnly}
                                  onClick={async () => {
-                                   const currentIndex = TRANSPORT_MODES.indexOf(seg.transportMode);
-                                   const nextMode = TRANSPORT_MODES[(currentIndex + 1) % TRANSPORT_MODES.length];
+                                   let modeSequence: Array<{ mode: TransportMode, customIcon?: string, color?: string, service?: string, profile?: string }> = 
+                                     TRANSPORT_MODES.map(m => ({ mode: m }));
+
+                                   if (showCustomModes && customModes.length > 0) {
+                                     const otherIdx = modeSequence.findIndex(m => m.mode === 'other');
+                                     const customInjected = customModes.map(cm => {
+                                       let service = 'Straight Line Router';
+                                       let profile = 'straight_line';
+                                       if (cm.routingProfile && cm.routingProfile.includes('|')) {
+                                         [service, profile] = cm.routingProfile.split('|');
+                                       } else if (cm.routingProfile) {
+                                          profile = cm.routingProfile;
+                                       }
+                                       return { mode: 'other' as TransportMode, customIcon: cm.icon, color: cm.color, service, profile };
+                                     });
+                                     if (otherIdx !== -1) {
+                                       modeSequence.splice(otherIdx, 0, ...customInjected);
+                                     } else {
+                                       modeSequence.push(...customInjected);
+                                     }
+                                   }
+
+                                   let currentIndex = -1;
+                                   if (seg.transportMode === 'other' && seg.customIcon) {
+                                     currentIndex = modeSequence.findIndex(m => m.mode === 'other' && m.customIcon === seg.customIcon);
+                                   }
+                                   if (currentIndex === -1) {
+                                     currentIndex = modeSequence.findIndex(m => m.mode === seg.transportMode && !m.customIcon);
+                                   }
+                                   if (currentIndex === -1) {
+                                     currentIndex = 0;
+                                   }
+
+                                   const nextItem = modeSequence[(currentIndex + 1) % modeSequence.length];
+
                                    const newSegments = [...trip.segments];
-                                   const defRouter = routingManager.getDefaultRouter(nextMode as any);
+                                   
+                                   let assignService = nextItem.service;
+                                   let assignProfile = nextItem.profile;
+
+                                   if (!assignService || !assignProfile) {
+                                     const defRouter = routingManager.getDefaultRouter(nextItem.mode);
+                                     assignService = defRouter.serviceName;
+                                     assignProfile = defRouter.profile;
+                                   }
+
                                    newSegments[segIndex] = await updateSegmentRoute({
                                      ...seg,
-                                     transportMode: nextMode as any,
-                                     customColor: undefined,
-                                     routingService: defRouter.serviceName,
-                                     routingProfile: defRouter.profile,
+                                     transportMode: nextItem.mode,
+                                     customIcon: nextItem.customIcon,
+                                     customColor: nextItem.color,
+                                     routingService: assignService,
+                                     routingProfile: assignProfile,
                                      source: 'router' as const
                                    });
                                    onUpdateTrip({ ...trip, segments: newSegments });
@@ -1137,6 +1186,8 @@ export function TripEditor({
                                               } : w)
                                             }));
                                             setWpSearchState(null);
+                                            onWaitingForCoords(null);
+                                            setFocusedWaypointWithoutCoords(null);
                                             onUpdateTrip({ ...trip, segments: newSegments });
                                             setTimeout(() => {
                                               onJumpToWaypoint(wp.id);
@@ -1228,7 +1279,7 @@ export function TripEditor({
                        const matchingSegs = trip.segments.filter(s => s.transportMode === 'other' && s.customIcon === targetIcon);
                        const allNames = matchingSegs.map(s => s.name?.trim()).filter(n => typeof n === 'string' && n !== '');
                        const commonName = allNames.length === matchingSegs.length && new Set(allNames).size === 1 ? allNames[0] : null;
-                       displayName = commonName || 'Other';
+                       displayName = commonName || (targetIcon ? (customModes.find(m => m.icon === targetIcon)?.name || targetIcon.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')) : 'Other');
 
                        const allColors = matchingSegs.map(s => s.customColor).filter(c => typeof c === 'string' && c !== '');
                        if (allColors.length === matchingSegs.length && new Set(allColors).size === 1) {
@@ -1332,3 +1383,4 @@ export function TripEditor({
     </>
   );
 }
+

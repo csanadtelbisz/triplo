@@ -152,6 +152,58 @@ export class GitHubPersistingService implements PersistingService {
     }
   }
 
+  async loadPreferences(): Promise<any | null> {
+    if (!this.isAvailable()) return null;
+    const repo = this.getRepo();
+    try {
+      const res = await this.request(`/repos/${repo}/contents/preferences.json`);
+      if (res.status === 404 || res.status === 409) return null;
+      if (!res.ok) throw new Error(`Failed to load preferences: ${res.statusText}`);
+      
+      const fileData = await res.json();
+      const content = atob(fileData.content);
+      return JSON.parse(content);
+    } catch (e) {
+      console.error('GitHubPersistingService.loadPreferences failed:', e);
+      return null;
+    }
+  }
+
+  async savePreferences(prefs: any): Promise<void> {
+    if (!this.isAvailable()) return;
+    const repo = this.getRepo();
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(prefs, null, 2))));
+    
+    // First, try to get existing file SHA
+    let sha: string | undefined;
+    try {
+      const getRes = await this.request(`/repos/${repo}/contents/preferences.json`);
+      if (getRes.ok) {
+        const getData = await getRes.json();
+        sha = getData.sha;
+      }
+    } catch (e) {
+      // Ignore if not found
+    }
+
+    const body = JSON.stringify({
+      message: 'Update Triplo preferences',
+      content,
+      sha
+    });
+
+    const putRes = await this.request(`/repos/${repo}/contents/preferences.json`, {
+      method: 'PUT',
+      body
+    });
+
+    if (!putRes.ok) {
+      const text = await putRes.text();
+      console.error(`Failed to push preferences to GitHub: ${putRes.status} ${text}`);
+      throw new Error(`GitHub sync failed: ${putRes.statusText}`);
+    }
+  }
+
   isAvailable(): boolean {
     return !!localStorage.getItem('github_token') && !!localStorage.getItem('github_repo');
   }

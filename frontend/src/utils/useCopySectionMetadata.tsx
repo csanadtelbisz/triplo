@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import type { Trip } from '../../../shared/types';
+import type { Trip, TransportMode } from '../../../shared/types';
 import { ModeThemes } from '../themes/config';
+import { routingManager } from '../routing/RoutingService';
+import { getCustomOtherModes } from './customModesPreferences';
 
 export interface CopySectionMetadataData {
   color: string;
@@ -36,6 +38,25 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
         modeToCopy = found.transportMode;
         routingProfileToCopy = found.routingProfile;
         routingServiceToCopy = found.routingService;
+      }
+
+      if (routingServiceToCopy === 'gpx' && modeToCopy) {
+         if (modeToCopy === 'other' && iconToCopy) {
+            const cm = getCustomOtherModes().find(m => m.icon === iconToCopy);
+            if (cm && cm.routingProfile) {
+              const [svc, prof] = cm.routingProfile.split('|');
+              routingServiceToCopy = svc;
+              routingProfileToCopy = prof;
+            } else {
+              const defaultRouter = routingManager.getDefaultRouter(modeToCopy as TransportMode);
+              routingServiceToCopy = defaultRouter.serviceName;
+              routingProfileToCopy = defaultRouter.profile;
+            }
+         } else {
+            const defaultRouter = routingManager.getDefaultRouter(modeToCopy as TransportMode);
+            routingServiceToCopy = defaultRouter.serviceName;
+            routingProfileToCopy = defaultRouter.profile;
+         }
       }
 
       if (modeToCopy) {

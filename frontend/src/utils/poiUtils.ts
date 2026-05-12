@@ -85,6 +85,7 @@ export const getPOIEmoji = (cls?: string, sub?: string, name?: string): string =
     place_of_worship: '⛪',
     church: '⛪',
     mosque: '🕌',
+    muslim: '🕌',
     synagogue: '🕍',
     hindu_temple: '🛕',
     shinto: '⛩️',
