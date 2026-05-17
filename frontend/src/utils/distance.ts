@@ -13,6 +13,15 @@ export function getDistanceStats(wp1: Waypoint, wp2: Waypoint, geometry: GeoJSON
     return { distanceKm: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 };
   }
 
+  if (geometry && geometry.coordinates && geometry.coordinates.length === 0) {
+      return {
+          distanceKm: 0,
+          hasElevation: false,
+          elevationUp: 0,
+          elevationDown: 0
+      }
+  }
+
   if (!geometry || !geometry.coordinates || geometry.coordinates.length < 2) {
       const startPt = turf.point(wp1.coordinates as [number, number]);
       const endPt = turf.point(wp2.coordinates as [number, number]);
@@ -145,6 +154,8 @@ export function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
               else elevationDown -= diff;
           }
       }
+  } else if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length === 0) {
+      // default 0 values are good
   } else if (seg.waypoints.length >= 2) {
       for (let i = 0; i < seg.waypoints.length - 1; i++) {
           const w1 = seg.waypoints[i];
@@ -167,9 +178,11 @@ export function computeTripCaches(trip: Trip): Trip {
   const newSegments = newTrip.segments.map(seg => {
     // Computing Segment stats
     const segDistStats = getSegmentDistanceSummary(seg);
-    overallTotalDistance += segDistStats.totalDistance;
-    const modeKey = seg.transportMode === 'other' && seg.customIcon ? `other:${seg.customIcon}` : seg.transportMode;
-    distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDistStats.totalDistance;
+    if (seg.routingProfile !== 'teleport') {
+      overallTotalDistance += segDistStats.totalDistance;
+      const modeKey = seg.transportMode === 'other' && seg.customIcon ? `other:${seg.customIcon}` : seg.transportMode;
+      distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDistStats.totalDistance;
+    }
 
     // Computing intermediate waypoint distances
     const wpStats: DistanceStats[] = [];
