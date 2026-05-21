@@ -1,5 +1,5 @@
 import type { Trip, Segment, Waypoint } from '../../../shared/types';
-import { ModeThemes } from '../themes/config';
+import { getModeColor } from './builtInModesPreferences';
 
 export function exportGPX(segment: Segment, trip?: Trip, includeAppMetadata: boolean = true): string {
   let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -88,7 +88,7 @@ export function exportTripGPX(trip: Trip, includeAppMetadata: boolean = true): s
 
     if (includeAppMetadata) {
       gpx += `    <extensions>\n`;
-      const color = segment.customColor || ModeThemes[segment.transportMode]?.color;
+      const color = segment.customColor || getModeColor(segment.transportMode);
       if (color) gpx += `      <triplo:color>${color}</triplo:color>\n`;
       if (segment.customIcon) gpx += `      <triplo:icon>${segment.customIcon}</triplo:icon>\n`;
       gpx += `    </extensions>\n`;

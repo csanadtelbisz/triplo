@@ -2,7 +2,7 @@
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
-import { ModeThemes } from '../themes/config';
+import { getModeColor, getModeName, getModeRoutingProfile } from '../utils/builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { Dialog } from './Dialog';
@@ -854,7 +854,7 @@ export function TripEditor({
                <tr className="gap-row">
                  <td className="segment-col"></td>
                  <td className="timeline-col gap-col">
-                   <div className="timeline-line bottom" style={{ background: trip.segments[0].customColor || ModeThemes[trip.segments[0].transportMode]?.color || '#007bff' }}></div>
+                   <div className="timeline-line bottom" style={{ background: trip.segments[0].customColor || getModeColor(trip.segments[0].transportMode) || '#007bff' }}></div>
                    {!isReadOnly && (
                      <div 
                        className="timeline-plus" 
@@ -874,7 +874,7 @@ export function TripEditor({
                const isLastSegment = segIndex === trip.segments.length - 1;
                const renderedWaypoints = isLastSegment ? seg.waypoints : seg.waypoints.slice(0, -1);
                
-               const currSegColor = seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff';
+               const currSegColor = seg.customColor || getModeColor(seg.transportMode) || '#007bff';
 
                return renderedWaypoints.map((wp, wpIndex) => {
                  const isFirstInSeg = wpIndex === 0;
@@ -882,7 +882,7 @@ export function TripEditor({
                  const isLastInSegRender = wpIndex === renderedWaypoints.length - 1;
                  const isLastOfTrip = isLastSegment && isLastInSegRender;
 
-                 const prevSegColor = segIndex > 0 ? (trip.segments[segIndex - 1].customColor || ModeThemes[trip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
+                 const prevSegColor = segIndex > 0 ? (trip.segments[segIndex - 1].customColor || getModeColor(trip.segments[segIndex - 1].transportMode) || '#007bff') : currSegColor;
                  const topLineColor = (isFirstInSeg && segIndex > 0) ? prevSegColor : currSegColor;
                  const bottomLineColor = currSegColor;
 
@@ -914,7 +914,7 @@ export function TripEditor({
                          break;
                        }
                      }
-                     targetDotColor = trip.segments[foundSegIndex]?.customColor || ModeThemes[trip.segments[foundSegIndex]?.transportMode]?.color || currSegColor;
+                     targetDotColor = trip.segments[foundSegIndex]?.customColor || getModeColor(trip.segments[foundSegIndex]?.transportMode) || currSegColor;
                    } else {
                      const { originalGlobalIndex, currentGlobalIndex } = dragRender;
                      const isMovingUp = currentGlobalIndex < originalGlobalIndex;
@@ -971,7 +971,7 @@ export function TripEditor({
                              <textarea 
                                key={`seg-title-${seg.id}-${seg.name || ''}`}
                                className="segment-title-textarea"
-                               placeholder={seg.transportMode === 'other' ? (customModes.find(m => m.icon === seg.customIcon)?.name || 'other') : seg.transportMode}
+                               placeholder={seg.transportMode === 'other' ? (customModes.find(m => m.icon === seg.customIcon)?.name || 'other') : getModeName(seg.transportMode)}
                                defaultValue={seg.name || ''}
                                disabled={isReadOnly}
                                onKeyDown={handleSegmentTitleKeyDown}
@@ -1039,8 +1039,10 @@ export function TripEditor({
 
                                    if (!assignService || !assignProfile) {
                                      const defRouter = routingManager.getDefaultRouter(nextItem.mode);
-                                     assignService = defRouter.serviceName;
-                                     assignProfile = defRouter.profile;
+                                     const assignedProfileStr = getModeRoutingProfile(nextItem.mode, defRouter.serviceName, defRouter.profile);
+                                     const [svc, prof] = assignedProfileStr.split('|');
+                                     assignService = svc || defRouter.serviceName;
+                                     assignProfile = prof || defRouter.profile;
                                    }
 
                                    newSegments[segIndex] = await updateSegmentRoute({
@@ -1287,7 +1289,7 @@ export function TripEditor({
                        }
                      }
                      
-                     const finalColor = customSummaryColor || ModeThemes[actualMode as keyof typeof ModeThemes]?.color || '#666';
+                     const finalColor = customSummaryColor || getModeColor(actualMode as any) || '#666';
 
                      return (
                        <tr key={mode} className="trip-summary-row">

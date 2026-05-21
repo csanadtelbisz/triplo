@@ -7,6 +7,8 @@
 .status-panel-header-title {
   margin: 0;
   font-size: 1.1rem;
+  flex: 1 1 0%;
+  text-align: center;
 }
 
 .status-panel-header-spacer {

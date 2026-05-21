@@ -9,7 +9,7 @@ export const ModeThemes: Record<TransportMode, { color: string }> = {
   taxi: { color: '#ffce08' }, // yellow
   bus: { color: '#1173b5' }, // blue
   rail: { color: '#e74c3c' }, // red
-  subway: { color: '#d35400' }, // orange-red
+  subway: { color: '#be4c00' }, // orange-red
   flight: { color: '#9b59b6' }, // purple
   ferry: { color: '#113db5' }, // teal
   other: { color: '#95a5a6' }, // gray

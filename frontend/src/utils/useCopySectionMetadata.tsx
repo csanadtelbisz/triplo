@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Trip, TransportMode } from '../../../shared/types';
-import { ModeThemes } from '../themes/config';
+import { getModeColor } from './builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
 import { getCustomOtherModes } from './customModesPreferences';
 
@@ -61,7 +61,7 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
 
       if (modeToCopy) {
         setSectionMetadataOffer({
-          color: colorToCopy || ModeThemes[modeToCopy as any as import('../../../shared/types').TransportMode]?.color || '#000000',
+          color: colorToCopy || getModeColor(modeToCopy as any) || '#000000',
           icon: iconToCopy || '',
           mode: modeToCopy,
           routingProfile: routingProfileToCopy,

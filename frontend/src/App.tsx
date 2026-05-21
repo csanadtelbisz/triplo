@@ -229,8 +229,21 @@ export default function App() {
     }
   };
 
-  const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false) => {
-    const cachedTrip = computeTripCaches(newTrip);
+  const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false, affectedSegmentIds?: string[]) => {
+    let affectedSegments = affectedSegmentIds;
+    if (!affectedSegments) {
+      const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
+      if (currentTrip && currentTrip.segments.length > 0) {
+        affectedSegments = newTrip.segments
+          .filter(newSeg => {
+             const oldSeg = currentTrip.segments.find(s => s.id === newSeg.id);
+             return oldSeg !== newSeg;
+          })
+          .map(s => s.id);
+      }
+    }
+
+    const cachedTrip = computeTripCaches(newTrip, affectedSegments);
     setTrips(prev => prev.map(t => t.id === tripId ? cachedTrip : t));
 
     setHistories(prev => {
@@ -259,6 +272,7 @@ export default function App() {
   const handleCoordinateChange = async (trip: Trip, wpId: string, coords: [number, number]) => {
     const newSegments = [...trip.segments];
     let changed = false;
+    const affectedSegmentIds: string[] = [];
 
     for (let i = 0; i < newSegments.length; i++) {
       const seg = { ...newSegments[i] };
@@ -274,11 +288,12 @@ export default function App() {
         }
         newSegments[i] = seg;
         changed = true;
+        affectedSegmentIds.push(seg.id);
       }
     }
 
     if (changed) {
-      updateTripState(trip.id, { ...trip, segments: newSegments });
+      updateTripState(trip.id, { ...trip, segments: newSegments }, false, affectedSegmentIds);
     }
   };
 

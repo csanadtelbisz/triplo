@@ -5,12 +5,19 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import '../styles/Map.css';
 // Removed unused route import
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
-import { ModeThemes } from '../themes/config';
+import { getModeColor } from '../utils/builtInModesPreferences';
 import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD } from '../config/mapStyles';
 import { getPOIEmoji } from '../utils/poiUtils';
 import { getCustomOtherModes } from '../utils/customModesPreferences';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
+import {
+  getStyleConfigs,
+  getActiveStyleConfigId,
+  setActiveStyleConfigId,
+  evaluateStyleConfig
+} from '../utils/mapStylesPreferences';
+import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
 
 
 function getRenderGeometry(seg: any) {
@@ -132,8 +139,70 @@ export const Map = forwardRef<MapRef, MapProps>(({
     return localStorage.getItem('showHiddenSegments') === 'true';
   });
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
-  const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string, mode: string } | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string | undefined, mode: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
+
+  const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
+  const [activeStyleConfigIdState, setActiveStyleConfigIdState] = useState(() => getActiveStyleConfigId());
+  const [evaluatedStyles, setEvaluatedStyles] = useState<EvaluatedStyles | null>(() => {
+    const config = getStyleConfigs().find(c => c.id === getActiveStyleConfigId()) || getStyleConfigs()[0];
+    return config ? evaluateStyleConfig(config.script) : null;
+  });
+  const [showStyleConfigMenu, setShowStyleConfigMenu] = useState(false);
+  const styleConfigMenuRef = useRef<HTMLDivElement>(null);
+
+  const [isStyleConfigEditorOpen, setIsStyleConfigEditorOpen] = useState(false);
+  const [testContextOverrides, setTestContextOverrides] = useState({
+    isNoTripSelected: true,
+    isReadOnly: false,
+    hasSegmentSelected: false
+  });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      setIsStyleConfigEditorOpen(e.detail);
+      if (e.detail) {
+        setTestContextOverrides({
+          isNoTripSelected: true,
+          isReadOnly: false,
+          hasSegmentSelected: false
+        });
+      }
+    };
+    window.addEventListener('style-config-panel-open', handler);
+    return () => window.removeEventListener('style-config-panel-open', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      const configs = getStyleConfigs();
+      setStyleConfigs(configs);
+      const activeId = getActiveStyleConfigId();
+      setActiveStyleConfigIdState(activeId);
+      const config = configs.find(c => c.id === activeId) || configs[0];
+      setEvaluatedStyles(config ? evaluateStyleConfig(config.script) : null);
+    };
+    window.addEventListener('preferences-updated', handler);
+    return () => window.removeEventListener('preferences-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (layerSelectorRef.current && !layerSelectorRef.current.contains(event.target as Node)) {
+        setShowLayerSelector(false);
+      }
+      if (styleConfigMenuRef.current && !styleConfigMenuRef.current.contains(event.target as Node)) {
+        setShowStyleConfigMenu(false);
+      }
+    };
+
+    if (showLayerSelector || showStyleConfigMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLayerSelector, showStyleConfigMenu]);
 
   useEffect(() => {
     localStorage.setItem('activeMapStyle', activeMapStyle);
@@ -594,7 +663,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               setHoverInfo({
                 x: e.originalEvent.clientX,
                 y: e.originalEvent.clientY,
-                name: tripName ? `${tripName} - ${segInfo?.name || ''}` : segInfo?.name || '',
+                name: tripName ? `${tripName}${segInfo && segInfo.name ? ` - ${segInfo.name}` : ''}` : segInfo?.name,
                 mode: hoverMode
               });
             
@@ -932,7 +1001,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 type: 'line',
                 source: 'route-source',
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': ['get', 'color'], 'line-width': 4, 'line-opacity': ['coalesce', ['get', 'opacity'], 1.0] }
+                paint: { 
+                  'line-color': ['get', 'color'], 
+                  'line-width': ['coalesce', ['get', 'width'], 4], 
+                  'line-opacity': ['coalesce', ['get', 'opacity'], 1.0] 
+                }
               });
             }
 
@@ -963,60 +1036,99 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         markersRef.current.forEach(m => m.marker.remove());
         markersRef.current = [];
 
-      if (!selectedTrip) {
-        const allFeatures: GeoJSON.Feature[] = [];
-        trips.forEach(trip => {
-           trip.segments.forEach(seg => {
-             if (seg.isHidden && !showHiddenSegments) return;
-             allFeatures.push({
-               type: 'Feature',
-               properties: { segmentId: seg.id, mode: seg.transportMode, color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff' },
-               geometry: getRenderGeometry(seg) as any
-             });
-           });
-        });
-        source.setData({
-          type: 'FeatureCollection',
-          features: allFeatures
-        });
-      } else {
-        const features: GeoJSON.Feature[] = selectedTrip.segments
-          .filter(seg => !seg.isHidden || showHiddenSegments)
-          .map(seg => {
-            let opacity = 1.0;
-            if (selectedSegmentId && selectedSegmentId !== seg.id) {
-              opacity = 0.4;
-            }
-            return {
-              type: 'Feature',
-              properties: { 
-                segmentId: seg.id, 
-                mode: seg.transportMode, 
-                color: seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff',
-                opacity
-              },
-              geometry: getRenderGeometry(seg) as any
-            };
-          });
-        source.setData({
-          type: 'FeatureCollection',
-          features
-        });
+      const isUnselectedState = !selectedTrip || (isStyleConfigEditorOpen && testContextOverrides.isNoTripSelected);
+      
+      // Derive the currently used map layer/style from the MapLibre instance when available.
+      const currentMapStyle = mapRef.current ? (() => {
+        try {
+          const st: any = mapRef.current!.getStyle();
+          // Prefer explicit name/metadata if available, otherwise fall back to our activeMapStyle identifier
+          return st?.name || (st?.metadata && st.metadata.name) || activeMapStyle;
+        } catch (e) {
+          return activeMapStyle;
+        }
+      })() : activeMapStyle;
 
-        // Add markers
-        selectedTrip.segments.forEach((seg, segIndex) => {
-          if (seg.isHidden && !showHiddenSegments) return;
-          const currSegColor = seg.customColor || ModeThemes[seg.transportMode]?.color || '#007bff';
+      const styleContext = {
+         isNoTripSelected: isStyleConfigEditorOpen ? testContextOverrides.isNoTripSelected : !selectedTrip,
+         showHiddenSegments: showHiddenSegments,
+         isReadOnly: isStyleConfigEditorOpen ? testContextOverrides.isReadOnly : isReadOnly,
+         selectedSegment: (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected)
+           ? { id: 'test-seg', transportMode: 'bike', routingProfile: 'bike', source: 'manual', routingService: 'none', geometry: { type: 'LineString', coordinates: [] }, waypoints: [] } as any
+           : (selectedTrip?.segments.find(s => s.id === selectedSegmentId) || null),
+         mapLayer: currentMapStyle
+      };
+
+      const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
+      
+      const features: GeoJSON.Feature[] = [];
+
+      targetTrips.forEach(trip => {
+        trip.segments.forEach(seg => {
+          const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
+          if ((seg.isHidden && !showHiddenSegments) || userStyle?.hidden) return;
+          
+          let opacity = 1.0;
+          if (!isUnselectedState && selectedSegmentId && selectedSegmentId !== seg.id) {
+            opacity = 0.4;
+          }
+          if (userStyle?.opacity !== undefined) {
+             opacity = userStyle.opacity;
+          }
+
+          features.push({
+            type: 'Feature',
+            properties: { 
+              segmentId: seg.id, 
+              mode: seg.transportMode, 
+              color: userStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff',
+              width: userStyle?.width || 4,
+              opacity
+            },
+            geometry: getRenderGeometry(seg) as any
+          });
+        });
+      });
+
+      source.setData({
+        type: 'FeatureCollection',
+        features
+      });
+
+      // Add markers
+      targetTrips.forEach(trip => {
+        // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
+        const selectedSegmentIndex = trip.segments.findIndex(s => s.id === selectedSegmentId);
+        trip.segments.forEach((seg, segIndex) => {
+          const userSegStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
+          if ((seg.isHidden && !showHiddenSegments) || userSegStyle?.hidden) return;
+          const currSegColor = userSegStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {
             if (!wp.coordinates || wp.coordinates.length < 2) return;
             const isLastInSeg = wpIndex === seg.waypoints.length - 1;
-            const isLastSegment = segIndex === selectedTrip.segments.length - 1;
+            const isLastSegment = segIndex === trip.segments.length - 1;
 
             if (isLastInSeg && !isLastSegment) {
               return; // Border waypoints take the color of the segment starting at that waypoint (the next one)
             }
 
             const isBordering = wpIndex === 0 && segIndex > 0;
+            const isInSelectedSegment = (!isUnselectedState && selectedSegmentId) 
+                ? trip.segments[selectedSegmentIndex]?.waypoints.some(w => w.id === wp.id) || trip.segments[selectedSegmentIndex + 1]?.waypoints[0]?.id === wp.id
+                : (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected ? false : true);
+            
+            const wpStyleContext = { ...styleContext, waypointInfo: { isLastSegment, isLastInSeg, isBordering, isInSelectedSegment, segIndex, wpIndex, currSegColor } };
+            const segmentsList = isBordering && segIndex > 0 ? [trip.segments[segIndex - 1], seg] : [seg];
+            const colorsList = isBordering && segIndex > 0 ? [trip.segments[segIndex-1].customColor || getModeColor(trip.segments[segIndex-1].transportMode) || '#007bff', currSegColor] : [currSegColor];
+            
+            const userWpStyle = evaluatedStyles?.getWaypointStyle ? evaluatedStyles.getWaypointStyle(wp, segmentsList, colorsList, wpStyleContext) : null;
+            
+            // if style specifies hidden, skip
+            if (userWpStyle?.hidden) return;
+            // Native default: hide all markers when no trip is selected (unselected state), 
+            // EXCEPT if style explicitly says hidden: false OR if the style editor is open (to preview styles).
+            if (isUnselectedState && !isStyleConfigEditorOpen && userWpStyle?.hidden !== false) return;
+
             let pref = 3;
             if (wpIndex === 0 && segIndex === 0) pref = 0;
             else if (isLastSegment && wpIndex === seg.waypoints.length - 1) pref = 0;
@@ -1024,19 +1136,30 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             else if (isBordering) pref = 2;
 
             const el = document.createElement('div');
-              const isWaypointInSelectedSegment = selectedSegmentId ? selectedTrip.segments.find(s => s.id === selectedSegmentId)?.waypoints.some(w => w.id === wp.id) : true;
 
-              if (wp.icon) {
+            const isPin = userWpStyle?.type === 'pin' || (wp.icon && userWpStyle?.type !== 'dot');
+
+            if (userWpStyle?.html) {
+                el.className = 'custom-map-marker pin-marker';
+                el.innerHTML = userWpStyle.html;
+                if (userWpStyle.width) el.style.width = userWpStyle.width + 'px';
+                if (userWpStyle.height) el.style.height = userWpStyle.height + 'px';
+                el.style.display = 'block';
+                el.style.cursor = 'pointer';
+                el.style.position = 'absolute';
+                if (userWpStyle.dropShadow) el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))';
+            } else if (isPin) {
               // Classic map pin with Material Icon
+              const pinColor = userWpStyle?.color ? (Array.isArray(userWpStyle.color) ? userWpStyle.color[0] : userWpStyle.color) : currSegColor;
               el.style.width = '32px';
               el.style.height = '32px';
               el.className = 'custom-map-marker pin-marker';
               el.innerHTML = `
                 <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg" style="display: block; overflow: visible;">
-                  <path d="M12 4C8.13 4 5 7.13 5 11c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${currSegColor}" stroke="white" stroke-width="1.5"/>
+                  <path d="M12 4C8.13 4 5 7.13 5 11c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${pinColor}" stroke="white" stroke-width="1.5"/>
                   <circle cx="12" cy="11" r="6.5" fill="white"/>
                 </svg>
-                <span class="material-symbols-rounded" style="position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); font-size: 13px; color: ${currSegColor}; pointer-events: none;">${wp.icon}</span>
+                ${wp.icon ? `<span class="material-symbols-rounded" style="position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); font-size: 13px; color: ${pinColor}; pointer-events: none;">${wp.icon}</span>` : ''}
               `;
               el.style.display = 'block';
               el.style.cursor = 'pointer';
@@ -1045,17 +1168,27 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))';
             } else {
               el.className = 'custom-map-marker dot-marker';
-              el.style.width = '14px';
-              el.style.height = '14px';
-              el.style.borderRadius = '50%';
+              el.style.width = (userWpStyle?.width || 14) + 'px';
+              el.style.height = (userWpStyle?.height || 14) + 'px';
+              el.style.borderRadius = userWpStyle?.borderRadius || '50%';
               
-              const prevSegColor = isBordering ? (selectedTrip.segments[segIndex - 1].customColor || ModeThemes[selectedTrip.segments[segIndex - 1].transportMode]?.color || '#007bff') : currSegColor;
-              const backgroundStyle = isBordering 
-                ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)`
-                : currSegColor;
+              let nextSegStyle;
+              if (isBordering) {
+                 nextSegStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(trip.segments[segIndex - 1], trip.segments[segIndex - 1].customColor || getModeColor(trip.segments[segIndex - 1].transportMode) || '#007bff', styleContext) : null;
+              }
+              const prevSegColor = isBordering ? (nextSegStyle?.color || trip.segments[segIndex - 1].customColor || getModeColor(trip.segments[segIndex - 1].transportMode) || '#007bff') : currSegColor;
+              const backgroundStyle = userWpStyle?.color 
+                ? (Array.isArray(userWpStyle.color)
+                    ? (userWpStyle.color.length == 2
+                        ? `linear-gradient(to bottom, ${userWpStyle.color[0]} 50%, ${userWpStyle.color[1]} 50%)`
+                        : userWpStyle.color[0])
+                    : userWpStyle.color)
+                : (isBordering 
+                    ? `linear-gradient(to bottom, ${prevSegColor} 50%, ${currSegColor} 50%)`
+                    : currSegColor);
                 
               el.style.background = backgroundStyle;
-              el.style.border = '2px solid white';
+              el.style.border = userWpStyle?.border || '2px solid white';
               el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
               el.style.display = 'flex';
               el.style.alignItems = 'center';
@@ -1068,7 +1201,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               setHoverInfo({
                 x: e.clientX,
                 y: e.clientY,
-                name: wp.name || 'Unnamed Point',
+                name: wp.name,
                 mode: 'Waypoint'
               });
               if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
@@ -1082,11 +1215,14 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             });
 
 
-            const marker = new Marker({ element: el, draggable: !isReadOnly, anchor: wp.icon ? 'bottom' : 'center' })
+            const marker = new Marker({ element: el, draggable: !isReadOnly, anchor: (userWpStyle?.html || isPin) ? 'bottom' : 'center' })
               .setLngLat(wp.coordinates as [number, number])
               .addTo(mapRef.current!);
 
-            if (selectedSegmentId && !isWaypointInSelectedSegment) {
+            if (userWpStyle?.opacity !== undefined) {
+              marker.getElement().classList.remove('faded-marker');
+              marker.getElement().style.setProperty('--marker-opacity', userWpStyle.opacity.toString());
+            } else if (selectedSegmentId && !isInSelectedSegment) {
               marker.getElement().classList.add('faded-marker');
             } else if (selectedSegmentId) {
               marker.getElement().classList.remove('faded-marker');
@@ -1206,16 +1342,16 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             markersRef.current.push({ marker, wp, pref });
           });
         });
+      });
 
-        // Trigger an initial declutter
-        if (mapRef.current) {
-          mapRef.current.fire('move');
-        }
+      // Trigger an initial declutter
+      if (mapRef.current) {
+        mapRef.current.fire('move');
       }
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {
@@ -1308,21 +1444,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
   }, [selectedPOI, mapLoaded]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (layerSelectorRef.current && !layerSelectorRef.current.contains(event.target as Node)) {
-        setShowLayerSelector(false);
-      }
-    };
-
-    if (showLayerSelector) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showLayerSelector]);
-
-  useEffect(() => {
     if (mapRef.current && mapLoaded) {
       const styleConfig = MAP_STYLES[activeMapStyle].url;
       mapRef.current.setStyle(styleConfig);
@@ -1351,22 +1472,83 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
 {/* Top Left Controls */}
         <div className="top-left-controls">
-          <button
-            className="map-control-button"
-            onClick={() => setShowHiddenSegments(!showHiddenSegments)}
-            title={showHiddenSegments ? "Hide invisible segments" : "Show invisible segments"}
-            style={{ color: showHiddenSegments ? '#007bff' : 'inherit' }}
-          >
-            <span className="material-symbols-rounded">{showHiddenSegments ? "visibility" : "visibility_off"}</span>
-          </button>
+          <div ref={styleConfigMenuRef} style={{ position: 'relative' }}>
+            <button
+              className="map-control-button"
+              onClick={() => setShowStyleConfigMenu(!showStyleConfigMenu)}
+              title="Style Configurations"
+            >
+              <span className="material-symbols-rounded">tune</span>
+            </button>
 
-          <button
-            className="map-control-button"
-            onClick={onSearchClick}
-            title="Search POI or Coordinates"
-          >
-            <span className="material-symbols-rounded">search</span>
-          </button>
+            {showStyleConfigMenu && (
+              <div className="layer-selector-dropdown style-selector-dropdown">
+                <div 
+                  className="layer-option" 
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '4px' }}
+                  onClick={(e) => { e.stopPropagation(); setShowHiddenSegments(!showHiddenSegments); }}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: '18px', color: showHiddenSegments ? '#007bff' : 'inherit' }}>
+                    {showHiddenSegments ? "visibility" : "visibility_off"}
+                  </span>
+                  <span style={{ fontSize: '0.85rem' }}>{showHiddenSegments ? "Hide invisible segments" : "Show invisible segments"}</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#666', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Style Config</div>
+                {styleConfigs.map((config) => (
+                  <div
+                    key={config.id}
+                    className="layer-option"
+                    style={{
+                      backgroundColor: activeStyleConfigIdState === config.id ? '#f0f0f0' : 'transparent',
+                      fontWeight: activeStyleConfigIdState === config.id ? 'bold' : 'normal'
+                    }}
+                    onClick={() => {
+                      setActiveStyleConfigId(config.id);
+                      setShowStyleConfigMenu(false);
+                    }}
+                  >
+                    {config.name}
+                  </div>
+                ))}
+                
+                {isStyleConfigEditorOpen && (
+                  <>
+                    <div style={{ fontSize: '0.75rem', color: '#666', padding: '12px 8px 4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px', borderTop: '1px solid #eee', marginTop: '4px' }}>Test Context Toggles</div>
+                    <div 
+                      className="layer-option" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, isNoTripSelected: !prev.isNoTripSelected })); }}
+                    >
+                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.isNoTripSelected ? '#007bff' : 'inherit' }}>
+                        {testContextOverrides.isNoTripSelected ? "check_box" : "check_box_outline_blank"}
+                      </span>
+                      <span style={{ fontSize: '0.85rem' }}>No Trip Selected</span>
+                    </div>
+                    <div 
+                      className="layer-option" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, isReadOnly: !prev.isReadOnly })); }}
+                    >
+                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.isReadOnly ? '#007bff' : 'inherit' }}>
+                        {testContextOverrides.isReadOnly ? "check_box" : "check_box_outline_blank"}
+                      </span>
+                      <span style={{ fontSize: '0.85rem' }}>Read-only</span>
+                    </div>
+                    <div 
+                      className="layer-option" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, hasSegmentSelected: !prev.hasSegmentSelected })); }}
+                    >
+                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.hasSegmentSelected ? '#007bff' : 'inherit' }}>
+                        {testContextOverrides.hasSegmentSelected ? "check_box" : "check_box_outline_blank"}
+                      </span>
+                      <span style={{ fontSize: '0.85rem' }}>Other Segment Selected</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           
           <div ref={layerSelectorRef} style={{ position: 'relative' }}>
             <button
@@ -1398,6 +1580,14 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               </div>
             )}
           </div>
+
+          <button
+            className="map-control-button"
+            onClick={onSearchClick}
+            title="Search POI or Coordinates"
+          >
+            <span className="material-symbols-rounded">search</span>
+          </button>
       </div>
       
       {hoverInfo && !isDraggingGhostRef.current && (
@@ -1469,34 +1659,44 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0f0f0'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
             onClick={() => {
+              const newWaypoint = {
+                id: 'wp-' + Date.now(),
+                name: '',
+                coordinates: contextMenu.lngLat,
+                importance: 'hidden' as 'hidden'
+              };
+
+              let targetSegmentIndex = null;
               const lastSegment = selectedTrip.segments[selectedTrip.segments.length - 1];
-              if (lastSegment && lastSegment.waypoints.length > 0) {
-                const newWaypoint = {
-                  id: 'wp-' + Date.now(),
-                  name: '',
-                  coordinates: contextMenu.lngLat,
-                  importance: 'hidden' as 'hidden'
-                };
+              if (lastSegment && lastSegment.waypoints.length > 1) {
+                targetSegmentIndex = selectedTrip.segments.length - 1;
+              } else if (selectedTrip.segments.length > 1) {
+                targetSegmentIndex = selectedTrip.segments.length - 2;
+              }
+
+              if (targetSegmentIndex !== null) {
+                const selectedSegment = selectedTrip.segments[targetSegmentIndex];
                 const newSegments = [...selectedTrip.segments];
-                const wpRef = newSegments[newSegments.length - 1];
+                const wpRef = newSegments[targetSegmentIndex];
                 const newWaypoints = [...wpRef.waypoints];
                 newWaypoints.splice(newWaypoints.length - 1, 0, newWaypoint as any);
 
-                newSegments[newSegments.length - 1] = {
+                newSegments[targetSegmentIndex] = {
                   ...wpRef,
                   waypoints: newWaypoints
                 };
                 
                 hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
                 
-                const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-                if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                    optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
-                        newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
+                const validCoords = newSegments[targetSegmentIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
+                if (validCoords.length >= 2 && selectedSegment.source === 'router') {
+                    optimizeSegmentRoute(newSegments[targetSegmentIndex], selectedSegment).then((geom: any) => {
+                        newSegments[targetSegmentIndex] = { ...newSegments[targetSegmentIndex], geometry: geom };
                         hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
                     });
                 }
               }
+
               setContextMenu(null);
             }}
           >

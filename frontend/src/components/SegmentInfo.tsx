@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
-import { ModeThemes } from '../themes/config';
+import { getModeColor, getModeName, getModeRoutingProfile } from '../utils/builtInModesPreferences';
 import { exportGPX, downloadFile } from '../utils/exportUtils';
 import { routingManager, route } from '../routing/RoutingService';
 import { ElevationProfile } from './ElevationProfile';
@@ -28,6 +28,11 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
   
   const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
+  const [showAllProfiles, setShowAllProfiles] = useState(false);
+  
+  useEffect(() => {
+    setShowAllProfiles(false);
+  }, [segmentId]);
   const [customIconInput, setCustomIconInput] = useState<string>('');
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [showCustomModes] = useState(() => getShowCustomModesInDefault());
@@ -225,34 +230,38 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
            <label className="form-label">Transport Mode</label>
            <div className="mode-selector">
               {TRANSPORT_MODES.filter(m => m !== 'other').map(m => {
-                const theme = ModeThemes[m];
+                const themeColor = getModeColor(m);
                 const isSelected = seg.transportMode === m;
                 return (
                   <button
                     key={m}
-                    title={m}
+                    title={getModeName(m)}
                     disabled={isReadOnly}
                     className="mode-button"
                     style={{
-                      border: isSelected ? `2px solid ${theme?.color || '#007bff'}` : '1px solid #ddd',
-                      background: isSelected ? `${theme?.color || '#007bff'}22` : 'white',
-                      color: theme?.color,
+                      border: isSelected ? `2px solid ${themeColor || '#007bff'}` : '1px solid #ddd',
+                      background: isSelected ? `${themeColor || '#007bff'}22` : 'white',
+                      color: themeColor,
                       opacity: isSelected || !isReadOnly ? 1 : 0.3,
                       cursor: isReadOnly ? 'default' : 'pointer',
                     }}
                     onClick={async () => {
                       if (!isSelected) {
                         const defRouter = routingManager.getDefaultRouter(m);
+                        const assignedProfileStr = getModeRoutingProfile(m, defRouter.serviceName, defRouter.profile);
+                        const [svc, prof] = assignedProfileStr.split('|');
+
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
                         const updatedSeg = {
                           ...newSegments[segIndex],
                           customColor: undefined,
                           transportMode: m,
-                          routingService: defRouter.serviceName,
-                          routingProfile: defRouter.profile,
+                          routingService: svc || defRouter.serviceName,
+                          routingProfile: prof || defRouter.profile,
                           source: 'router' as const
                         };
+                        setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
                           const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
@@ -278,7 +287,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                 return (
                   <button
                     key={`custom-${cm.icon}`}
-                    title={cm.name || cm.icon}
+                    title={cm.name.toLowerCase() || cm.icon.replaceAll("_", " ").toLowerCase()}
                     disabled={isReadOnly}
                     className="mode-button"
                     style={{
@@ -310,6 +319,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                           routingProfile: profile,
                           source: 'router' as const
                         };
+                        setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
                           const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
@@ -332,7 +342,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
 
               {/* Keep the original 'other' handler at the end */}
               {TRANSPORT_MODES.filter(m => m === 'other').map(m => {
-                const theme = ModeThemes[m];
+                const themeColor = getModeColor(m);
                 // Should only be indicated if customIcon doesn't match any custom modes, 
                 // but visually distinguishing it is nice if they selected a built-in other mode manually.
                 const isModeSelected = seg.transportMode === m;
@@ -340,19 +350,22 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                 return (
                   <button
                     key={m}
-                    title={m}
+                    title={getModeName(m)}
                     disabled={isReadOnly}
                     className="mode-button"
                     style={{
-                      border: isBuiltinSelected ? `2px solid ${theme?.color || '#007bff'}` : '1px solid #ddd',
-                      background: isBuiltinSelected ? `${theme?.color || '#007bff'}22` : 'white',
-                      color: theme?.color,
+                      border: isBuiltinSelected ? `2px solid ${themeColor || '#007bff'}` : '1px solid #ddd',
+                      background: isBuiltinSelected ? `${themeColor || '#007bff'}22` : 'white',
+                      color: themeColor,
                       opacity: isBuiltinSelected || !isReadOnly ? 1 : 0.3,
                       cursor: isReadOnly ? 'default' : 'pointer',
                     }}
                     onClick={async () => {
                       if (!isBuiltinSelected) {
                         const defRouter = routingManager.getDefaultRouter(m);
+                        const assignedProfileStr = getModeRoutingProfile(m, defRouter.serviceName, defRouter.profile);
+                        const [svc, prof] = assignedProfileStr.split('|');
+
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
                         const updatedSeg = {
@@ -360,10 +373,11 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                           customColor: undefined,
                           transportMode: m,
                           customIcon: undefined,
-                          routingService: defRouter.serviceName,
-                          routingProfile: defRouter.profile,
+                          routingService: svc || defRouter.serviceName,
+                          routingProfile: prof || defRouter.profile,
                           source: 'router' as const
                         };
+                        setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
                           const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
@@ -393,6 +407,10 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              value={seg.routingService === 'gpx' ? 'gpx|Imported Track' : `${seg.routingService}|${seg.routingProfile}`}
              onChange={async (e) => {
                const [service, profile] = e.target.value.split('|');
+               if (service === 'all') {
+                 setShowAllProfiles(true);
+                 return;
+               }
                if (service === 'gpx') {
                  handleImportTrack();
                  return;
@@ -413,13 +431,16 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              }}
            >
              {seg.transportMode && routingManager.getServices().flatMap(svc => 
-                 svc.getRoutingProfiles(seg.transportMode).map(profile => (
+                 svc.getRoutingProfiles((showAllProfiles || seg.transportMode === 'other') ? 'other' : seg.transportMode).map(profile => (
                    <option key={`${svc.name}|${profile}`} value={`${svc.name}|${profile}`}>
                      {svc.name.replace(' Router', '')} [{profile}]
                    </option>
                  ))
              )}
              <option value="gpx|Imported Track">Imported Track</option>
+             {seg.transportMode !== 'other' && !showAllProfiles &&
+               <option value="all|Show All">Show All Options</option>
+             }
            </select>
            {routingManager.getService(seg.routingService) && !routingManager.getService(seg.routingService)!.isAvailable() && (
              <div style={{ color: 'red', fontSize: '0.8rem', marginTop: '4px' }}>
@@ -515,7 +536,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                <input 
                  type="color" 
-                 value={seg.customColor || ModeThemes[seg.transportMode]?.color || '#000000'} 
+                 value={seg.customColor || getModeColor(seg.transportMode) || '#000000'} 
                  disabled={isReadOnly}
                  onChange={(e) => {
                    const newSegments = trip.segments.map(s => 
