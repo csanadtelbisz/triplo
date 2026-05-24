@@ -13,8 +13,11 @@ import { getCustomOtherModes } from '../utils/customModesPreferences';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
 import {
   getStyleConfigs,
-  getActiveStyleConfigId,
+  buildTransportModeFilterStyleConfig,
+  getTransientStyleConfig,
   setActiveStyleConfigId,
+  getResolvedActiveStyleConfig,
+  setTransientStyleConfig,
   evaluateStyleConfig
 } from '../utils/mapStylesPreferences';
 import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
@@ -79,6 +82,7 @@ export interface MapProps {
     onEmptyClick?: () => void;
     isSidebarCollapsed?: boolean;
     onDragStart?: () => void;
+    styleContextSelectedSegment?: Segment | null;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -102,7 +106,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onSelectTrip,
     onEmptyClick,
     isSidebarCollapsed,
-    onDragStart
+    onDragStart,
+    styleContextSelectedSegment = null
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -143,9 +148,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
 
   const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
-  const [activeStyleConfigIdState, setActiveStyleConfigIdState] = useState(() => getActiveStyleConfigId());
+  const [activeStyleConfigIdState, setActiveStyleConfigIdState] = useState(() => localStorage.getItem('activeRenderStyleConfigId') || 'default');
   const [evaluatedStyles, setEvaluatedStyles] = useState<EvaluatedStyles | null>(() => {
-    const config = getStyleConfigs().find(c => c.id === getActiveStyleConfigId()) || getStyleConfigs()[0];
+    const config = getResolvedActiveStyleConfig();
     return config ? evaluateStyleConfig(config.script) : null;
   });
   const [showStyleConfigMenu, setShowStyleConfigMenu] = useState(false);
@@ -177,9 +182,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
     const handler = () => {
       const configs = getStyleConfigs();
       setStyleConfigs(configs);
-      const activeId = getActiveStyleConfigId();
+      const activeId = localStorage.getItem('activeRenderStyleConfigId') || 'default';
       setActiveStyleConfigIdState(activeId);
-      const config = configs.find(c => c.id === activeId) || configs[0];
+      const config = getResolvedActiveStyleConfig();
       setEvaluatedStyles(config ? evaluateStyleConfig(config.script) : null);
     };
     window.addEventListener('preferences-updated', handler);
@@ -1049,15 +1054,19 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         }
       })() : activeMapStyle;
 
+      const effectiveSelectedSegmentId = styleContextSelectedSegment?.id || selectedSegmentId;
+
       const styleContext = {
          isNoTripSelected: isStyleConfigEditorOpen ? testContextOverrides.isNoTripSelected : !selectedTrip,
          showHiddenSegments: showHiddenSegments,
          isReadOnly: isStyleConfigEditorOpen ? testContextOverrides.isReadOnly : isReadOnly,
          selectedSegment: (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected)
            ? { id: 'test-seg', transportMode: 'bike', routingProfile: 'bike', source: 'manual', routingService: 'none', geometry: { type: 'LineString', coordinates: [] }, waypoints: [] } as any
-           : (selectedTrip?.segments.find(s => s.id === selectedSegmentId) || null),
+           : (styleContextSelectedSegment || selectedTrip?.segments.find(s => s.id === effectiveSelectedSegmentId) || null),
          mapLayer: currentMapStyle
       };
+
+      const isAnalyticsFilterActive = !!getTransientStyleConfig()?.id.startsWith('analytics-filter:');
 
       const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
       
@@ -1066,10 +1075,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       targetTrips.forEach(trip => {
         trip.segments.forEach(seg => {
           const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
-          if ((seg.isHidden && !showHiddenSegments) || userStyle?.hidden) return;
+          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive) || userStyle?.hidden) return;
           
           let opacity = 1.0;
-          if (!isUnselectedState && selectedSegmentId && selectedSegmentId !== seg.id) {
+          if (!isUnselectedState && effectiveSelectedSegmentId && effectiveSelectedSegmentId !== seg.id) {
             opacity = 0.4;
           }
           if (userStyle?.opacity !== undefined) {
@@ -1098,10 +1107,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       // Add markers
       targetTrips.forEach(trip => {
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
-        const selectedSegmentIndex = trip.segments.findIndex(s => s.id === selectedSegmentId);
+        const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
           const userSegStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
-          if ((seg.isHidden && !showHiddenSegments) || userSegStyle?.hidden) return;
+          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive) || userSegStyle?.hidden) return;
           const currSegColor = userSegStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {
             if (!wp.coordinates || wp.coordinates.length < 2) return;
@@ -1113,7 +1122,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             }
 
             const isBordering = wpIndex === 0 && segIndex > 0;
-            const isInSelectedSegment = (!isUnselectedState && selectedSegmentId) 
+            const isInSelectedSegment = (!isUnselectedState && effectiveSelectedSegmentId) 
                 ? trip.segments[selectedSegmentIndex]?.waypoints.some(w => w.id === wp.id) || trip.segments[selectedSegmentIndex + 1]?.waypoints[0]?.id === wp.id
                 : (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected ? false : true);
             
@@ -1222,9 +1231,9 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             if (userWpStyle?.opacity !== undefined) {
               marker.getElement().classList.remove('faded-marker');
               marker.getElement().style.setProperty('--marker-opacity', userWpStyle.opacity.toString());
-            } else if (selectedSegmentId && !isInSelectedSegment) {
+            } else if (effectiveSelectedSegmentId && !isInSelectedSegment) {
               marker.getElement().classList.add('faded-marker');
-            } else if (selectedSegmentId) {
+            } else if (effectiveSelectedSegmentId) {
               marker.getElement().classList.remove('faded-marker');
             }
 
@@ -1351,7 +1360,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, styleContextSelectedSegment, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {
@@ -1503,6 +1512,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       fontWeight: activeStyleConfigIdState === config.id ? 'bold' : 'normal'
                     }}
                     onClick={() => {
+                      const transientConfig = getTransientStyleConfig();
+                      const isAnalyticsFilterActive = !!transientConfig?.id.startsWith('analytics-filter:');
+                      if (isAnalyticsFilterActive) {
+                        const filterModeKey = transientConfig!.id.split(':').slice(2).join(':');
+                        setTransientStyleConfig(buildTransportModeFilterStyleConfig(config, filterModeKey));
+                      }
                       setActiveStyleConfigId(config.id);
                       setShowStyleConfigMenu(false);
                     }}
@@ -1510,6 +1525,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                     {config.name}
                   </div>
                 ))}
+
+                {getTransientStyleConfig()?.id.startsWith('analytics-filter:') && (
+                  <div style={{ fontSize: '0.75rem', color: '#666', padding: '8px 8px 4px 8px', lineHeight: 1.35 }}>
+                    Overridden by analytics filter.
+                  </div>
+                )}
                 
                 {isStyleConfigEditorOpen && (
                   <>

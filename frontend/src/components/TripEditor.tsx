@@ -1253,7 +1253,7 @@ export function TripEditor({
          </table>
          <div className="trip-summary">
            <h3 className="trip-summary-title">
-             <MaterialIcon name="analytics" size={18} /> Trip Summary
+             <MaterialIcon name="finance" size={18} /> Trip Summary
            </h3>
            <div className="trip-summary-total">
              <strong>Total Distance:</strong> {tripSummary.totalDistance.toFixed(1)} km

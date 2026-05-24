@@ -87,6 +87,10 @@ export default function App() {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
+  const analyticsStyleSegment = analyticsSegmentInfo
+    ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
+    : null;
   const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
@@ -811,10 +815,55 @@ export default function App() {
             onUpdateTrips={handleUpdateExternalTrips}
           />
         ) : isAnalyticsOpen ? (
-          <AnalyticsPanel
-            onGoBack={() => setIsAnalyticsOpen(false)}
-            trips={trips}
-          />
+          <>
+            <div style={{ display: analyticsSegmentInfo ? 'none' : 'block', height: '100%' }}>
+              <AnalyticsPanel
+                onGoBack={() => {
+                  setAnalyticsSegmentInfo(null);
+                  setIsAnalyticsOpen(false);
+                }}
+                trips={trips}
+                onOpenSegmentInfo={(tripId, segmentId) => {
+                  setAnalyticsSegmentInfo({ tripId, segmentId });
+                }}
+                onFocusSegment={(tripId, segmentId) => {
+                  const trip = trips.find(t => t.id === tripId);
+                  const segment = trip?.segments.find(s => s.id === segmentId);
+                  if (!segment) return;
+                  if (window.innerWidth <= 768) {
+                    mapComponentRef.current?.zoomToSegment(segment, 'collapsed', 'trip');
+                    setIsSidebarCollapsed(true);
+                  } else {
+                    mapComponentRef.current?.zoomToSegment(segment, 'current', 'trip');
+                  }
+                }}
+              />
+            </div>
+            {analyticsSegmentInfo ? (() => {
+              const targetTrip = trips.find(trip => trip.id === analyticsSegmentInfo.tripId);
+              if (!targetTrip) return null;
+              return (
+                <SegmentInfo
+                  isReadOnly={isReadOnly}
+                  segmentId={analyticsSegmentInfo.segmentId}
+                  trip={targetTrip}
+                  allTrips={trips}
+                  onGoBack={() => setAnalyticsSegmentInfo(null)}
+                  onUpdateTrip={(newTrip) => updateTripState(targetTrip.id, newTrip)}
+                  hoveredCoordinate={hoveredCoordinate}
+                  onHoverCoordinate={setHoveredCoordinate}
+                  onZoomToSegment={(seg) => {
+                    if (window.innerWidth <= 768) {
+                      mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
+                      setIsSidebarCollapsed(true);
+                    } else {
+                      mapComponentRef.current?.zoomToSegment(seg, 'current', 'trip');
+                    }
+                  }}
+                />
+              );
+            })() : null}
+          </>
         ) : isSearchOpen ? (
           <SearchPanel 
             onGoBack={() => setIsSearchOpen(false)}
@@ -981,6 +1030,7 @@ export default function App() {
         ref={mapComponentRef}
         trips={trips}
         selectedTrip={selectedTrip}
+        styleContextSelectedSegment={analyticsStyleSegment}
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}
