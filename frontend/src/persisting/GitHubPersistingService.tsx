@@ -30,6 +30,104 @@ export class GitHubPersistingService implements PersistingService {
     return localStorage.getItem('github_repo');
   }
 
+  private encodeUtf8Base64(value: string) {
+    return btoa(unescape(encodeURIComponent(value)));
+  }
+
+  private decodeUtf8Base64(value: string) {
+    return decodeURIComponent(escape(atob(value.replace(/\s/g, ''))));
+  }
+
+  private async loadTextFile(path: string): Promise<string | null> {
+    if (!this.isAvailable()) return null;
+    const repo = this.getRepo();
+    try {
+      const res = await this.request(`/repos/${repo}/contents/${path}`);
+      if (res.status === 404 || res.status === 409) return null;
+      if (!res.ok) throw new Error(`Failed to load ${path}: ${res.statusText}`);
+
+      const fileData = await res.json();
+      return this.decodeUtf8Base64(fileData.content);
+    } catch (e) {
+      console.error(`GitHubPersistingService.loadTextFile failed for ${path}:`, e);
+      return null;
+    }
+  }
+
+  private async saveTextFile(path: string, content: string, message: string): Promise<void> {
+    if (!this.isAvailable()) return;
+    const repo = this.getRepo();
+    const encodedContent = this.encodeUtf8Base64(content);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let sha: string | undefined;
+      try {
+        const getRes = await this.request(`/repos/${repo}/contents/${path}`);
+        if (getRes.ok) {
+          const getData = await getRes.json();
+          sha = getData.sha;
+        }
+      } catch {
+        // Ignore if not found
+      }
+
+      const body = JSON.stringify({
+        message,
+        content: encodedContent,
+        ...(sha ? { sha } : {})
+      });
+
+      const putRes = await this.request(`/repos/${repo}/contents/${path}`, {
+        method: 'PUT',
+        body
+      });
+
+      if (putRes.ok) return;
+
+      const text = await putRes.text();
+      if (putRes.status === 409 && attempt < 2) {
+        console.warn(`Retrying GitHub preference file save after conflict for ${path}: ${text}`);
+        continue;
+      }
+
+      console.error(`Failed to push ${path} to GitHub: ${putRes.status} ${text}`);
+      throw new Error(`GitHub sync failed: ${putRes.statusText}`);
+    }
+  }
+
+  private async deleteTextFile(path: string, message: string): Promise<void> {
+    if (!this.isAvailable()) return;
+    const repo = this.getRepo();
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const getRes = await this.request(`/repos/${repo}/contents/${path}`);
+      if (getRes.status === 404 || getRes.status === 409) return;
+      if (!getRes.ok) throw new Error(`Failed to load ${path} for delete: ${getRes.statusText}`);
+
+      const fileData = await getRes.json();
+      const body = JSON.stringify({
+        message,
+        sha: fileData.sha
+      });
+
+      const deleteRes = await this.request(`/repos/${repo}/contents/${path}`, {
+        method: 'DELETE',
+        body
+      });
+
+      if (deleteRes.ok) return;
+
+      const text = await deleteRes.text();
+      if (deleteRes.status === 409 && attempt < 2) {
+        console.warn(`Retrying GitHub preference file delete after conflict for ${path}: ${text}`);
+        continue;
+      }
+
+      console.error(`Failed to delete ${path} from GitHub: ${deleteRes.status} ${text}`);
+      throw new Error(`GitHub delete failed: ${deleteRes.statusText}`);
+    }
+  }
+
   async load(): Promise<any[]> {
     if (!this.isAvailable()) return [];
     const repo = this.getRepo();
@@ -87,7 +185,7 @@ export class GitHubPersistingService implements PersistingService {
       // Ignored: probably 404 which means new file
     }
 
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(trip, null, 2))));
+    const content = this.encodeUtf8Base64(JSON.stringify(trip, null, 2));
     
     const body = JSON.stringify({
       message: `Triplo: Sync trip ${trip.name || trip.id}`,
@@ -153,55 +251,29 @@ export class GitHubPersistingService implements PersistingService {
   }
 
   async loadPreferences(): Promise<any | null> {
-    if (!this.isAvailable()) return null;
-    const repo = this.getRepo();
     try {
-      const res = await this.request(`/repos/${repo}/contents/preferences.json`);
-      if (res.status === 404 || res.status === 409) return null;
-      if (!res.ok) throw new Error(`Failed to load preferences: ${res.statusText}`);
-      
-      const fileData = await res.json();
-      const content = atob(fileData.content);
-      return JSON.parse(content);
+      const content = await this.loadTextFile('preferences.json');
+      return content ? JSON.parse(content) : null;
     } catch (e) {
-      console.error('GitHubPersistingService.loadPreferences failed:', e);
+      console.error('GitHubPersistingService.loadPreferences parse failed:', e);
       return null;
     }
   }
 
   async savePreferences(prefs: any): Promise<void> {
-    if (!this.isAvailable()) return;
-    const repo = this.getRepo();
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(prefs, null, 2))));
-    
-    // First, try to get existing file SHA
-    let sha: string | undefined;
-    try {
-      const getRes = await this.request(`/repos/${repo}/contents/preferences.json`);
-      if (getRes.ok) {
-        const getData = await getRes.json();
-        sha = getData.sha;
-      }
-    } catch (e) {
-      // Ignore if not found
-    }
+    await this.saveTextFile('preferences.json', JSON.stringify(prefs, null, 2), 'Update Triplo preferences');
+  }
 
-    const body = JSON.stringify({
-      message: 'Update Triplo preferences',
-      content,
-      sha
-    });
+  async loadPreferenceFile(path: string): Promise<string | null> {
+    return this.loadTextFile(path);
+  }
 
-    const putRes = await this.request(`/repos/${repo}/contents/preferences.json`, {
-      method: 'PUT',
-      body
-    });
+  async savePreferenceFile(path: string, content: string): Promise<void> {
+    await this.saveTextFile(path, content, `Update Triplo preference file ${path}`);
+  }
 
-    if (!putRes.ok) {
-      const text = await putRes.text();
-      console.error(`Failed to push preferences to GitHub: ${putRes.status} ${text}`);
-      throw new Error(`GitHub sync failed: ${putRes.statusText}`);
-    }
+  async deletePreferenceFile(path: string): Promise<void> {
+    await this.deleteTextFile(path, `Delete Triplo preference file ${path}`);
   }
 
   isAvailable(): boolean {

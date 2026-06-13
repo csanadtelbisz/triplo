@@ -134,6 +134,112 @@ export class GoogleDrivePersistingService implements PersistingService {
     return createRes.id;
   }
 
+  private async getChildFolder(parentId: string, folderName: string): Promise<string | null> {
+    const safeName = folderName.replace(/'/g, "\\'");
+    const q = encodeURIComponent(`'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${safeName}' and trashed=false`);
+    const res = await this.request(`files?q=${q}&spaces=drive&fields=files(id)`);
+    if (res.files && res.files.length > 0) {
+      return res.files[0].id;
+    }
+    return null;
+  }
+
+  private async getOrCreateChildFolder(parentId: string, folderName: string): Promise<string> {
+    const existingId = await this.getChildFolder(parentId, folderName);
+    if (existingId) return existingId;
+
+    const createRes = await this.request('files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentId]
+      })
+    });
+    return createRes.id;
+  }
+
+  private splitPreferencePath(path: string) {
+    return path.split('/').filter(Boolean);
+  }
+
+  private async getPreferenceParentFolder(path: string, createFolders: boolean): Promise<{ folderId: string; fileName: string } | null> {
+    const parts = this.splitPreferencePath(path);
+    const fileName = parts.pop();
+    if (!fileName) return null;
+
+    let folderId = await this.getOrCreateFolder();
+    for (const folderName of parts) {
+      const nextFolderId = createFolders
+        ? await this.getOrCreateChildFolder(folderId, folderName)
+        : await this.getChildFolder(folderId, folderName);
+      if (!nextFolderId) return null;
+      folderId = nextFolderId;
+    }
+
+    return { folderId, fileName };
+  }
+
+  private async findPreferenceFile(path: string): Promise<{ fileId: string; fileName: string; folderId: string } | null> {
+    const target = await this.getPreferenceParentFolder(path, false);
+    if (!target) return null;
+
+    const safeName = target.fileName.replace(/'/g, "\\'");
+    const q = encodeURIComponent(`'${target.folderId}' in parents and name='${safeName}' and trashed=false`);
+    const searchRes = await this.request(`files?q=${q}&spaces=drive&fields=files(id)`);
+    if (!searchRes.files || searchRes.files.length === 0) return null;
+
+    return {
+      fileId: searchRes.files[0].id,
+      fileName: target.fileName,
+      folderId: target.folderId
+    };
+  }
+
+  private async loadTextFile(path: string): Promise<string | null> {
+    if (!this.getAccessToken()) return null;
+
+    const file = await this.findPreferenceFile(path);
+    if (!file) return null;
+
+    const fileData = await this.request(`files/${file.fileId}?alt=media`);
+    return typeof fileData === 'string' ? fileData : JSON.stringify(fileData, null, 2);
+  }
+
+  private async saveTextFile(path: string, content: string, contentType = 'text/plain'): Promise<void> {
+    if (!this.getAccessToken()) return;
+
+    const target = await this.getPreferenceParentFolder(path, true);
+    if (!target) return;
+
+    const existingFile = await this.findPreferenceFile(path);
+    let fileId = existingFile?.fileId;
+    if (!fileId) {
+      const createRes = await this.request('files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: target.fileName, parents: [target.folderId] })
+      });
+      fileId = createRes.id;
+    }
+
+    await this.request(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': contentType },
+      body: content
+    });
+  }
+
+  private async deleteTextFile(path: string): Promise<void> {
+    if (!this.getAccessToken()) return;
+
+    const file = await this.findPreferenceFile(path);
+    if (!file) return;
+
+    await this.request(`files/${file.fileId}`, { method: 'DELETE' });
+  }
+
   async load(): Promise<any[]> {
     if (!this.getAccessToken()) return [];
 
@@ -224,16 +330,8 @@ export class GoogleDrivePersistingService implements PersistingService {
   async loadPreferences(): Promise<any | null> {
     if (!this.getAccessToken()) return null;
     try {
-      const folderId = await this.getOrCreateFolder();
-      const fileName = 'preferences.json';
-      const q = encodeURIComponent(`'${folderId}' in parents and name='${fileName}' and trashed=false`);
-      const searchRes = await this.request(`files?q=${q}&spaces=drive&fields=files(id)`);
-      
-      if (!searchRes.files || searchRes.files.length === 0) return null;
-      
-      const fileId = searchRes.files[0].id;
-      const fileData = await this.request(`files/${fileId}?alt=media`);
-      return fileData;
+      const fileData = await this.loadTextFile('preferences.json');
+      return fileData ? JSON.parse(fileData) : null;
     } catch (e) {
       console.error('Failed to load preferences from Google Drive:', e);
       return null;
@@ -243,32 +341,37 @@ export class GoogleDrivePersistingService implements PersistingService {
   async savePreferences(prefs: any): Promise<void> {
     if (!this.getAccessToken()) return;
     try {
-      const folderId = await this.getOrCreateFolder();
-      const fileName = 'preferences.json';
       const content = JSON.stringify(prefs, null, 2);
-
-      const q = encodeURIComponent(`'${folderId}' in parents and name='${fileName}' and trashed=false`);
-      const searchRes = await this.request(`files?q=${q}&spaces=drive`);
-      
-      let fileId;
-      if (searchRes.files && searchRes.files.length > 0) {
-        fileId = searchRes.files[0].id;
-      } else {
-        const createRes = await this.request('files', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: fileName, parents: [folderId] })
-        });
-        fileId = createRes.id;
-      }
-
-      await this.request(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: content
-      });
+      await this.saveTextFile('preferences.json', content, 'application/json');
     } catch (e) {
       console.error('Failed to save preferences to Google Drive:', e);
+      throw e;
+    }
+  }
+
+  async loadPreferenceFile(path: string): Promise<string | null> {
+    try {
+      return await this.loadTextFile(path);
+    } catch (e) {
+      console.error(`Failed to load preference file ${path} from Google Drive:`, e);
+      return null;
+    }
+  }
+
+  async savePreferenceFile(path: string, content: string): Promise<void> {
+    try {
+      await this.saveTextFile(path, content);
+    } catch (e) {
+      console.error(`Failed to save preference file ${path} to Google Drive:`, e);
+      throw e;
+    }
+  }
+
+  async deletePreferenceFile(path: string): Promise<void> {
+    try {
+      await this.deleteTextFile(path);
+    } catch (e) {
+      console.error(`Failed to delete preference file ${path} from Google Drive:`, e);
       throw e;
     }
   }

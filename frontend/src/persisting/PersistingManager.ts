@@ -97,6 +97,37 @@ export class PersistingManager {
       }
     }
   }
+
+  async loadPreferenceFile(path: string): Promise<string | null> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      if (service.loadPreferenceFile) {
+        const content = await service.loadPreferenceFile(path);
+        if (content !== null) {
+          return content;
+        }
+      }
+    }
+    return null;
+  }
+
+  async savePreferenceFile(path: string, content: string): Promise<void> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      if (service.savePreferenceFile) {
+        await service.savePreferenceFile(path, content);
+      }
+    }
+  }
+
+  async deletePreferenceFile(path: string): Promise<void> {
+    const available = this.getAvailableServices();
+    for (const service of available) {
+      if (service.deletePreferenceFile) {
+        await service.deletePreferenceFile(path);
+      }
+    }
+  }
 }
 
 export const persistingManager = new PersistingManager();

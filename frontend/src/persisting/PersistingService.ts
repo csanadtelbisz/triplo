@@ -33,6 +33,15 @@ export interface PersistingService {
   // save synced preferences
   savePreferences?(prefs: any): Promise<void>;
 
+  // load an auxiliary synced preference file, such as a style script
+  loadPreferenceFile?(path: string): Promise<string | null>;
+
+  // save an auxiliary synced preference file, such as a style script
+  savePreferenceFile?(path: string, content: string): Promise<void>;
+
+  // delete an auxiliary synced preference file, such as a removed style script
+  deletePreferenceFile?(path: string): Promise<void>;
+
   // check if the service is currently available
   isAvailable(): boolean;
 
