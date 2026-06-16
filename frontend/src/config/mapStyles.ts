@@ -5,7 +5,7 @@ import opentopomapIcon from '../assets/icons/opentopomap.png';
 
 const mapyApiKey = import.meta.env.VITE_MAPY_API_KEY || '';
 
-export const MARKER_HIDE_THRESHOLD = 40;
+export const MARKER_HIDE_THRESHOLD = 30;
 
 // Define our target vector tile POI layers based on zoomed tiers
 export const POI_LAYERS: any[] = [

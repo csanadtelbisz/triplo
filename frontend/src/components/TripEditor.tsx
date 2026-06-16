@@ -76,6 +76,23 @@ export function TripEditor({
   } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
 
   const [isSaving, setIsSaving] = useState(false);
+  const primeDatePickerMonth = (input: HTMLInputElement, fallbackDate?: string) => {
+    if (input.value || !fallbackDate) return;
+    const dateOnly = fallbackDate.split('T')[0];
+    input.dataset.primedDate = dateOnly;
+    input.value = dateOnly;
+    try {
+      input.showPicker?.();
+    } catch {
+      // Some browsers only allow showPicker from direct pointer activation.
+    }
+    requestAnimationFrame(() => {
+      if (input.dataset.primedDate === dateOnly && input.value === dateOnly) {
+        input.value = '';
+      }
+    });
+  };
+
   const handleSaveWrapper = async () => {
     setIsSaving(true);
     await onSave();
@@ -829,7 +846,9 @@ export function TripEditor({
                className="form-input"
                defaultValue={trip.startDate ? trip.startDate.split('T')[0] : ''}
                disabled={isReadOnly}
+               onFocus={(e) => primeDatePickerMonth(e.currentTarget, !trip.startDate ? trip.endDate : undefined)}
                onChange={(e) => {
+                 delete e.currentTarget.dataset.primedDate;
                  onUpdateTrip({ ...trip, startDate: e.target.value });
                }}
              />
@@ -841,7 +860,9 @@ export function TripEditor({
                className="form-input"
                defaultValue={trip.endDate ? trip.endDate.split('T')[0] : ''}
                disabled={isReadOnly}
+               onFocus={(e) => primeDatePickerMonth(e.currentTarget, !trip.endDate ? trip.startDate : undefined)}
                onChange={(e) => {
+                 delete e.currentTarget.dataset.primedDate;
                  onUpdateTrip({ ...trip, endDate: e.target.value });
                }}
              />
