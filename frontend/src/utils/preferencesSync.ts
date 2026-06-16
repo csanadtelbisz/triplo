@@ -185,11 +185,6 @@ export const loadPreferencesFromCloud = async (): Promise<boolean> => {
           saveStyleConfigs(loadedStyleConfigs);
           changed = true;
         }
-
-        if (prefs.styleConfigurations.activeId && prefs.styleConfigurations.activeId !== getActiveStyleConfigId()) {
-          setActiveStyleConfigId(prefs.styleConfigurations.activeId);
-          changed = true;
-        }
       }
 
       if (changed) {

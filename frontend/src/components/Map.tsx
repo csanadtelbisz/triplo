@@ -992,13 +992,27 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
     useEffect(() => {
       if (mapLoaded && mapRef.current) {
-        if (!mapRef.current.getSource('route-source') || !mapRef.current.getLayer('route-layer')) {
+        const evaluatedStyleTolerance = evaluatedStyles?.mapStyleOverrides?.tolerance;
+        const toleranceChanged = mapRef.current.getSource('route-source')?.serialize().tolerance !== evaluatedStyleTolerance;
+        if (!mapRef.current.getSource('route-source') || !mapRef.current.getLayer('route-layer') || toleranceChanged) {
           try {
+            if (toleranceChanged) {
+              if (mapRef.current.getLayer('route-layer')) {
+                mapRef.current.removeLayer('route-layer');
+              }
+              if (mapRef.current.getSource('route-source')) {
+                mapRef.current.removeSource('route-source');
+              }
+            }
             if (!mapRef.current.getSource('route-source')) {
-              mapRef.current.addSource('route-source', {
+              let mapSourceConfig: any = {
                 type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-              });
+                data: { type: 'FeatureCollection', features: [] },
+              };
+              if (evaluatedStyleTolerance) {
+                mapSourceConfig['tolerance'] = evaluatedStyleTolerance;
+              }
+              mapRef.current.addSource('route-source', mapSourceConfig);
             }
             if (!mapRef.current.getLayer('route-layer')) {
               mapRef.current.addLayer({

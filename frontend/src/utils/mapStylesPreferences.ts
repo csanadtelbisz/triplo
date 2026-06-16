@@ -156,6 +156,7 @@ export function setActiveStyleConfigId(id: string) {
 export interface EvaluatedStyles {
   getWaypointStyle?: (wp: Waypoint, segments: Segment[], colors: string[], context: StyleConfigurationContext) => { hidden?: boolean, color?: string | string[], type?: 'dot' | 'pin', size?: number, html?: string, width?: number, height?: number, dropShadow?: boolean, borderRadius?: string, border?: string, opacity?: number } | null;
   getSegmentStyle?: (seg: Segment, color: string, context: StyleConfigurationContext) => { hidden?: boolean, color?: string, width?: number, opacity?: number } | null;
+  mapStyleOverrides?: { tolerance?: number };
 }
 
 export function evaluateStyleConfig(script: string): EvaluatedStyles | null {
