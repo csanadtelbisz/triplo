@@ -2,7 +2,7 @@ import { persistingManager } from '../persisting/PersistingManager';
 import { getLanguagePreferences, saveLanguagePreferences } from './languagePreferences';
 import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault, setShowCustomModesInDefault } from './customModesPreferences';
 import { getBuiltInModeOverrides, saveBuiltInModeOverrides } from './builtInModesPreferences';
-import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs, setActiveStyleConfigId } from './mapStylesPreferences';
+import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './mapStylesPreferences';
 import type { RenderStyleConfig } from './mapStylesPreferences';
 
 let syncTimeout: any;
