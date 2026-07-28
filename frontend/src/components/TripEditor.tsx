@@ -64,9 +64,17 @@ export function TripEditor({
   const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [exportMinify, setExportMinify] = useState(false);
+  const [openTransportModeMenuSegmentId, setOpenTransportModeMenuSegmentId] = useState<string | null>(null);
 
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [showCustomModes] = useState(() => getShowCustomModesInDefault());
+
+  useEffect(() => {
+    if (!openTransportModeMenuSegmentId) return;
+    const closeMenu = () => setOpenTransportModeMenuSegmentId(null);
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, [openTransportModeMenuSegmentId]);
 
   const {
     sectionMetadataOffer,
@@ -625,6 +633,36 @@ export function TripEditor({
       return segment;
     };
 
+  const handleTransportModeSelect = async (segIndex: number, seg: Segment, mode: TransportMode, customMode?: CustomOtherMode) => {
+    const newSegments = [...trip.segments];
+    let routingService: string;
+    let routingProfile: string;
+
+    if (customMode) {
+      [routingService, routingProfile] = customMode.routingProfile?.includes('|')
+        ? customMode.routingProfile.split('|')
+        : ['Straight Line Router', customMode.routingProfile || 'straight_line'];
+    } else {
+      const defaultRouter = routingManager.getDefaultRouter(mode);
+      const assignedProfileStr = getModeRoutingProfile(mode, defaultRouter.serviceName, defaultRouter.profile);
+      const [assignedService, assignedProfile] = assignedProfileStr.split('|');
+      routingService = assignedService || defaultRouter.serviceName;
+      routingProfile = assignedProfile || defaultRouter.profile;
+    }
+
+    newSegments[segIndex] = await updateSegmentRoute({
+      ...seg,
+      transportMode: customMode ? 'other' : mode,
+      customIcon: customMode?.icon,
+      customColor: customMode?.color,
+      routingService,
+      routingProfile,
+      source: 'router' as const
+    });
+
+    onUpdateTrip({ ...trip, segments: newSegments });
+  };
+
   const handleStartEarlier = async (segIndex: number) => {
     if (segIndex <= 0) return;
     const prevSeg = trip.segments[segIndex - 1];
@@ -988,7 +1026,7 @@ export function TripEditor({
                      >
                        {isFirstInSeg ? (
                         <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)} onPointerDown={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
-                           <div className="segment-toolbox">
+                           <div className="segment-toolbox" style={{ position: 'relative' }}>
                              <textarea 
                                key={`seg-title-${seg.id}-${seg.name || ''}`}
                                className="segment-title-textarea"
@@ -1015,71 +1053,102 @@ export function TripEditor({
                                <button 
                                  className="iconButton small" 
                                  style={{ color: currSegColor, opacity: 1 }} 
-                                 title={isReadOnly ? `Mode: ${seg.transportMode}` : `Switch mode: ${seg.transportMode}`}
+                                title={isReadOnly ? `Mode: ${seg.transportMode}` : `Select transport mode`}
                                  disabled={isReadOnly}
-                                 onClick={async () => {
-                                   let modeSequence: Array<{ mode: TransportMode, customIcon?: string, color?: string, service?: string, profile?: string }> = 
-                                     TRANSPORT_MODES.map(m => ({ mode: m }));
-
-                                   if (showCustomModes && customModes.length > 0) {
-                                     const otherIdx = modeSequence.findIndex(m => m.mode === 'other');
-                                     const customInjected = customModes.map(cm => {
-                                       let service = 'Straight Line Router';
-                                       let profile = 'straight_line';
-                                       if (cm.routingProfile && cm.routingProfile.includes('|')) {
-                                         [service, profile] = cm.routingProfile.split('|');
-                                       } else if (cm.routingProfile) {
-                                          profile = cm.routingProfile;
-                                       }
-                                       return { mode: 'other' as TransportMode, customIcon: cm.icon, color: cm.color, service, profile };
-                                     });
-                                     if (otherIdx !== -1) {
-                                       modeSequence.splice(otherIdx, 0, ...customInjected);
-                                     } else {
-                                       modeSequence.push(...customInjected);
-                                     }
-                                   }
-
-                                   let currentIndex = -1;
-                                   if (seg.transportMode === 'other' && seg.customIcon) {
-                                     currentIndex = modeSequence.findIndex(m => m.mode === 'other' && m.customIcon === seg.customIcon);
-                                   }
-                                   if (currentIndex === -1) {
-                                     currentIndex = modeSequence.findIndex(m => m.mode === seg.transportMode && !m.customIcon);
-                                   }
-                                   if (currentIndex === -1) {
-                                     currentIndex = 0;
-                                   }
-
-                                   const nextItem = modeSequence[(currentIndex + 1) % modeSequence.length];
-
-                                   const newSegments = [...trip.segments];
-                                   
-                                   let assignService = nextItem.service;
-                                   let assignProfile = nextItem.profile;
-
-                                   if (!assignService || !assignProfile) {
-                                     const defRouter = routingManager.getDefaultRouter(nextItem.mode);
-                                     const assignedProfileStr = getModeRoutingProfile(nextItem.mode, defRouter.serviceName, defRouter.profile);
-                                     const [svc, prof] = assignedProfileStr.split('|');
-                                     assignService = svc || defRouter.serviceName;
-                                     assignProfile = prof || defRouter.profile;
-                                   }
-
-                                   newSegments[segIndex] = await updateSegmentRoute({
-                                     ...seg,
-                                     transportMode: nextItem.mode,
-                                     customIcon: nextItem.customIcon,
-                                     customColor: nextItem.color,
-                                     routingService: assignService,
-                                     routingProfile: assignProfile,
-                                     source: 'router' as const
-                                   });
-                                   onUpdateTrip({ ...trip, segments: newSegments });
-                                 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenTransportModeMenuSegmentId(prev => prev === seg.id ? null : seg.id);
+                                }}
                                >
                                {seg.transportMode !== 'other' ? getModeIcon(seg.transportMode, 18) : (seg.customIcon ? <MaterialIcon name={seg.customIcon} size={18} /> : getModeIcon(seg.transportMode, 18))}
                                </button>
+                               {openTransportModeMenuSegmentId === seg.id && !isReadOnly && (
+                                 <div
+                                   className="segment-mode-menu"
+                                   style={{
+                                     position: 'absolute',
+                                     top: 'calc(100% - 20px)',
+                                     left: 0,
+                                     zIndex: 50,
+                                     width: 'min(340px, calc(100vw - 32px))',
+                                     maxWidth: 'calc(100vw - 32px)',
+                                     background: '#fff',
+                                     border: '1px solid #e3e7eb',
+                                     borderRadius: '8px',
+                                     boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                     padding: '8px',
+                                     display: 'flex',
+                                     flexWrap: 'wrap',
+                                     gap: '6px'
+                                   }}
+                                   onClick={(e) => e.stopPropagation()}
+                                 >
+                                   {TRANSPORT_MODES.filter(mode => mode !== 'other').map(mode => (
+                                     <button
+                                       key={mode}
+                                       type="button"
+                                       className="iconButton"
+                                       title={getModeName(mode)}
+                                       aria-label={getModeName(mode)}
+                                       style={{
+                                         width: '34px',
+                                         height: '34px',
+                                         padding: 0,
+                                         borderRadius: '6px',
+                                         border: mode === seg.transportMode ? `2px solid ${getModeColor(mode) || '#007bff'}` : '1px solid #ddd',
+                                         background: mode === seg.transportMode ? `${getModeColor(mode) || '#007bff'}22` : 'transparent',
+                                         color: getModeColor(mode),
+                                         display: 'flex',
+                                         alignItems: 'center',
+                                         justifyContent: 'center'
+                                       }}
+                                       onClick={async (e) => {
+                                         e.stopPropagation();
+                                         setOpenTransportModeMenuSegmentId(null);
+                                         if (mode !== seg.transportMode) {
+                                           await handleTransportModeSelect(segIndex, seg, mode);
+                                         }
+                                       }}
+                                     >
+                                       {getModeIcon(mode, 20)}
+                                     </button>
+                                   ))}
+                                   {showCustomModes && customModes.map(customMode => {
+                                     const label = customMode.name || customMode.icon.replaceAll('_', ' ');
+                                     const isSelected = seg.transportMode === 'other' && seg.customIcon === customMode.icon;
+                                     return (
+                                       <button
+                                         key={`custom-${customMode.icon}`}
+                                         type="button"
+                                         className="iconButton"
+                                         title={label}
+                                         aria-label={label}
+                                         style={{
+                                           width: '34px',
+                                           height: '34px',
+                                           padding: 0,
+                                           borderRadius: '6px',
+                                           border: isSelected ? `2px solid ${customMode.color || '#007bff'}` : '1px solid #ddd',
+                                           background: isSelected ? `${customMode.color || '#007bff'}22` : 'transparent',
+                                           color: customMode.color || getModeColor('other'),
+                                           display: 'flex',
+                                           alignItems: 'center',
+                                           justifyContent: 'center'
+                                         }}
+                                         onClick={async (e) => {
+                                           e.stopPropagation();
+                                           setOpenTransportModeMenuSegmentId(null);
+                                           if (!isSelected) {
+                                             await handleTransportModeSelect(segIndex, seg, 'other', customMode);
+                                           }
+                                         }}
+                                       >
+                                         <MaterialIcon name={customMode.icon} size={20} />
+                                       </button>
+                                     );
+                                   })}
+                                 </div>
+                               )}
                                {isReadOnly ? (
                                  <button
                                    className="iconButton small"
