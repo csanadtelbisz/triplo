@@ -3,6 +3,7 @@ import { getLanguagePreferences, saveLanguagePreferences } from './languagePrefe
 import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault, setShowCustomModesInDefault } from './customModesPreferences';
 import { getBuiltInModeOverrides, saveBuiltInModeOverrides } from './builtInModesPreferences';
 import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './mapStylesPreferences';
+import { getTripListPreferences, saveTripListPreferences } from './tripListPreferences';
 import type { RenderStyleConfig } from './mapStylesPreferences';
 
 let syncTimeout: any;
@@ -119,6 +120,7 @@ export const syncPreferencesToCloud = async (immediate = false) => {
         showCustomModesInDefault: getShowCustomModesInDefault(),
         builtInModes: getBuiltInModeOverrides(),
         homePosition: localStorage.getItem('homeMapPosition') ? JSON.parse(localStorage.getItem('homeMapPosition')!) : null,
+        tripList: getTripListPreferences(),
         styleConfigurations
       };
       await persistingManager.savePreferences(prefs);
@@ -176,6 +178,15 @@ export const loadPreferencesFromCloud = async (): Promise<boolean> => {
       if (prefs.homePosition && JSON.stringify(prefs.homePosition) !== prevHome) {
         localStorage.setItem('homeMapPosition', JSON.stringify(prefs.homePosition));
         changed = true;
+      }
+
+      if (prefs.tripList) {
+        const previousTripList = JSON.stringify(getTripListPreferences());
+        const nextTripList = JSON.stringify(prefs.tripList);
+        if (nextTripList !== previousTripList) {
+          saveTripListPreferences(prefs.tripList);
+          changed = true;
+        }
       }
 
       if (prefs.styleConfigurations?.configs && Array.isArray(prefs.styleConfigurations.configs)) {

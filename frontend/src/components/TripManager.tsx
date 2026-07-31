@@ -3,6 +3,9 @@ import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import { ConfirmDialog } from './Dialog';
 import { persistingManager } from '../persisting/PersistingManager';
+import { syncPreferencesToCloud } from '../utils/preferencesSync';
+import { getTripListPreferences, saveTripListPreferences } from '../utils/tripListPreferences';
+import type { TripListDisplayMode, TripListPreferences, TripSortOrder } from '../utils/tripListPreferences';
 
 interface TripManagerProps {
   isReadOnly?: boolean;
@@ -29,8 +32,26 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [tripListPreferences, setTripListPreferences] = useState<TripListPreferences>(getTripListPreferences);
 
   const contentRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const refreshPreferences = () => setTripListPreferences(getTripListPreferences());
+    window.addEventListener('preferences-updated', refreshPreferences);
+    return () => window.removeEventListener('preferences-updated', refreshPreferences);
+  }, []);
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!sortMenuRef.current?.contains(event.target as Node)) setShowSortMenu(false);
+    };
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, [showSortMenu]);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -65,6 +86,43 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
       setTripToDelete(null);
     }
   };
+
+  const updateTripListPreferences = (updates: Partial<TripListPreferences>) => {
+    const next = { ...tripListPreferences, ...updates };
+    saveTripListPreferences(next);
+    setTripListPreferences(next);
+    syncPreferencesToCloud();
+  };
+
+  const getTripDate = (trip: Trip) => {
+    const date = trip.endDate || trip.startDate;
+    const timestamp = date ? new Date(date).getTime() : Number.NaN;
+    return Number.isNaN(timestamp) ? null : timestamp;
+  };
+
+  const sortedTrips = [...trips].sort((a, b) => {
+    if (tripListPreferences.sortOrder === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+    if (tripListPreferences.sortOrder === 'name_desc') return (b.name || '').localeCompare(a.name || '');
+
+    const dateA = getTripDate(a);
+    const dateB = getTripDate(b);
+    if (dateA !== null && dateB !== null) return tripListPreferences.sortOrder === 'newer' ? dateB - dateA : dateA - dateB;
+    if (dateA !== null) return -1;
+    if (dateB !== null) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  const isTimeSorted = tripListPreferences.sortOrder === 'newer' || tripListPreferences.sortOrder === 'older';
+  const tripGroups = isTimeSorted
+    ? Array.from(sortedTrips.reduce((groups, trip) => {
+        const date = trip.endDate || trip.startDate;
+        const year = date && !Number.isNaN(new Date(date).getTime()) ? String(new Date(date).getFullYear()) : 'No date';
+        const group = groups.get(year) || [];
+        group.push(trip);
+        groups.set(year, group);
+        return groups;
+      }, new globalThis.Map<string, Trip[]>()).entries())
+    : [['', sortedTrips] as [string, Trip[]]];
 
   return (
     <>
@@ -125,28 +183,45 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
               )}
             </div>
           </div>
-          <button 
-            className="iconButton" 
-            onClick={handleReload} 
-            title="Reload from all services"
-          >
-            <MaterialIcon name="sync" size={20} className={isReloading ? "spinning" : ""} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button className="iconButton" onClick={handleReload} title="Reload from all services">
+              <MaterialIcon name="sync" size={20} className={isReloading ? "spinning" : ""} />
+            </button>
+            <div ref={sortMenuRef} style={{ position: 'relative' }}>
+              <button className="iconButton" onClick={() => setShowSortMenu(open => !open)} title="Display and sort trips" aria-label="Display and sort trips">
+                <MaterialIcon name="sort" size={20} />
+              </button>
+              {showSortMenu && (
+                <div className="trip-sort-menu">
+                  {([
+                    ['detailed', 'Detailed'],
+                    ['compact', 'Compact'],
+                  ] as [TripListDisplayMode, string][]).map(([displayMode, label]) => (
+                    <div key={displayMode} className={`trip-sort-menu-option${tripListPreferences.displayMode === displayMode ? ' selected' : ''}`} onClick={() => updateTripListPreferences({ displayMode })}>
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                  <div className="trip-sort-menu-divider" />
+                  {([
+                    ['newer', 'Newer first'],
+                    ['older', 'Older first'],
+                    ['name_asc', 'A to Z'],
+                    ['name_desc', 'Z to A'],
+                  ] as [TripSortOrder, string][]).map(([sortOrder, label]) => (
+                    <div key={sortOrder} className={`trip-sort-menu-option${tripListPreferences.sortOrder === sortOrder ? ' selected' : ''}`} onClick={() => { updateTripListPreferences({ sortOrder }); setShowSortMenu(false); }}>
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {[...trips].sort((a, b) => {
-          const dateA = a.endDate || a.startDate;
-          const dateB = b.endDate || b.startDate;
-          if (dateA && dateB) {
-            return new Date(dateB).getTime() - new Date(dateA).getTime();
-          } else if (dateA) {
-            return -1;
-          } else if (dateB) {
-            return 1;
-          } else {
-            return (a.name || '').localeCompare(b.name || '');
-          }
-        }).map(trip => {
+        {tripGroups.map(([year, groupedTrips]) => (
+          <div key={year || 'all-trips'}>
+            {isTimeSorted && <div className="trip-year-heading">{year}</div>}
+            {groupedTrips.map(trip => {
           const startDateStr = trip.startDate ? new Date(trip.startDate).toLocaleDateString() : '';
           const endDateStr = trip.endDate ? new Date(trip.endDate).toLocaleDateString() : '';
           const dateDisplay = startDateStr && endDateStr && startDateStr !== endDateStr
@@ -166,7 +241,7 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
               style={{ border: isConflicted ? '2px solid #d9534f' : undefined }}
               onClick={() => onSelectTrip(trip)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tripListPreferences.displayMode === 'detailed' ? '8px' : 0 }}>
                 <h3 className="trip-card-title" style={{ margin: 0, fontStyle: isUnsaved ? 'italic' : 'normal', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {trip.name} 
                   {isConflicted ? (
@@ -220,17 +295,24 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
                   )}
                 </div>
               </div>
-              <p className="trip-card-desc">
+              {tripListPreferences.displayMode === 'detailed' && <p className="trip-card-desc">
                 {trip.description && trip.description.length > 50 
                   ? `${trip.description.slice(0, 50)}...` 
                   : trip.description}
-              </p>
-              <div className="trip-card-footer" style={{ marginTop: 'auto', paddingTop: '12px' }}>
+              </p>}
+              <div
+                className="trip-card-footer"
+                style={tripListPreferences.displayMode === 'detailed'
+                  ? { marginTop: 'auto', paddingTop: '12px' }
+                  : { marginTop: 0, paddingTop: '4px' }}
+              >
                 <small className="trip-card-date">{dateDisplay}</small>
               </div>
             </div>
           );
-        })}
+            })}
+          </div>
+        ))}
         {trips.length === 0 && isTripsLoading && <p className="empty-state">Loading trips...</p>}
         {trips.length === 0 && !isTripsLoading && <p className="empty-state">No trips found.</p>}
       </div>

@@ -25,6 +25,54 @@
 .trip-card-date {
   color: #999;
 }
+
+.trip-sort-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 180px;
+  padding: 5px;
+  background-color: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.trip-sort-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.trip-sort-menu-option:hover {
+  background-color: #f0f0f0;
+}
+
+.trip-sort-menu-option.selected {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.trip-sort-menu-divider {
+  border-top: 1px solid #eee;
+  margin: 4px 0;
+}
+
+.trip-year-heading {
+  margin: 16px 0 8px;
+  color: #666;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 .empty-state {
   color: #888;
   text-align: center;
