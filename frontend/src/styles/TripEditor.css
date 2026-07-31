@@ -53,6 +53,9 @@ body.is-dragging * {
   position: sticky;
   top: 16px;
 }
+.segment-toolbox--menu-open {
+  z-index: 100;
+}
 .segment-title-textarea {
   font-size: 0.75rem;
   font-weight: bold;

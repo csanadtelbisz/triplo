@@ -1026,7 +1026,7 @@ export function TripEditor({
                      >
                        {isFirstInSeg ? (
                         <td className="segment-col" rowSpan={Math.max(1, (seg.waypoints.length - 1) * 2)} onPointerDown={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
-                           <div className="segment-toolbox" style={{ position: 'relative' }}>
+                           <div className={`segment-toolbox${openTransportModeMenuSegmentId === seg.id ? ' segment-toolbox--menu-open' : ''}`}>
                              <textarea 
                                key={`seg-title-${seg.id}-${seg.name || ''}`}
                                className="segment-title-textarea"
