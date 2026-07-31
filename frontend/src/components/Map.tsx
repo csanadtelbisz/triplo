@@ -1486,7 +1486,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
   }, [activeMapStyle, mapLoaded]);
 
   return (
-    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div className="map-panel" style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <div ref={mapContainer} id="map" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}></div>
 
       {activeMapStyle === 'mapy_outdoor' && (

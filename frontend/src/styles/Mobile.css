@@ -18,6 +18,19 @@
     width: 100%;
   }
 
+  /* Keep the attribution visible above the mobile bottom sheet. */
+  .mapy-logo-overlay {
+    bottom: calc(70dvh + 10px);
+  }
+
+  .sidebar.poi-info-smaller + .map-panel .mapy-logo-overlay {
+    bottom: calc(50dvh + 10px);
+  }
+
+  .sidebar.collapsed + .map-panel .mapy-logo-overlay {
+    bottom: 74px;
+  }
+
   .sidebar {
     width: 100vw;
     height: 70vh;
