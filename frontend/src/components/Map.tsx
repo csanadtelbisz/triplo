@@ -21,6 +21,7 @@ import {
   evaluateStyleConfig
 } from '../utils/mapStylesPreferences';
 import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
+import { Icon, createIconElement } from './Icon';
 
 
 function getRenderGeometry(seg: any) {
@@ -1172,7 +1173,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 el.style.position = 'absolute';
                 if (userWpStyle.dropShadow) el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))';
             } else if (isPin) {
-              // Classic map pin with Material Icon
+              // Classic map pin with an icon from the shared registry.
               const pinColor = userWpStyle?.color ? (Array.isArray(userWpStyle.color) ? userWpStyle.color[0] : userWpStyle.color) : currSegColor;
               el.style.width = '32px';
               el.style.height = '32px';
@@ -1182,8 +1183,19 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   <path d="M12 4C8.13 4 5 7.13 5 11c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${pinColor}" stroke="white" stroke-width="1.5"/>
                   <circle cx="12" cy="11" r="6.5" fill="white"/>
                 </svg>
-                ${wp.icon ? `<span class="material-symbols-rounded" style="position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); font-size: 13px; color: ${pinColor}; pointer-events: none;">${wp.icon}</span>` : ''}
               `;
+              if (wp.icon) {
+                const icon = createIconElement(wp.icon, 13);
+                Object.assign(icon.style, {
+                  position: 'absolute',
+                  top: '46%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  color: pinColor,
+                  pointerEvents: 'none',
+                });
+                el.appendChild(icon);
+              }
               el.style.display = 'block';
               el.style.cursor = 'pointer';
               el.style.position = 'absolute';
@@ -1501,7 +1513,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               onClick={() => setShowStyleConfigMenu(!showStyleConfigMenu)}
               title="Style Configurations"
             >
-              <span className="material-symbols-rounded">tune</span>
+              <Icon name="tune" />
             </button>
 
             {showStyleConfigMenu && (
@@ -1511,9 +1523,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '4px' }}
                   onClick={(e) => { e.stopPropagation(); setShowHiddenSegments(!showHiddenSegments); }}
                 >
-                  <span className="material-symbols-rounded" style={{ fontSize: '18px', color: showHiddenSegments ? '#007bff' : 'inherit' }}>
-                    {showHiddenSegments ? "visibility" : "visibility_off"}
-                  </span>
+                  <Icon name={showHiddenSegments ? 'visibility' : 'visibility_off'} size={18} style={{ color: showHiddenSegments ? '#007bff' : 'inherit' }} />
                   <span style={{ fontSize: '0.85rem' }}>{showHiddenSegments ? "Hide invisible segments" : "Show invisible segments"}</span>
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#666', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Style Config</div>
@@ -1554,9 +1564,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                       onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, isNoTripSelected: !prev.isNoTripSelected })); }}
                     >
-                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.isNoTripSelected ? '#007bff' : 'inherit' }}>
-                        {testContextOverrides.isNoTripSelected ? "check_box" : "check_box_outline_blank"}
-                      </span>
+                      <Icon name={testContextOverrides.isNoTripSelected ? 'check_box' : 'check_box_outline_blank'} size={18} style={{ color: testContextOverrides.isNoTripSelected ? '#007bff' : 'inherit' }} />
                       <span style={{ fontSize: '0.85rem' }}>No Trip Selected</span>
                     </div>
                     <div 
@@ -1564,9 +1572,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                       onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, isReadOnly: !prev.isReadOnly })); }}
                     >
-                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.isReadOnly ? '#007bff' : 'inherit' }}>
-                        {testContextOverrides.isReadOnly ? "check_box" : "check_box_outline_blank"}
-                      </span>
+                      <Icon name={testContextOverrides.isReadOnly ? 'check_box' : 'check_box_outline_blank'} size={18} style={{ color: testContextOverrides.isReadOnly ? '#007bff' : 'inherit' }} />
                       <span style={{ fontSize: '0.85rem' }}>Read-only</span>
                     </div>
                     <div 
@@ -1574,9 +1580,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                       onClick={(e) => { e.stopPropagation(); setTestContextOverrides(prev => ({ ...prev, hasSegmentSelected: !prev.hasSegmentSelected })); }}
                     >
-                      <span className="material-symbols-rounded" style={{ fontSize: '18px', color: testContextOverrides.hasSegmentSelected ? '#007bff' : 'inherit' }}>
-                        {testContextOverrides.hasSegmentSelected ? "check_box" : "check_box_outline_blank"}
-                      </span>
+                      <Icon name={testContextOverrides.hasSegmentSelected ? 'check_box' : 'check_box_outline_blank'} size={18} style={{ color: testContextOverrides.hasSegmentSelected ? '#007bff' : 'inherit' }} />
                       <span style={{ fontSize: '0.85rem' }}>Other Segment Selected</span>
                     </div>
                   </>
@@ -1591,7 +1595,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               onClick={() => setShowLayerSelector(!showLayerSelector)}
               title="Select map layer"
             >
-              <span className="material-symbols-rounded">layers</span>
+              <Icon name="layers" />
             </button>
 
             {showLayerSelector && (
@@ -1621,7 +1625,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             onClick={onSearchClick}
             title="Search POI or Coordinates"
           >
-            <span className="material-symbols-rounded">search</span>
+            <Icon name="search" />
           </button>
       </div>
       

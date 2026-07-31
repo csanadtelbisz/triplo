@@ -40,7 +40,8 @@
   justify-content: center;
 }
 
-.map-control-button .material-symbols-rounded {
+.map-control-button .material-symbols-rounded,
+.map-control-button .triplo-icon {
   font-size: 20px;
 }
 

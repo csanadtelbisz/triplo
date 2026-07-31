@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 65 65"
+   height="24px"
+   width="24px"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="horse.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="17.265191"
+     inkscape:cx="18.244803"
+     inkscape:cy="10.773122"
+     inkscape:window-width="1440"
+     inkscape:window-height="830"
+     inkscape:window-x="1913"
+     inkscape:window-y="-6"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g1" />
+  <g
+     id="g1">
+    <path
+       stroke="#000000"
+       stroke-width="1"
+       d="M 60.2,25.6 56.8,12 C 56.7,11.7 56.5,11.5 56.3,11.4 L 54.2,10.3 C 54,10.2 53.8,10.2 53.5,10.2 53,10.3 52.5,10.4 52,10.6 L 50.3,7.5 C 50,6.9 49.4,6.8 48.9,7 48.4,7.3 48.2,7.9 48.5,8.4 L 50,11.2 C 44.1,13.4 40,17.6 37.5,23.9 H 21.6 c -1.2,0 -2.3,0.3 -3.2,0.8 v 0 c -4,-1.4 -8.6,0 -11.1,3.5 L 6.1,29.9 C 4,32.8 3.7,36.6 5.2,39.7 l 1.2,2.5 c 0.2,0.3 0.5,0.6 0.9,0.6 v 0 c 0.4,0 0.7,-0.2 0.9,-0.6 l 3.5,-7.6 c 0.7,-1.5 1.8,-2.7 3.3,-3.5 v 25.862116 c 0,0.6 0.5,1 1,1 h 5.1 c 0.5,0 1,-0.4 1,-1 v -8 c 0,-3.8 3.1,-7 7,-7 h 7.6 c 3.8,0 7,3.1 7,7 v 8 c 0,0.6 0.5,1 1,1 h 5.1 c 0.5,0 1,-0.4 1,-1 V 24.4 l 4.6,4.7 c 0.4,0.4 0.9,0.4 1.3,0.1 L 60,26.7 c 0.2,-0.3 0.3,-0.7 0.2,-1.1 z m -36.180417,0.3 h 11.517362 v 7.680417 h -2.915379 v -4.041175 c 0,-0.5 -0.107833,-1 -0.607833,-1 -0.5,0 -0.725483,0.5 -0.725483,1 v 4.041175 L 28.2294,33.5412 v -4.041175 c 0,-0.5 -0.225483,-1 -0.725483,-1 -0.5,0 -0.686267,0.5 -0.686267,1 V 33.5412 l -2.798067,0.03922 z M 15.2,28.8 14.7,29 c -2.1,1 -3.8,2.7 -4.8,4.8 L 7.3,39.5 7,38.9 C 5.8,36.3 6.1,33.3 7.7,31.1 l 1.2,-1.7 c 1.8,-2.4 4.7,-3.6 7.6,-3.1 -0.6,0.8 -1,1.6 -1.3,2.5 z m 40.9,-1.7 -4.3,-4.4 c -0.3,-0.3 -0.8,-0.5 -1.3,-0.5 -1,0 -1.8,0.8 -1.8,1.8 v 31.962116 h -3.1 v -7 c 0,-4.9 -4,-9 -9,-9 H 29 c -5,0 -9,4 -9,9 v 7 H 17 V 30.5 c 0,-2.6 2.1,-4.6 4.6,-4.6 h 0.419583 v 8.680417 c 0,0.6 0.4,1 1,1 h 13.517362 c 0.5,0 1,-0.4 1,-1 V 25.9 H 38.2 c 0.4,0 0.8,-0.3 0.9,-0.7 2.6,-7.1 7.3,-11.4 14.4,-13 l 1.3,0.7 3.2,12.5 z"
+       id="path1"
+       sodipodi:nodetypes="sccccccccccsssccccsscccssssssssssssccccsccccsssccsssccccccccccccccssccssssccsscsssscsccccc"
+       style="stroke-width:2.35354167;stroke-dasharray:none" />
+  </g>
+</svg>

@@ -4,7 +4,7 @@ export const mockTrips: Trip[] = [
   {
     id: 'alps_road_trip_hike',
     name: 'Alps Road Trip & Hike',
-    description: 'A brief drive up the mountains, followed by a hike to the peak and a train back.',
+    description: 'A trolley bus trip up the mountains, followed by a hike to the peak and a train back.',
     startDate: '2025-06-15T08:00:00Z',
     endDate: '2025-06-16T18:00:00Z',
     createdAt: '2025-06-01T12:00:00Z',
@@ -12,9 +12,10 @@ export const mockTrips: Trip[] = [
     segments: [
       {
         id: 'seg-1',
-        transportMode: 'car',
-        routingService: 'GraphHopper Router',
-        routingProfile: 'car',
+        transportMode: 'other',
+        customIcon: 'trolley_bus',
+        routingService: 'Straight Line Router',
+        routingProfile: 'straight',
         source: 'router',
         waypoints: [
           { id: 'wp-1', coordinates: [11.3933, 47.2692], name: 'Innsbruck Hbf', icon: 'train' },

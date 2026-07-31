@@ -9,3 +9,16 @@ body, html, #root {
 * {
   box-sizing: border-box;
 }
+
+/* Custom SVGs use the same currentColor behaviour and sizing as Material Symbols. */
+.triplo-icon {
+  width: 1em;
+  height: 1em;
+  background-color: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
