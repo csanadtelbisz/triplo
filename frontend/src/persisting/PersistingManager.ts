@@ -1,11 +1,11 @@
 import type { PersistingService } from './PersistingService';
-import { GitHubPersistingService } from './GitHubPersistingService';
 import { GoogleDrivePersistingService } from './GoogleDrivePersistingService';
+import { GitHubPersistingService } from './GitHubPersistingService';
 
 export class PersistingManager {
   private services: PersistingService[] = [
+    new GoogleDrivePersistingService(),
     new GitHubPersistingService(),
-    new GoogleDrivePersistingService()
   ];
 
   getServices(): PersistingService[] {

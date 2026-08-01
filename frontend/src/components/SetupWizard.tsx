@@ -10,6 +10,10 @@ type SetupMode = 'new' | 'restore';
 type Step = 'welcome' | 'google-folder' | 'github' | 'api-keys';
 
 export function SetupWizard({ onComplete }: { onComplete: () => void }) {
+  const persistingServices = persistingManager.getServices();
+  const googleDriveService = persistingServices.find(service => service.name === 'Google Drive')!;
+  const githubService = persistingServices.find(service => service.name === 'GitHub')!;
+
   const [step, setStep] = useState<Step>('welcome');
   const [mode, setMode] = useState<SetupMode>('new');
   const [folderName, setFolderName] = useState(() => localStorage.getItem('gdrive_folder_name') || 'Triplo Trips');
@@ -29,10 +33,9 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   };
 
   const chooseGoogle = (selectedMode: SetupMode) => {
-    const service: any = persistingManager.getServices().find(candidate => candidate.name === 'Google Drive');
-    service?.getConnectionInstruction().onAction(async () => {
-      const existingTrips = selectedMode === 'restore' ? await service.load() : [];
-      const existingPreferences = selectedMode === 'restore' ? await service.loadPreferences?.() : null;
+    googleDriveService?.getConnectionInstruction().onAction(async () => {
+      const existingTrips = selectedMode === 'restore' ? await googleDriveService.load() : [];
+      const existingPreferences = selectedMode === 'restore' ? await googleDriveService.loadPreferences?.() : null;
       if (selectedMode === 'restore' && (existingTrips.length > 0 || existingPreferences) && !localStorage.getItem('gdrive_folder_name')) continueAfterStorage(selectedMode);
       else setStep('google-folder');
     });
@@ -57,15 +60,15 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
         <strong>Set up Triplo for the first time</strong>
         <span>Choose a storage service:</span>
         <div>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); chooseGoogle('new'); }}><img src="/src/assets/icons/google_drive.png" alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); setStep('github'); }}><img src="/src/assets/icons/github.png" alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); chooseGoogle('new'); }}><img src={googleDriveService.icon} alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); setStep('github'); }}><img src={githubService.icon} alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
         </div>
       </div>
       <div className="setup-option-group">
         <strong>Fetch existing Triplo setup</strong>
         <div>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); chooseGoogle('restore'); }}><img src="/src/assets/icons/google_drive.png" alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); setStep('github'); }}><img src="/src/assets/icons/github.png" alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); chooseGoogle('restore'); }}><img src={googleDriveService.icon} alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); setStep('github'); }}><img src={githubService.icon} alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
         </div>
       </div>
       <div className="setup-option-group">
