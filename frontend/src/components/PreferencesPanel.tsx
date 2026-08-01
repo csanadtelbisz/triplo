@@ -9,6 +9,8 @@ import type { BuiltInModesOverrides } from '../utils/builtInModesPreferences';
 import type { TransportMode } from '../../../shared/types';
 import { routingManager } from '../routing/RoutingService';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
+import { getPreferencesSyncStatus } from '../utils/preferencesSync';
+import { persistingManager } from '../persisting/PersistingManager';
 import { getStyleConfigs, saveStyleConfigs, DEFAULT_STYLE_SCRIPT, setActiveStyleConfigId } from '../utils/mapStylesPreferences';
 import type { RenderStyleConfig } from '../utils/mapStylesPreferences';
 import StyleConfigPanel from './StyleConfigPanel';
@@ -25,7 +27,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
   const [defaultReadOnly, setDefaultReadOnly] = useState(() => localStorage.getItem('defaultReadOnly') === 'true');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [preferencesSyncStatus, setPreferencesSyncStatus] = useState(getPreferencesSyncStatus);
 
   const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [showCustomModes, setShowCustomModes] = useState(() => getShowCustomModesInDefault());
@@ -57,7 +59,12 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     };
     
     window.addEventListener('preferences-updated', handlePreferencesUpdated);
-    return () => window.removeEventListener('preferences-updated', handlePreferencesUpdated);
+    const handleSyncStatus = () => setPreferencesSyncStatus(getPreferencesSyncStatus());
+    window.addEventListener('preferences-sync-status', handleSyncStatus);
+    return () => {
+      window.removeEventListener('preferences-updated', handlePreferencesUpdated);
+      window.removeEventListener('preferences-sync-status', handleSyncStatus);
+    };
   }, []);
 
   const updatePrefs = (newPrefs: string[]) => {
@@ -92,12 +99,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     }
     setAddingLang(false);
     setSelectedNewLang('');
-  };
-
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    await syncPreferencesToCloud(true);
-    setIsSyncing(false);
   };
 
   const handleSetHome = () => {
@@ -253,14 +254,21 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 className="status-panel-header-title">Preferences</h2>
-        <div className="status-panel-header-spacer"></div>
-        <button 
-          className="iconButton" 
-          onClick={handleManualSync} 
-          title="Backup Preferences"
-          disabled={isSyncing}
+        <button
+          className="iconButton"
+          disabled
+          title={persistingManager.getAvailableServices().length === 0
+            ? 'Preferences are not synced because no persisting service is connected'
+            : preferencesSyncStatus === 'pending' ? 'Preferences will sync shortly'
+            : preferencesSyncStatus === 'syncing' ? 'Syncing preferences'
+            : preferencesSyncStatus === 'error' ? 'Preferences could not be synced'
+            : 'Preferences are synced'}
         >
-          <MaterialIcon name={isSyncing ? "sync" : "backup"} size={20} className={isSyncing ? "rotating" : ""} />
+          <MaterialIcon
+            name={persistingManager.getAvailableServices().length === 0 ? 'sync_disabled' : preferencesSyncStatus === 'pending' || preferencesSyncStatus === 'syncing' ? 'sync' : 'cloud_done'}
+            size={20}
+            className={preferencesSyncStatus === 'pending' || preferencesSyncStatus === 'syncing' ? 'spinning' : ''}
+          />
         </button>
       </div>
 

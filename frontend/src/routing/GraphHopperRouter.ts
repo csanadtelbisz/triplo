@@ -1,18 +1,34 @@
 import type { TransportMode } from '../../../shared/types';
 import type { IRoutingService } from './RoutingService';
+import type { ApiKeyTestResult } from './RoutingService';
 import iconUrl from '../assets/icons/graphhopper.png';
+import { getApiKey, GRAPHHOPPER_API_CONFIGURATION } from '../utils/apiKeyPreferences';
 
 export class GraphHopperRouter implements IRoutingService {
   name = 'GraphHopper Router';
   icon = iconUrl;
-  private apiKey: string;
-
-  constructor() {
-    this.apiKey = import.meta.env.VITE_GRAPHHOPPER_API_KEY || '';
+  isAvailable(): boolean {
+    const apiKey = getApiKey('graphHopperApiKey');
+    return !!apiKey && apiKey !== 'your_graphhopper_api_key_here';
   }
 
-  isAvailable(): boolean {
-    return !!this.apiKey && this.apiKey !== 'your_graphhopper_api_key_here';
+  getApiKeyConfiguration() {
+    return GRAPHHOPPER_API_CONFIGURATION;
+  }
+
+  async testApiKey(apiKey: string): Promise<ApiKeyTestResult> {
+    try {
+      const url = new URL('https://graphhopper.com/api/1/geocode');
+      url.searchParams.set('q', 'Prague');
+      url.searchParams.set('limit', '1');
+      url.searchParams.set('key', apiKey);
+      const response = await fetch(url);
+      if (response.ok) return { ok: true, status: response.status };
+      const body = await response.json().catch(() => null);
+      return { ok: false, status: response.status, message: body?.message || response.statusText };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Network request failed' };
+    }
   }
 
   getAttribution() {
@@ -59,7 +75,7 @@ export class GraphHopperRouter implements IRoutingService {
     for (let i = 0; i < waypoints.length - 1; i += 4) {
       const chunk = waypoints.slice(i, i + 5);
       
-      const url = `https://graphhopper.com/api/1/route?key=${this.apiKey}`;
+      const url = `https://graphhopper.com/api/1/route?key=${getApiKey('graphHopperApiKey')}`;
       const payload: any = {
         points: chunk,
         profile: profile,

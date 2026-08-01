@@ -366,7 +366,7 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
 
       <div style={{ fontSize: '0.85rem', marginBottom: '12px', color: '#555' }}>
         <b>Security Best Practice:</b> Triplo runs purely in your browser, meaning it must store your access token locally.
-        For your safety, <b>do not use a Classic Token</b>. Instead, generate a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Fine-grained Personal Access Token</a>:<br />
+        For security, <b>do not use a Classic Token</b>. Instead, generate a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Fine-grained Personal Access Token</a>:<br />
         <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
           <li><b>Repository access:</b> Select <i>"Only select repositories"</i> and choose your target repository.</li>
           <li><b>Permissions:</b> Under <i>Repository permissions</i>, grant <b>Read and Write</b> access to <i>Contents</i>.</li>
@@ -374,19 +374,6 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label htmlFor="github_token" style={{ width: '100px', fontSize: '0.85rem', fontWeight: 600 }}>Access Token:</label>
-          <input
-            id="github_token"
-            name="github_token"
-            autoComplete="new-password"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="ghp_..."
-            style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
-        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <label htmlFor="github_repo" style={{ width: '100px', fontSize: '0.85rem', fontWeight: 600 }}>Repository:</label>
           <input
@@ -397,6 +384,19 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
             value={repo}
             onChange={(e) => setRepo(e.target.value)}
             placeholder="username/triplo-trips"
+            style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label htmlFor="github_token" style={{ width: '100px', fontSize: '0.85rem', fontWeight: 600 }}>Access Token:</label>
+          <input
+            id="github_token"
+            name="github_token"
+            autoComplete="new-password"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="ghp_..."
             style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
           />
         </div>

@@ -4,9 +4,21 @@ import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault,
 import { getBuiltInModeOverrides, saveBuiltInModeOverrides } from './builtInModesPreferences';
 import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './mapStylesPreferences';
 import { getTripListPreferences, saveTripListPreferences } from './tripListPreferences';
+import { getApiKeyPreferences, saveApiKeyPreferences } from './apiKeyPreferences';
 import type { RenderStyleConfig } from './mapStylesPreferences';
 
 let syncTimeout: any;
+let preferencesSyncStatus: 'idle' | 'pending' | 'syncing' | 'synced' | 'error' | 'unavailable' = 'idle';
+let preferencesDirty = false;
+
+const setPreferencesSyncStatus = (status: typeof preferencesSyncStatus, dirty = preferencesDirty) => {
+  preferencesSyncStatus = status;
+  preferencesDirty = dirty;
+  window.dispatchEvent(new Event('preferences-sync-status'));
+};
+
+export const getPreferencesSyncStatus = () => preferencesSyncStatus;
+export const hasUnsyncedPreferences = () => preferencesDirty;
 
 interface SyncedStyleConfigMetadata {
   id: string;
@@ -108,6 +120,11 @@ async function loadStyleConfigScripts(styleConfigurations: SyncedStyleConfigurat
 
 export const syncPreferencesToCloud = async (immediate = false) => {
   const doSync = async () => {
+    if (persistingManager.getAvailableServices().length === 0) {
+      setPreferencesSyncStatus('unavailable', true);
+      return;
+    }
+    setPreferencesSyncStatus('syncing', true);
     try {
       const previousPrefs = await persistingManager.loadPreferences();
       const styleConfigurations = getSyncedStyleConfigs();
@@ -121,11 +138,14 @@ export const syncPreferencesToCloud = async (immediate = false) => {
         builtInModes: getBuiltInModeOverrides(),
         homePosition: localStorage.getItem('homeMapPosition') ? JSON.parse(localStorage.getItem('homeMapPosition')!) : null,
         tripList: getTripListPreferences(),
+        apiKeys: getApiKeyPreferences(),
         styleConfigurations
       };
       await persistingManager.savePreferences(prefs);
+      setPreferencesSyncStatus('synced', false);
     } catch (e) {
       console.error('Failed to sync preferences to cloud:', e);
+      setPreferencesSyncStatus('error', true);
     }
   };
 
@@ -136,6 +156,7 @@ export const syncPreferencesToCloud = async (immediate = false) => {
     }
     await doSync();
   } else {
+    setPreferencesSyncStatus('pending', true);
     if (syncTimeout) {
       clearTimeout(syncTimeout);
     }
@@ -185,6 +206,15 @@ export const loadPreferencesFromCloud = async (): Promise<boolean> => {
         const nextTripList = JSON.stringify(prefs.tripList);
         if (nextTripList !== previousTripList) {
           saveTripListPreferences(prefs.tripList);
+          changed = true;
+        }
+      }
+
+      if (prefs.apiKeys) {
+        const previousApiKeys = JSON.stringify(getApiKeyPreferences());
+        const nextApiKeys = JSON.stringify(prefs.apiKeys);
+        if (nextApiKeys !== previousApiKeys) {
+          saveApiKeyPreferences(prefs.apiKeys);
           changed = true;
         }
       }

@@ -24,10 +24,11 @@ import { StatusPanel } from './components/StatusPanel';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import { persistingManager } from './persisting/PersistingManager';
-import { loadPreferencesFromCloud } from './utils/preferencesSync';
+import { hasUnsyncedPreferences, loadPreferencesFromCloud } from './utils/preferencesSync';
 import { resolvePOIName } from './utils/poiUtils';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
+import { SetupWizard } from './components/SetupWizard';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 
@@ -100,6 +101,7 @@ export default function App() {
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
+  const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0);
 
   const stripMeta = (t: Trip) => {
     const copy: any = { ...t };
@@ -513,6 +515,16 @@ export default function App() {
   const unsavedTripIds = new Set(
     trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t)).map(t => t.id)
   );
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (unsavedTripIds.size === 0 && !hasUnsyncedPreferences()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [unsavedTripIds.size]);
 
   const handleResolveConflict = async (tripId: string, acceptedVersion: Trip) => {
     // 1. collect all sources involved
@@ -1026,6 +1038,7 @@ export default function App() {
           />
         )}
       </div>
+      {showSetupWizard && <SetupWizard onComplete={() => { setShowSetupWizard(false); loadTrips(); }} />}
       <Map isReadOnly={isReadOnly}
         ref={mapComponentRef}
         trips={trips}

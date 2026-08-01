@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import '../styles/Dialog.css';
 
@@ -8,6 +8,7 @@ interface DialogProps {
   children: React.ReactNode;
   actions?: React.ReactNode;
   onClose: () => void;
+  className?: string;
 }
 
 export function Dialog({
@@ -15,15 +16,27 @@ export function Dialog({
   title,
   children,
   actions,
-  onClose
+  onClose,
+  className
 }: DialogProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return createPortal(
     <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
+      <div className={`dialog-content${className ? ` ${className}` : ''}`} onClick={(e) => e.stopPropagation()}>
         <h3 className="dialog-title">{title}</h3>
-        <div className="dialog-message">{children}</div>
+        <div className="dialog-message" style={{ marginBottom: actions ? '24px' : '0' }}>
+          {children}
+        </div>
         {actions && (
           <div className="dialog-actions">
             {actions}

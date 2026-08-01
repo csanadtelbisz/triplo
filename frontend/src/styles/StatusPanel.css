@@ -50,6 +50,21 @@
   border: 1px solid #e9ecef;
 }
 
+.status-panel-card.configurable {
+  cursor: pointer;
+}
+
+.status-panel-card.configurable:hover {
+  background: #f0f0f0;
+}
+
+.status-panel-configure-button {
+  align-self: flex-start;
+  margin: 8px 0 0 32px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
 .status-panel-card-header {
   display: flex;
   align-items: center;

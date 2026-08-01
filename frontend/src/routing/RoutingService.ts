@@ -4,6 +4,7 @@ import { StraightLineRouter } from './StraightLineRouter';
 import { GraphHopperRouter } from './GraphHopperRouter';
 import { RailRouter } from './RailRouter';
 import { MapyRouter } from './MapyRouter';
+import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 
 export interface IRoutingService {
   name: string;
@@ -12,6 +13,14 @@ export interface IRoutingService {
   isAvailable: () => boolean;
   getAttribution: () => { text: string; link?: string } | undefined;
   getRoutingProfiles: (mode: TransportMode) => string[];
+  getApiKeyConfiguration?: () => ApiKeyServiceConfiguration | undefined;
+  testApiKey?: (apiKey: string) => Promise<ApiKeyTestResult>;
+}
+
+export interface ApiKeyTestResult {
+  ok: boolean;
+  status?: number;
+  message?: string;
 }
 
 export interface DefaultRouter {

@@ -7,7 +7,7 @@ import '../styles/Map.css';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getModeColor } from '../utils/builtInModesPreferences';
 import * as turf from '@turf/turf';
-import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD } from '../config/mapStyles';
+import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD, getMapStyleUrl } from '../config/mapStyles';
 import { getPOIEmoji } from '../utils/poiUtils';
 import { getCustomOtherModes } from '../utils/customModesPreferences';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
@@ -1480,9 +1480,19 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
   useEffect(() => {
     if (mapRef.current && mapLoaded) {
-      const styleConfig = MAP_STYLES[activeMapStyle].url;
+      const styleConfig = getMapStyleUrl(activeMapStyle);
       mapRef.current.setStyle(styleConfig);
     }
+  }, [activeMapStyle, mapLoaded]);
+
+  useEffect(() => {
+    const refreshMapyStyle = () => {
+      if (activeMapStyle === 'mapy_outdoor' && mapRef.current && mapLoaded) {
+        mapRef.current.setStyle(getMapStyleUrl(activeMapStyle));
+      }
+    };
+    window.addEventListener('preferences-updated', refreshMapyStyle);
+    return () => window.removeEventListener('preferences-updated', refreshMapyStyle);
   }, [activeMapStyle, mapLoaded]);
 
   return (

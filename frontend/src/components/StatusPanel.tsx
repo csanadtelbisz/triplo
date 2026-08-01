@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import { routingManager } from '../routing/RoutingService';
-import { MAP_STYLES } from '../config/mapStyles';
+import type { ApiKeyTestResult } from '../routing/RoutingService';
+import { MAP_STYLES, getMapStyleUrl } from '../config/mapStyles';
 import { persistingManager } from '../persisting/PersistingManager';
 
 import type { Trip } from '../../../shared/types';
 import { PersistingConfigDialog } from './PersistingConfigDialog';
+import { ApiKeyDialog } from './ApiKeyDialog';
+import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 
 interface StatusPanelProps {
   onGoBack: () => void;
@@ -18,18 +21,40 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
   const persistingServices = persistingManager.getServices();
 
   const [mapStatuses, setMapStatuses] = useState<Record<string, 'pending' | 'success' | 'error'>>({});
-  const [, setUpdateTick] = useState(0);
+  const [updateTick, setUpdateTick] = useState(0);
   const [configuringService, setConfiguringService] = useState<any>(null);
+  const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
+  const [apiKeyTester, setApiKeyTester] = useState<((apiKey: string) => Promise<ApiKeyTestResult>) | undefined>();
+
+  const openApiKeyConfiguration = (configuration: ApiKeyServiceConfiguration, tester?: (apiKey: string) => Promise<ApiKeyTestResult>) => {
+    setApiKeyConfiguration(configuration);
+    setApiKeyTester(() => tester);
+  };
+
+  const getApiKeyTester = (configuration: ApiKeyServiceConfiguration) => {
+    const service = services.find(candidate => candidate.getApiKeyConfiguration?.()?.preferenceKey === configuration.preferenceKey);
+    return service?.testApiKey?.bind(service);
+  };
+
+  const configurePersistingService = (service: any) => {
+    if (service.isAvailable()) {
+      setConfiguringService(service);
+      return;
+    }
+    const instruction = service.getConnectionInstruction();
+    instruction.onAction(() => setUpdateTick(Date.now()), () => setConfiguringService(service));
+  };
 
   useEffect(() => {
-    Object.entries(MAP_STYLES).forEach(([key, style]) => {
+    Object.keys(MAP_STYLES).forEach((key) => {
       let pingUrl = '';
-      if (typeof style.url === 'string') {
-        pingUrl = style.url;
+      const styleUrl = getMapStyleUrl(key);
+      if (typeof styleUrl === 'string') {
+        pingUrl = styleUrl;
       } else {
-        const sourceKeys = Object.keys(style.url.sources);
+        const sourceKeys = Object.keys(styleUrl.sources);
         if (sourceKeys.length > 0) {
-          const source = style.url.sources[sourceKeys[0]];
+          const source = styleUrl.sources[sourceKeys[0]];
           if (source.tiles && source.tiles.length > 0) {
             pingUrl = source.tiles[0].replace('{z}', '0').replace('{x}', '0').replace('{y}', '0');
           }
@@ -49,6 +74,12 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
       }
     });
 
+  }, [updateTick]);
+
+  useEffect(() => {
+    const refreshStatuses = () => setUpdateTick(Date.now());
+    window.addEventListener('preferences-updated', refreshStatuses);
+    return () => window.removeEventListener('preferences-updated', refreshStatuses);
   }, []);
 
   return (
@@ -68,7 +99,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
             const available = service.isAvailable();
             const instruction = service.getConnectionInstruction();
             return (
-              <div key={idx} className="status-panel-card">
+              <div key={idx} className={`status-panel-card ${available ? 'configurable' : ''}`} onClick={available ? () => configurePersistingService(service) : undefined}>
                 <div className={`status-panel-card-header ${!available ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
                     <img
@@ -86,14 +117,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                     <span className="status-panel-card-title">{service.name}</span>
                   </div>
                   {available ? (
-                    <button
-                      className="iconButton"
-                      onClick={() => setConfiguringService(service)}
-                      title={`Configure ${service.name}`}
-                      style={{ marginLeft: 'auto', padding: '4px', cursor: 'pointer' }}
-                    >
-                      <MaterialIcon name="settings" size={20} />
-                    </button>
+                    <span className="status-panel-badge success">Connected</span>
                   ) : (
                     <span className="status-panel-badge unavailable">Unavailable</span>
                   )}
@@ -101,14 +125,12 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                 {!available && (
                   <div className="status-panel-attribution" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <span dangerouslySetInnerHTML={{ __html: instruction.htmlDescription }} />
-                    <button
-                      className="dialog-btn dialog-btn-primary"
-                        onClick={() => instruction.onAction(() => setUpdateTick(Date.now()), () => setConfiguringService(service))}
-                      style={{ alignSelf: 'flex-start', padding: '4px 12px', fontSize: '0.85rem' }}
-                    >
-                      {instruction.actionButtonLabel}
-                    </button>
                   </div>
+                )}
+                {!available && (
+                  <button className="dialog-btn dialog-btn-primary status-panel-configure-button" onClick={() => configurePersistingService(service)}>
+                    Configure {service.name}
+                  </button>
                 )}
               </div>
             );
@@ -120,8 +142,9 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
           {services.map((service: any, idx: number) => {
             const available = service.isAvailable();
             const attr = service.getAttribution();
+            const configuration = service.getApiKeyConfiguration?.();
             return (
-              <div key={idx} className="status-panel-card">
+              <div key={idx} className={`status-panel-card ${configuration && available ? 'configurable' : ''}`} onClick={configuration && available ? () => openApiKeyConfiguration(configuration, service.testApiKey?.bind(service)) : undefined}>
                 <div className={`status-panel-card-header ${attr ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
                     {service.icon ? (
@@ -161,6 +184,11 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                     )}
                   </div>
                 )}
+                {!available && configuration && (
+                  <button className="dialog-btn dialog-btn-primary status-panel-configure-button" onClick={(event) => { event.stopPropagation(); openApiKeyConfiguration(configuration, service.testApiKey?.bind(service)); }}>
+                    Configure {service.name.replace(' Router', '')}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -170,17 +198,19 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
         <div className="status-panel-list">
           {Object.entries(MAP_STYLES).map(([key, style]) => {
             const status = mapStatuses[key] || 'pending';
+            const configuration = style.apiKeyConfiguration;
+            const styleUrl = getMapStyleUrl(key);
             
             let htmlAttribution = style.attribution || '';
-            if (!htmlAttribution && typeof style.url !== 'string') {
-              const sourceKeys = Object.keys(style.url.sources);
-              if (sourceKeys.length > 0 && style.url.sources[sourceKeys[0]].attribution) {
-                htmlAttribution = style.url.sources[sourceKeys[0]].attribution;
+            if (!htmlAttribution && typeof styleUrl !== 'string') {
+              const sourceKeys = Object.keys(styleUrl.sources);
+              if (sourceKeys.length > 0 && styleUrl.sources[sourceKeys[0]].attribution) {
+                htmlAttribution = styleUrl.sources[sourceKeys[0]].attribution;
               }
             }
 
             return (
-              <div key={key} className="status-panel-card">
+              <div key={key} className={`status-panel-card ${configuration && status === 'success' ? 'configurable' : ''}`} onClick={configuration && status === 'success' ? () => openApiKeyConfiguration(configuration, getApiKeyTester(configuration)) : undefined}>
                 <div className={`status-panel-card-header ${htmlAttribution ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
                     {style.icon ? (
@@ -205,7 +235,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                     )}
                     <span className="status-panel-card-title">{style.name}</span>
                   </div>
-                  <span className={`status-panel-badge ${status === 'success' ? 'success' : status === 'error' ? 'error' : 'pending'}`}>
+                  <span className={`status-panel-badge ${status === 'success' ? 'success' : status === 'error' ? 'unavailable' : 'pending'}`}>
                     {status === 'pending' ? 'Pinging...' : status === 'success' ? 'Available' : 'Unavailable'}
                   </span>
                 </div>
@@ -214,6 +244,11 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                     className="status-panel-attribution"
                     dangerouslySetInnerHTML={{ __html: htmlAttribution }} 
                   />
+                )}
+                {status === 'error' && configuration && (
+                  <button className="dialog-btn dialog-btn-primary status-panel-configure-button" onClick={(event) => { event.stopPropagation(); openApiKeyConfiguration(configuration, getApiKeyTester(configuration)); }}>
+                    Configure {style.name}
+                  </button>
                 )}
               </div>
             );
@@ -227,6 +262,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
         onClose={() => setConfiguringService(null)} 
         onUpdateTrips={onUpdateTrips}
       />
+      <ApiKeyDialog key={apiKeyConfiguration?.preferenceKey} configuration={apiKeyConfiguration} testApiKey={apiKeyTester} onClose={() => { setApiKeyConfiguration(null); setApiKeyTester(undefined); }} />
     </>
   );
 }

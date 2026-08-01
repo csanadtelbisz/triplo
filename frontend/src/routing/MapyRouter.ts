@@ -1,18 +1,32 @@
 import type { TransportMode } from '../../../shared/types';
 import type { IRoutingService } from './RoutingService';
+import type { ApiKeyTestResult } from './RoutingService';
 import iconUrl from '../assets/icons/mapy.png';
+import { getApiKey, MAPY_API_CONFIGURATION } from '../utils/apiKeyPreferences';
 
 export class MapyRouter implements IRoutingService {
   name = 'Mapy Router';
   icon = iconUrl;
-  private apiKey: string;
-
-  constructor() {
-    this.apiKey = import.meta.env.VITE_MAPY_API_KEY || '';
+  isAvailable(): boolean {
+    return !!getApiKey('mapyApiKey');
   }
 
-  isAvailable(): boolean {
-    return !!this.apiKey;
+  getApiKeyConfiguration() {
+    return MAPY_API_CONFIGURATION;
+  }
+
+  async testApiKey(apiKey: string): Promise<ApiKeyTestResult> {
+    try {
+      const url = new URL('https://api.mapy.com/v1/timezone/timezone');
+      url.searchParams.set('apikey', apiKey);
+      url.searchParams.set('timezone', 'Europe/Prague');
+      const response = await fetch(url);
+      if (response.ok) return { ok: true, status: response.status };
+      const body = await response.json().catch(() => null);
+      return { ok: false, status: response.status, message: body?.message || response.statusText };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Network request failed' };
+    }
   }
 
   getAttribution() {
@@ -64,7 +78,7 @@ export class MapyRouter implements IRoutingService {
       const intermediate = chunk.slice(1, chunk.length - 1);
       
       const url = new URL('https://api.mapy.cz/v1/routing/route');
-      url.searchParams.set('apikey', this.apiKey);
+      url.searchParams.set('apikey', getApiKey('mapyApiKey'));
       url.searchParams.set('start', `${start[0]},${start[1]}`);
       url.searchParams.set('end', `${end[0]},${end[1]}`);
       url.searchParams.set('routeType', profile);
@@ -115,7 +129,8 @@ export class MapyRouter implements IRoutingService {
   }
 
   private async fetchElevations(coords: [number, number][]): Promise<[number, number, number][]> {
-    if (!this.apiKey || coords.length === 0) return coords as any;
+    const apiKey = getApiKey('mapyApiKey');
+    if (!apiKey || coords.length === 0) return coords as any;
 
     const CHUNK_SIZE = 256;
     const result: [number, number, number][] = [];
@@ -124,7 +139,7 @@ export class MapyRouter implements IRoutingService {
       const chunk = coords.slice(i, i + CHUNK_SIZE);
       
       const url = new URL('https://api.mapy.cz/v1/elevation');
-      url.searchParams.set('apikey', this.apiKey);
+      url.searchParams.set('apikey', apiKey);
       chunk.forEach(c => url.searchParams.append('positions', `${c[0]},${c[1]}`));
 
       try {

@@ -30,7 +30,7 @@
 }
 
 .dialog-message {
-  margin: 0 0 24px 0;
+  margin: 0;
   font-size: 0.95rem;
   color: #555;
   line-height: 1.5;
@@ -40,6 +40,117 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.dialog-content.api-key-dialog {
+  max-width: 780px!important;
+}
+
+.dialog-content.setup-dialog {
+  max-width: 540px;
+}
+
+.dialog-content * {
+  text-decoration: none;
+}
+
+.setup-option-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  border-top: 1px solid #eee;
+}
+
+.setup-option-group .dialog-btn {
+  width: 160px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-option-group:first-of-type {
+  border-top: 0;
+}
+
+.setup-option-group > div {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    justify-content: center;
+}
+
+.setup-option-group small {
+  color: #666;
+}
+
+.setup-folder-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-folder-input input,
+.setup-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0;
+  font-weight: 600;
+}
+
+.setup-divider {
+  border: 0;
+  border-top: 1px solid #eee;
+  margin: 20px 0;
+}
+
+.api-key-dialog-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.api-key-dialog-grid a {
+  text-decoration: none;
+}
+
+.api-key-test-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+
+.api-key-test-status.success {
+  color: #198754;
+}
+
+.api-key-test-status.warning {
+  color: #9a6700;
+}
+
+.api-key-test-status.pending {
+  color: #666;
+}
+
+@media (max-width: 640px) {
+  .api-key-dialog-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dialog-btn {

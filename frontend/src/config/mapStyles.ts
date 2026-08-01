@@ -2,8 +2,9 @@ import mapyIcon from '../assets/icons/mapy.png';
 import openfreemapIcon from '../assets/icons/openfreemap.png';
 import openstreetmapIcon from '../assets/icons/openstreetmap.png';
 import opentopomapIcon from '../assets/icons/opentopomap.png';
+import { getApiKey, MAPY_API_CONFIGURATION } from '../utils/apiKeyPreferences';
+import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 
-const mapyApiKey = import.meta.env.VITE_MAPY_API_KEY || '';
 
 export const MARKER_HIDE_THRESHOLD = 30;
 
@@ -107,16 +108,17 @@ export const POI_LAYERS: any[] = [
   }
 ];
 
-export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: string, icon?: string }> = {
+export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: string, icon?: string, apiKeyConfiguration?: ApiKeyServiceConfiguration }> = {
   mapy_outdoor: {
     name: 'Mapy.com',
     icon: mapyIcon,
+    apiKeyConfiguration: MAPY_API_CONFIGURATION,
     url: {
       version: 8,
       sources: {
         mapy: {
           type: 'raster',
-          tiles: [`https://api.mapy.com/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${mapyApiKey}`],
+          tiles: ['https://api.mapy.com/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey={triploApiKey}'],
           tileSize: 256,
           attribution: '&copy; <a href="https://api.mapy.com/copyright" target="_blank" rel="noreferrer">Seznam.cz a.s. and others</a>'
         }
@@ -146,7 +148,7 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
           type: 'raster',
           tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
           tileSize: 256,
-          attribution: '&copy; OpenStreetMap Contributors'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> Contributors'
         }
       },
       layers: [
@@ -168,7 +170,7 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
           type: 'raster',
           tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png'],
           tileSize: 256,
-          attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+          attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>, <a href="https://www2.jpl.nasa.gov/srtm/" target="_blank" rel="noreferrer">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org/" target="_blank" rel="noreferrer">OpenTopoMap (CC-BY-SA)</a>'
         }
       },
       layers: [
@@ -181,3 +183,18 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
     }
   }
 };
+
+export function getMapStyleUrl(styleId: string) {
+  const style = MAP_STYLES[styleId];
+  if (styleId !== 'mapy_outdoor' || typeof style?.url === 'string') return style?.url;
+  return {
+    ...style.url,
+    sources: {
+      ...style.url.sources,
+      mapy: {
+        ...style.url.sources.mapy,
+        tiles: [`https://api.mapy.com/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${getApiKey('mapyApiKey')}`],
+      },
+    },
+  };
+}
