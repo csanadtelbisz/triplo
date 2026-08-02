@@ -1038,7 +1038,7 @@ export default function App() {
           />
         )}
       </div>
-      {showSetupWizard && <SetupWizard onComplete={() => { setShowSetupWizard(false); loadTrips(); }} />}
+      {showSetupWizard && <SetupWizard onComplete={() => { setShowSetupWizard(false); }} onStartBackgroundSync={loadTrips} />}
       <Map isReadOnly={isReadOnly}
         ref={mapComponentRef}
         trips={trips}

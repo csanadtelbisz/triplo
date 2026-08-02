@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Dialog } from './Dialog';
+import { MaterialIcon } from './MaterialIcon';
 import { ApiKeyConfigurationSection } from './ApiKeyDialog';
 import { GRAPHHOPPER_API_CONFIGURATION, MAPY_API_CONFIGURATION, getApiKeyPreferences, saveApiKeyPreferences } from '../utils/apiKeyPreferences';
+import { loadPreferencesFromCloud } from '../utils/preferencesSync';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
 import { persistingManager } from '../persisting/PersistingManager';
 import { routingManager } from '../routing/RoutingService';
 
 type SetupMode = 'new' | 'restore';
-type Step = 'welcome' | 'google-folder' | 'github' | 'api-keys';
+type Step = 'welcome' | 'fetching' | 'google-folder' | 'github' | 'api-keys';
 
-export function SetupWizard({ onComplete }: { onComplete: () => void }) {
+export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete: () => void; onStartBackgroundSync: () => void | Promise<void> }) {
   const persistingServices = persistingManager.getServices();
   const googleDriveService = persistingServices.find(service => service.name === 'Google Drive')!;
   const githubService = persistingServices.find(service => service.name === 'GitHub')!;
@@ -27,6 +29,34 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
     else finish();
   };
 
+  const fetchSetupAndContinue = async (selectedMode: SetupMode, connection: 'google' | 'github') => {
+    setStep('fetching');
+    void Promise.resolve(onStartBackgroundSync()).catch(error => {
+      console.error('Background trip reload failed after authentication:', error);
+    });
+
+    await loadPreferencesFromCloud();
+
+    if (connection === 'google') {
+      const [existingTrips, existingPreferences] = await Promise.all([
+        googleDriveService.load(),
+        googleDriveService.loadPreferences?.()
+      ]);
+
+      if (selectedMode === 'restore' && existingTrips.length === 0 && !existingPreferences) {
+        setStep('google-folder');
+        return;
+      }
+
+      if (selectedMode === 'new') {
+        setStep('google-folder');
+        return;
+      }
+    }
+
+    continueAfterStorage(selectedMode);
+  };
+
   const finish = () => {
     syncPreferencesToCloud(true);
     onComplete();
@@ -34,19 +64,28 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
 
   const chooseGoogle = (selectedMode: SetupMode) => {
     googleDriveService?.getConnectionInstruction().onAction(async () => {
-      const existingTrips = selectedMode === 'restore' ? await googleDriveService.load() : [];
-      const existingPreferences = selectedMode === 'restore' ? await googleDriveService.loadPreferences?.() : null;
-      if (selectedMode === 'restore' && (existingTrips.length > 0 || existingPreferences) && !localStorage.getItem('gdrive_folder_name')) continueAfterStorage(selectedMode);
-      else setStep('google-folder');
+      await fetchSetupAndContinue(selectedMode, 'google');
     });
   };
 
-  const saveGitHub = () => {
+  const saveGitHub = async () => {
     if (!repo.trim() || !token.trim()) return;
     localStorage.setItem('github_repo', repo.trim());
     localStorage.setItem('github_token', token.trim());
-    continueAfterStorage();
+    await fetchSetupAndContinue(mode, 'github');
   };
+
+  if (step === 'fetching') {
+    return <Dialog isOpen title="Fetching setup" onClose={onComplete} className="setup-dialog">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <MaterialIcon name="sync" size={24} className="spinning" />
+        <div>
+          <p style={{ margin: 0 }}>Please wait while Triplo loads your setup.</p>
+          <small>Trip sync starts automatically in the background.</small>
+        </div>
+      </div>
+    </Dialog>;
+  }
 
   const saveApiKeys = () => {
     saveApiKeyPreferences(apiKeys);

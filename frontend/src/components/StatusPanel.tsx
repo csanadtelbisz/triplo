@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import { routingManager } from '../routing/RoutingService';
+import type { IRoutingService } from '../routing/RoutingService';
 import type { ApiKeyTestResult } from '../routing/RoutingService';
 import { MAP_STYLES, getMapStyleUrl } from '../config/mapStyles';
 import { persistingManager } from '../persisting/PersistingManager';
+import type { PersistingService } from '../persisting/PersistingService';
 
 import type { Trip } from '../../../shared/types';
 import { PersistingConfigDialog } from './PersistingConfigDialog';
 import { ApiKeyDialog } from './ApiKeyDialog';
+import { ConfirmDialog } from './Dialog';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 
 interface StatusPanelProps {
@@ -22,9 +25,10 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
 
   const [mapStatuses, setMapStatuses] = useState<Record<string, 'pending' | 'success' | 'error'>>({});
   const [updateTick, setUpdateTick] = useState(0);
-  const [configuringService, setConfiguringService] = useState<any>(null);
+  const [configuringService, setConfiguringService] = useState<PersistingService | null>(null);
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const [apiKeyTester, setApiKeyTester] = useState<((apiKey: string) => Promise<ApiKeyTestResult>) | undefined>();
+  const [showClearBrowserDataDialog, setShowClearBrowserDataDialog] = useState(false);
 
   const openApiKeyConfiguration = (configuration: ApiKeyServiceConfiguration, tester?: (apiKey: string) => Promise<ApiKeyTestResult>) => {
     setApiKeyConfiguration(configuration);
@@ -36,13 +40,62 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
     return service?.testApiKey?.bind(service);
   };
 
-  const configurePersistingService = (service: any) => {
+  const configurePersistingService = (service: PersistingService) => {
     if (service.isAvailable()) {
       setConfiguringService(service);
       return;
     }
     const instruction = service.getConnectionInstruction();
     instruction.onAction(() => setUpdateTick(Date.now()), () => setConfiguringService(service));
+  };
+
+  const clearTriploBrowserData = async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    if ('indexedDB' in window) {
+      if (typeof indexedDB.databases === 'function') {
+        try {
+          const databases = await indexedDB.databases();
+          await Promise.all(databases.map(database => database.name ? new Promise<void>(resolve => {
+            const request = indexedDB.deleteDatabase(database.name!);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          }) : Promise.resolve()));
+        } catch (error) {
+          console.warn('IndexedDB database enumeration failed; falling back to known Triplo database cleanup.', error);
+        }
+      }
+
+      await new Promise<void>(resolve => {
+        const request = indexedDB.deleteDatabase('TriploDB');
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+        request.onblocked = () => resolve();
+      });
+    }
+
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      } catch (error) {
+        console.warn('Failed to clear Cache Storage:', error);
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+      } catch (error) {
+        console.warn('Failed to unregister service workers:', error);
+      }
+    }
+
+    window.dispatchEvent(new Event('preferences-updated'));
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -95,7 +148,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
       <div className="content status-panel-content">
         <h3 className="status-panel-section-title first">Persisting Services</h3>
         <div className="status-panel-list">
-          {persistingServices.map((service: any, idx: number) => {
+          {persistingServices.map((service: PersistingService, idx: number) => {
             const available = service.isAvailable();
             const instruction = service.getConnectionInstruction();
             return (
@@ -139,7 +192,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
 
         <h3 className="status-panel-section-title second">Routing Services</h3>
         <div className="status-panel-list">
-          {services.map((service: any, idx: number) => {
+          {services.map((service: IRoutingService, idx: number) => {
             const available = service.isAvailable();
             const attr = service.getAttribution();
             const configuration = service.getApiKeyConfiguration?.();
@@ -254,6 +307,24 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
             );
           })}
         </div>
+
+        <h3 className="status-panel-section-title second">Browser data</h3>
+        <div className="status-panel-list">
+          <div className="status-panel-card">
+            <div className="status-panel-card-header no-margin">
+              <div className="status-panel-card-title-container">
+                <MaterialIcon name="delete_forever" size={20} className="status-panel-icon unavailable" />
+                <span className="status-panel-card-title">Browser storage used by Triplo</span>
+              </div>
+            </div>
+            <div className="status-panel-attribution" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span>Clear local Triplo data from this browser, including saved trips and preferences stored outside your cloud service(s).</span>
+            </div>
+            <button className="dialog-btn dialog-btn-confirm status-panel-configure-button" onClick={() => setShowClearBrowserDataDialog(true)}>
+              Clean Triplo browser data
+            </button>
+          </div>
+        </div>
       </div>
 
       <PersistingConfigDialog 
@@ -263,6 +334,20 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
         onUpdateTrips={onUpdateTrips}
       />
       <ApiKeyDialog key={apiKeyConfiguration?.preferenceKey} configuration={apiKeyConfiguration} testApiKey={apiKeyTester} onClose={() => { setApiKeyConfiguration(null); setApiKeyTester(undefined); }} />
+      <ConfirmDialog
+        isOpen={showClearBrowserDataDialog}
+        title="Clean Browser Data"
+        message={
+          <p style={{ margin: 0 }}>
+            Are you sure you want to clear all data that Triplo stores in your browser? Your trips and preferences might be lost if you do not have them backed up.
+          </p>
+        }
+        confirmLabel="Clear"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+        onConfirm={clearTriploBrowserData}
+        onCancel={() => setShowClearBrowserDataDialog(false)}
+      />
     </>
   );
 }

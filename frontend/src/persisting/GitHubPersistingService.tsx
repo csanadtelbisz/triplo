@@ -276,6 +276,13 @@ export class GitHubPersistingService implements PersistingService {
     await this.deleteTextFile(path, `Delete Triplo preference file ${path}`);
   }
 
+  async disconnect(): Promise<void> {
+    localStorage.removeItem('github_token');
+    localStorage.removeItem('github_repo');
+    window.dispatchEvent(new Event('preferences-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
   isAvailable(): boolean {
     return !!localStorage.getItem('github_token') && !!localStorage.getItem('github_repo');
   }

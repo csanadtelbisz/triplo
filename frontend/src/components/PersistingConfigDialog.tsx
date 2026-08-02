@@ -15,6 +15,7 @@ interface PersistingConfigDialogProps {
 export function PersistingConfigDialog({ service, trips, onClose, onUpdateTrips }: PersistingConfigDialogProps) {
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncingMap, setSyncingMap] = useState<Record<string, boolean>>({});
+  const [disconnecting, setDisconnecting] = useState(false);
 
   if (!service) return null;
 
@@ -65,15 +66,37 @@ export function PersistingConfigDialog({ service, trips, onClose, onUpdateTrips 
     }
   };
 
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await service.disconnect();
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert(`Failed to disconnect from ${service.name}.`);
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   return (
     <Dialog
       isOpen={!!service}
       title={`${service.name} Configuration`}
       onClose={onClose}
       actions={
-        <button className="dialog-btn dialog-btn-cancel" onClick={onClose}>
-          Close
-        </button>
+        <>
+          <button
+            className="dialog-btn dialog-btn-confirm"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+          >
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+          </button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={onClose}>
+            Close
+          </button>
+        </>
       }
     >
       <div style={{ marginBottom: '24px' }}>

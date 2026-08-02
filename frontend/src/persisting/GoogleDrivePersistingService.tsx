@@ -376,6 +376,22 @@ export class GoogleDrivePersistingService implements PersistingService {
     }
   }
 
+  async disconnect(): Promise<void> {
+    const token = this.getAccessToken();
+    localStorage.removeItem('gdrive_access_token');
+    localStorage.removeItem('gdrive_token_expires_at');
+    this.tokenClient = null;
+
+    if (token && google?.accounts?.oauth2?.revoke) {
+      await new Promise<void>(resolve => {
+        google.accounts.oauth2.revoke(token, () => resolve());
+      });
+    }
+
+    window.dispatchEvent(new Event('preferences-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
   isAvailable(): boolean {
     return this.getAccessToken() !== null;
   }

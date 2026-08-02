@@ -35,6 +35,11 @@
   cursor: default;
 }
 
+.spinning {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
 .content {
   flex: 1;
   overflow-y: auto;
@@ -112,4 +117,13 @@
   border-radius: 4px;
   background: #f9f9f9;
   margin-bottom: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

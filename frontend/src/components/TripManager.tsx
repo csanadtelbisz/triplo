@@ -67,8 +67,11 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
 
   const handleReload = async () => {
     setIsReloading(true);
-    await onReloadTrips();
-    setIsReloading(false);
+    try {
+      await onReloadTrips();
+    } finally {
+      setIsReloading(false);
+    }
   };
 
   const availablePersistingServices = persistingManager.getAvailableServices();
@@ -184,8 +187,8 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button className="iconButton" onClick={handleReload} title="Reload from all services">
-              <MaterialIcon name="sync" size={20} className={isReloading ? "spinning" : ""} />
+            <button className="iconButton" onClick={handleReload} title="Reload from all services" disabled={isReloading || isTripsLoading}>
+              <MaterialIcon name="sync" size={20} className={isReloading || isTripsLoading ? "spinning" : ""} />
             </button>
             <div ref={sortMenuRef} style={{ position: 'relative' }}>
               <button className="iconButton" onClick={() => setShowSortMenu(open => !open)} title="Display and sort trips" aria-label="Display and sort trips">

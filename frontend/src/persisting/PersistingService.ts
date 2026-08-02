@@ -42,6 +42,9 @@ export interface PersistingService {
   // delete an auxiliary synced preference file, such as a removed style script
   deletePreferenceFile?(path: string): Promise<void>;
 
+  // disconnect from the service and clear the local connection state
+  disconnect(): Promise<void>;
+
   // check if the service is currently available
   isAvailable(): boolean;
 
