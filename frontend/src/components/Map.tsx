@@ -1090,7 +1090,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       targetTrips.forEach(trip => {
         trip.segments.forEach(seg => {
           const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
-          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive) || userStyle?.hidden) return;
+          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive && userStyle?.hidden !== false) || userStyle?.hidden) return;
           
           let opacity = 1.0;
           if (!isUnselectedState && effectiveSelectedSegmentId && effectiveSelectedSegmentId !== seg.id) {
@@ -1125,7 +1125,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
           const userSegStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
-          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive) || userSegStyle?.hidden) return;
+          if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive && userSegStyle?.hidden !== false) || userSegStyle?.hidden) return;
           const currSegColor = userSegStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {
             if (!wp.coordinates || wp.coordinates.length < 2) return;
