@@ -6,6 +6,7 @@ import trolleyBusUrl from '../assets/custom-icons/trolley_bus.svg';
 import horseUrl from '../assets/custom-icons/horse.svg';
 import skiTourUrl from '../assets/custom-icons/ski_tour.svg';
 import mountainPassUrl from '../assets/custom-icons/mountain_pass.svg';
+import caveUrl from '../assets/custom-icons/cave.svg';
 
 /**
  * Add custom SVGs here. Callers only use the icon name, regardless of its source.
@@ -15,6 +16,7 @@ export const CUSTOM_ICONS: Readonly<Record<string, string>> = {
   horse: horseUrl,
   ski_tour: skiTourUrl,
   mountain_pass: mountainPassUrl,
+  cave: caveUrl,
 };
 
 export type IconProps = Omit<ComponentPropsWithoutRef<'span'>, 'children'> & {

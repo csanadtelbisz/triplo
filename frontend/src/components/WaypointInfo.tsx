@@ -99,10 +99,10 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
         </div>
       </div>
       <div className="content">
-        <div className="form-group">
+        {/* <div className="form-group">
           <label className="form-label">ID (Read-only)</label>
           <input type="text" readOnly value={wp.id} className="form-input" />
-        </div>
+        </div> */}
         <div className="form-group">
            <label className="form-label">Name</label>
            <input 
@@ -116,34 +116,6 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                  const newSegments = trip.segments.map(s => ({
                    ...s,
                    waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, name: e.target.value } : w)
-                 }));
-                 onUpdateTrip({ ...trip, segments: newSegments });
-               }
-             }}
-           />
-        </div>
-        <div className="form-group">
-           <label className="form-label">Date</label>
-           <input 
-             key={`wpdate-${wp.date || ''}`}
-             type="datetime-local" 
-             defaultValue={wp.date ? wp.date.slice(0, 16) : ''} 
-             disabled={isReadOnly}
-             className="form-input" 
-           />
-        </div>
-        <div className="form-group">
-           <label className="form-label">Description</label>
-           <textarea 
-             key={`wpdesc-${wp.description || ''}`}
-             defaultValue={wp.description || ''} 
-             disabled={isReadOnly}
-             className="form-textarea" 
-             onBlur={(e) => {
-               if (e.target.value !== (wp?.description || '')) {
-                 const newSegments = trip.segments.map(s => ({
-                   ...s,
-                   waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, description: e.target.value } : w)
                  }));
                  onUpdateTrip({ ...trip, segments: newSegments });
                }
@@ -234,6 +206,34 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                <MaterialIcon name="close" size={20} />
              </button>
            </div>
+        </div>
+        <div className="form-group">
+           <label className="form-label">Date</label>
+           <input 
+             key={`wpdate-${wp.date || ''}`}
+             type="datetime-local" 
+             defaultValue={wp.date ? wp.date.slice(0, 16) : ''} 
+             disabled={isReadOnly}
+             className="form-input" 
+           />
+        </div>
+        <div className="form-group">
+           <label className="form-label">Description</label>
+           <textarea 
+             key={`wpdesc-${wp.description || ''}`}
+             defaultValue={wp.description || ''} 
+             disabled={isReadOnly}
+             className="form-textarea" 
+             onBlur={(e) => {
+               if (e.target.value !== (wp?.description || '')) {
+                 const newSegments = trip.segments.map(s => ({
+                   ...s,
+                   waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, description: e.target.value } : w)
+                 }));
+                 onUpdateTrip({ ...trip, segments: newSegments });
+               }
+             }}
+           />
         </div>
         <div className="form-row align-end">
            <div className="form-col">

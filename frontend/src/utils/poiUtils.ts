@@ -2,7 +2,9 @@
 
 export const SUGGESTED_WAYPOINT_ICONS = [
   'landscape',
+  'mountain_pass',
   'water',
+  'cave',
   'beach_access',
   'location_city',
   'house',
