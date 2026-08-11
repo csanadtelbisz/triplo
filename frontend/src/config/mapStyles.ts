@@ -120,7 +120,7 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
           type: 'raster',
           tiles: ['https://api.mapy.com/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey={triploApiKey}'],
           tileSize: 256,
-          attribution: '&copy; <a href="https://api.mapy.com/copyright" target="_blank" rel="noreferrer">Seznam.cz a.s. and others</a>'
+          attribution: '&copy; <a href="https://api.mapy.com/copyright" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Seznam.cz a.s. and others</a>'
         }
       },
       layers: [
