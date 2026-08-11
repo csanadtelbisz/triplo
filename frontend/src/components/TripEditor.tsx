@@ -4,14 +4,16 @@ import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../.
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getModeColor, getModeName, getModeRoutingProfile } from '../utils/builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
+import type { PersistingService } from '../persisting/PersistingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { Dialog } from './Dialog';
-import { exportTripGPX, exportTripGeoJSON, downloadFile } from '../utils/exportUtils';
+import { exportTripGPX, downloadFile } from '../utils/exportUtils';
 import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
 import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
 import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { TransportMode } from '../../../shared/types';
+import { slugify } from '../utils/slugify';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -35,17 +37,22 @@ interface TripEditorProps {
   onWaitingForCoords: (waypointId: string | null) => void;
   allTrips?: Trip[];
   isSidebarCollapsed?: boolean;
+  isSharedTripView?: boolean;
   onSelectTrip?: (trip: Trip) => void;
+  availablePersistingServices?: PersistingService[];
+  onPersistTrip?: (trip: Trip) => Promise<void> | void;
 }
 
 const tripEditorScrollPositions: Record<string, number> = {};
 
 export function TripEditor({
-  isReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
+  isReadOnly: propIsReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
-  onWaitingForCoords, allTrips, isSidebarCollapsed, onSelectTrip
+  onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistTrip
 }: TripEditorProps) {
+  const isSharedTrip = !!trip.metadata?.shareLink;
+  const isReadOnly = propIsReadOnly || isSharedTrip;
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -60,14 +67,22 @@ export function TripEditor({
   const [isWpSearching, setIsWpSearching] = useState(false);
   const [swipeAnim, setSwipeAnim] = useState<{ direction: 'left' | 'right', phase: 'out' | 'in' } | null>(null);
 
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'gpx' | 'geojson'>('gpx');
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isShareServicePickerOpen, setIsShareServicePickerOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState(() => trip.metadata?.shareLink || '');
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
-  const [exportMinify, setExportMinify] = useState(false);
   const [openTransportModeMenuSegmentId, setOpenTransportModeMenuSegmentId] = useState<string | null>(null);
 
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [showCustomModes] = useState(() => getShowCustomModesInDefault());
+
+  useEffect(() => {
+    setShareLink(trip.metadata?.shareLink || '');
+    setShareError(null);
+    setIsSharing(false);
+  }, [trip.id, trip.metadata?.shareLink]);
 
   useEffect(() => {
     if (!openTransportModeMenuSegmentId) return;
@@ -106,6 +121,94 @@ export function TripEditor({
     await onSave();
     setIsSaving(false);
   };
+
+  const shareUrl = shareLink ? `${window.location.origin}/share/${shareLink}` : '';
+
+  const persistTripLocally = async (nextTrip: Trip) => {
+    await onPersistTrip?.(nextTrip);
+  };
+
+  const updateSharedTripState = async (nextTrip: Trip) => {
+    onUpdateTrip(nextTrip);
+    await persistTripLocally(nextTrip);
+  };
+
+  const createCopyTrip = async () => {
+    const copyId = `${slugify(trip.name, allTrips?.map(existing => existing.id) || [])}_${Math.random().toString(36).slice(2, 8)}`;
+    const copyTrip: Trip = {
+      ...structuredClone(trip),
+      id: copyId,
+      metadata: (() => {
+        const metadata = { ...(trip.metadata || {}) };
+        delete (metadata as any).shareLink;
+        delete (metadata as any).sharedService;
+        return metadata;
+      })()
+    };
+    await persistTripLocally(copyTrip);
+  };
+
+  const handleShareTrip = async (service: PersistingService) => {
+    setIsSharing(true);
+    setShareError(null);
+    try {
+      const encodedShareLink = await service.shareTrip(trip);
+      const nextTrip: Trip = {
+        ...trip,
+        metadata: {
+          ...(trip.metadata || {}),
+          shareLink: encodedShareLink,
+          sharedService: service.name
+        }
+      };
+      await updateSharedTripState(nextTrip);
+    } catch (error) {
+      console.error(error);
+      setShareError(`Failed to share trip with ${service.name}.`);
+    } finally {
+      setIsSharing(false);
+      setIsShareServicePickerOpen(false);
+    }
+  };
+
+  const handleDisableShare = async () => {
+    if (!shareLink) return;
+    setIsSharing(true);
+    setShareError(null);
+    const service = availablePersistingServices.find(candidate => candidate.name === trip.metadata?.sharedService);
+    try {
+      if (service) {
+        await service.revokeShare(shareLink);
+      } else {
+        await Promise.all(availablePersistingServices.map(candidate => candidate.revokeShare(shareLink)));
+      }
+      const nextMetadata = { ...(trip.metadata || {}) };
+      delete (nextMetadata as any).shareLink;
+      delete (nextMetadata as any).sharedService;
+      await updateSharedTripState({ ...trip, metadata: nextMetadata });
+    } catch (error) {
+      console.error(error);
+      setShareError('Failed to disable sharing for this trip.');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleEnableShare = async () => {
+    const available = availablePersistingServices;
+    if (available.length === 0) {
+      setShareError('Connect a persisting service before sharing a trip.');
+      return;
+    }
+    if (available.length === 1) {
+      await handleShareTrip(available[0]);
+      return;
+    }
+    setShareError(null);
+    setIsShareServicePickerOpen(true);
+  };
+
+  const canSaveSharedTripLocally = isSharedTrip && isSharedTripView && !!onPersistTrip;
   
   const [dragRender, setDragRender] = useState<{
     activeId: string;
@@ -815,7 +918,7 @@ export function TripEditor({
            {!isReadOnly && <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>}
            {!isReadOnly && <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>}
            {!(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
-             <button className="iconButton" title="Export Trip" onClick={() => setIsExportDialogOpen(true)}><MaterialIcon name="file_download" size={20} /></button>
+             <button className="iconButton" title="Share Trip" onClick={() => setIsShareDialogOpen(true)}><MaterialIcon name="share" size={20} /></button>
            )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
            {isReadOnly ? (
@@ -823,7 +926,7 @@ export function TripEditor({
                className="iconButton"
                title="Turn Off Read-Only Mode"
                onClick={onToggleReadOnly}
-               disabled={!onToggleReadOnly}
+               disabled={!onToggleReadOnly || isSharedTrip}
              >
                <MaterialIcon name="lock" size={20} />
              </button>
@@ -845,6 +948,16 @@ export function TripEditor({
                style={{ color: isSaving ? 'inherit' : '#007bff' }}
              >
                <MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} />
+             </button>
+           )}
+           {canSaveSharedTripLocally && (
+             <button className="iconButton" title="Save the trip to my trips" onClick={() => persistTripLocally(trip)}>
+               <MaterialIcon name="bookmark_add" size={20} />
+             </button>
+           )}
+           {canSaveSharedTripLocally && (
+             <button className="iconButton" title="Create a copy in my trips" onClick={() => createCopyTrip()}>
+               <MaterialIcon name="content_copy" size={20} />
              </button>
            )}
         </div>
@@ -1402,73 +1515,81 @@ export function TripEditor({
       </div>
 
       <Dialog
-        isOpen={isExportDialogOpen}
-        title="Export Trip"
-        onClose={() => setIsExportDialogOpen(false)}
+        isOpen={isShareDialogOpen}
+        title="Share Trip"
+        onClose={() => setIsShareDialogOpen(false)}
+        className="setup-dialog"
         actions={
-          <>
-            <button className="dialog-btn dialog-btn-cancel" onClick={() => setIsExportDialogOpen(false)}>Cancel</button>
-            <button className="dialog-btn dialog-btn-primary" onClick={() => {
-              const content = exportFormat === 'gpx' 
-                ? exportTripGPX(trip, exportIncludeMetadata) 
-                : exportTripGeoJSON(trip, exportIncludeMetadata, exportMinify);
-              const filename = `${trip.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'trip'}.${exportFormat}`;
-              const mimeType = exportFormat === 'gpx' ? 'application/gpx+xml' : 'application/geo+json';
-              downloadFile(content, filename, mimeType);
-              setIsExportDialogOpen(false);
-            }}>Export</button>
-          </>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => setIsShareDialogOpen(false)}>Close</button>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Format</label>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                <input 
-                  type="radio" 
-                  name="exportFormat" 
-                  value="gpx" 
-                  checked={exportFormat === 'gpx'} 
-                  onChange={() => setExportFormat('gpx')} 
-                /> GPX
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                <input 
-                  type="radio" 
-                  name="exportFormat" 
-                  value="geojson" 
-                  checked={exportFormat === 'geojson'} 
-                  onChange={() => setExportFormat('geojson')} 
-                /> GeoJSON
-              </label>
-            </div>
-            {exportFormat === 'geojson' && (
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={exportMinify} 
-                    onChange={(e) => setExportMinify(e.target.checked)} 
-                  />
-                  <span>Minify output (no pretty printing)</span>
-                </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <section>
+            <h4 style={{ margin: '0 0 8px', fontSize: '1rem' }}>Sharing</h4>
+            {shareError && <p style={{ color: '#d9534f', margin: '0 0 12px' }}>{shareError}</p>}
+            {isSharing && (
+              <div className="sharing-status">
+                <MaterialIcon name="sync" size={18} className="spinning" />
+                <span>{shareLink ? 'Updating sharing...' : 'Activating sharing...'}</span>
               </div>
             )}
-          </div>
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={exportIncludeMetadata} 
-                onChange={(e) => setExportIncludeMetadata(e.target.checked)} 
+            {shareLink ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <input readOnly value={shareUrl} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button className="dialog-btn dialog-btn-primary" onClick={() => navigator.clipboard.writeText(shareUrl)}>Copy Link</button>
+                  <button className="dialog-btn dialog-btn-confirm" onClick={handleDisableShare} disabled={isSharing}>Disable Share</button>
+                </div>
+              </div>
+            ) : (
+              <button className="dialog-btn dialog-btn-primary" onClick={handleEnableShare} disabled={isSharing}>Enable Share</button>
+            )}
+          </section>
+
+          <hr className="setup-divider" />
+
+          <section>
+            <h4 style={{ margin: '0 0 8px', fontSize: '1rem' }}>Download as GPX</h4>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={exportIncludeMetadata}
+                onChange={(e) => setExportIncludeMetadata(e.target.checked)}
               />
               <span>Include Application Metadata</span>
             </label>
-            <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '4px', marginLeft: '24px' }}>
-              Includes Triplo-specific data like colors, custom icons, and other rich information.
-            </div>
-          </div>
+            <button className="dialog-btn dialog-btn-primary" onClick={() => {
+              const content = exportTripGPX(trip, exportIncludeMetadata);
+              const filename = `${trip.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'trip'}.gpx`;
+              downloadFile(content, filename, 'application/gpx+xml');
+            }}>Download GPX</button>
+          </section>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={isShareServicePickerOpen}
+        title="Choose Sharing Service"
+        onClose={() => setIsShareServicePickerOpen(false)}
+        className="setup-dialog"
+        actions={<button className="dialog-btn dialog-btn-cancel" onClick={() => setIsShareServicePickerOpen(false)}>Cancel</button>}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {availablePersistingServices.map(service => (
+            <button
+              key={service.name}
+              className="dialog-btn dialog-btn-primary"
+              onClick={() => {
+                setIsShareServicePickerOpen(false);
+                void handleShareTrip(service);
+              }}
+              disabled={isSharing}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}
+            >
+              {service.icon && <img src={service.icon} alt={service.name} width={18} height={18} style={{ display: 'block', objectFit: 'contain' }} />}
+              <span>{service.name}</span>
+            </button>
+          ))}
         </div>
       </Dialog>
       <CopySectionMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer()} onCancel={cancelSectionMetadataOffer} />

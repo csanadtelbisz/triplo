@@ -247,6 +247,7 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tripListPreferences.displayMode === 'detailed' ? '8px' : 0 }}>
                 <h3 className="trip-card-title" style={{ margin: 0, fontStyle: isUnsaved ? 'italic' : 'normal', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {trip.name} 
+                  {trip.metadata?.shareLink && <MaterialIcon name="share" size={16} title="Shared trip" style={{ color: '#6c757d' }} />}
                   {isConflicted ? (
                     <span title="Conflicts found between devices/services" style={{ color: '#d9534f' }}>•</span>
                   ) : isUnsaved ? (

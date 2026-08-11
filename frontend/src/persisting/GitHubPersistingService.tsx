@@ -3,13 +3,22 @@ import type { ReactNode } from 'react';
 import type { PersistingService, ConnectionInstruction } from './PersistingService';
 import type { Trip } from '../../../shared/types';
 import githubIcon from '../assets/icons/github.png';
+import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
 
 export class GitHubPersistingService implements PersistingService {
-  name = 'GitHub';
+  name = 'GitHub' as const;
   icon = githubIcon;
 
+  private getAuthToken() {
+    return localStorage.getItem('github_token');
+  }
+
+  private getShareToken() {
+    return localStorage.getItem('github_share_token') || this.getAuthToken();
+  }
+
   private async request(url: string, options: RequestInit = {}) {
-    const token = localStorage.getItem('github_token');
+    const token = this.getAuthToken();
     if (!token) throw new Error('GitHub token missing');
 
     const response = await fetch(`https://api.github.com${url}`, {
@@ -38,16 +47,40 @@ export class GitHubPersistingService implements PersistingService {
     return decodeURIComponent(escape(atob(value.replace(/\s/g, ''))));
   }
 
+  private parseTripContent(content: string): Trip | null {
+    try {
+      return JSON.parse(content) as Trip;
+    } catch {
+      try {
+        const normalized = content
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\');
+        return JSON.parse(normalized) as Trip;
+      } catch (error) {
+        console.error('Failed to parse GitHub shared trip content:', error);
+        return null;
+      }
+    }
+  }
+
   private async loadTextFile(path: string): Promise<string | null> {
     if (!this.isAvailable()) return null;
     const repo = this.getRepo();
     try {
-      const res = await this.request(`/repos/${repo}/contents/${path}`);
+      // Request the raw file bytes directly instead of the default JSON+base64
+      // representation. The Contents API only populates `content` for files up
+      // to 1MB; for 1-100MB files you must request the raw media type to get
+      // the actual data back.
+      const res = await this.request(`/repos/${repo}/contents/${path}`, {
+        headers: { 'Accept': 'application/vnd.github.raw+json' }
+      });
       if (res.status === 404 || res.status === 409) return null;
       if (!res.ok) throw new Error(`Failed to load ${path}: ${res.statusText}`);
 
-      const fileData = await res.json();
-      return this.decodeUtf8Base64(fileData.content);
+      return await res.text();
     } catch (e) {
       console.error(`GitHubPersistingService.loadTextFile failed for ${path}:`, e);
       return null;
@@ -276,9 +309,98 @@ export class GitHubPersistingService implements PersistingService {
     await this.deleteTextFile(path, `Delete Triplo preference file ${path}`);
   }
 
+  async shareTrip(trip: Trip): Promise<string> {
+    const token = this.getShareToken();
+    if (!token) throw new Error('GitHub share token missing');
+    const fileName = `${trip.id}.triplo.json`;
+    const response = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        description: `Triplo shared trip ${trip.name || trip.id}`,
+        public: false,
+        files: {
+          [fileName]: {
+            content: JSON.stringify(trip, null, 2)
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create GitHub gist share: ${response.status} ${await response.text()}`);
+    }
+
+    const gist = await response.json();
+    return encodeSharePayload({
+      service: this.name,
+      data: gist.id
+    });
+  }
+
+  async revokeShare(shareLink: string): Promise<void> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return;
+
+    const token = this.getShareToken();
+    if (!token) return;
+
+    await fetch(`https://api.github.com/gists/${payload.data}`, {
+      method: 'DELETE',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+  }
+
+  async fetchSharedTrip(shareLink: string): Promise<Trip | null> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return null;
+
+    try {
+      const response = await fetch(`https://api.github.com/gists/${payload.data}`, { cache: 'no-store' });
+      if (!response.ok) return null;
+
+      const gist = await response.json();
+      const files = gist.files
+        ? Object.values(gist.files) as Array<{ raw_url?: string; content?: string; truncated?: boolean }>
+        : [];
+      const firstFile = files[0];
+      if (!firstFile) return null;
+
+      // GitHub's Gist API only inlines up to 1MB of a file's content.
+      // For larger files it sets truncated: true, and `content` will be a
+      // cut-off (invalid) fragment — we must fetch raw_url for the full text.
+      if (firstFile.content && !firstFile.truncated) {
+        const parsed = this.parseTripContent(firstFile.content);
+        if (parsed) return parsed;
+        // Fall through to raw_url even if truncated wasn't set but parsing
+        // still failed, as a safety net.
+      }
+
+      if (!firstFile.raw_url) return null;
+      const rawResponse = await fetch(firstFile.raw_url, { cache: 'no-store' });
+      if (!rawResponse.ok) return null;
+      return this.parseTripContent(await rawResponse.text());
+    } catch (error) {
+      console.error('Failed to fetch shared GitHub trip:', error);
+      return null;
+    }
+  }
+
   async disconnect(): Promise<void> {
     localStorage.removeItem('github_token');
     localStorage.removeItem('github_repo');
+    localStorage.removeItem('github_share_token');
     window.dispatchEvent(new Event('preferences-updated'));
     window.dispatchEvent(new Event('storage'));
   }
@@ -307,10 +429,14 @@ export class GitHubPersistingService implements PersistingService {
 export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHubPersistingService, trips: Trip[], onUpdateTrips?: (trips: Trip[]) => void }) {
   const [token, setToken] = useState('');
   const [repo, setRepo] = useState('');
+  const [shareToken, setShareToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [showShareToken, setShowShareToken] = useState(false);
   
   useEffect(() => {
     setToken(localStorage.getItem('github_token') || '');
     setRepo(localStorage.getItem('github_repo') || '');
+    setShareToken(localStorage.getItem('github_share_token') || '');
   }, []);
 
   const handleSaveConfig = async () => {
@@ -343,6 +469,7 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
 
     localStorage.setItem('github_token', cleanToken);
     localStorage.setItem('github_repo', cleanRepo);
+    localStorage.setItem('github_share_token', shareToken.trim());
 
     try {
       const remoteTrips = await service.load();
@@ -381,8 +508,8 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label htmlFor="github_repo" style={{ width: '100px', fontSize: '0.85rem', fontWeight: 600 }}>Repository:</label>
+        <div>
+          <label htmlFor="github_repo" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }}>Repository</label>
           <input
             id="github_repo"
             name="github_repo"
@@ -391,21 +518,44 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
             value={repo}
             onChange={(e) => setRepo(e.target.value)}
             placeholder="username/triplo-trips"
-            style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc', height: '32px' }}
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label htmlFor="github_token" style={{ width: '100px', fontSize: '0.85rem', fontWeight: 600 }}>Access Token:</label>
-          <input
-            id="github_token"
-            name="github_token"
-            autoComplete="new-password"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="ghp_..."
-            style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
+        <div>
+          <label htmlFor="github_token" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }}>Access Token</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              id="github_token"
+              name="github_token"
+              autoComplete="new-password"
+              type={showToken ? 'text' : 'password'}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="ghp_..."
+              style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+            <button type="button" className="iconButton" onClick={() => setShowToken(visible => !visible)} title={showToken ? 'Hide access token' : 'Show access token'} aria-label={showToken ? 'Hide access token' : 'Show access token'}>
+              <span className="material-symbols-rounded" style={{ fontSize: '16px'}}>{showToken ? 'visibility_off' : 'visibility'}</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="github_share_token" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600 }}>Share Token</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              id="github_share_token"
+              name="github_share_token"
+              autoComplete="new-password"
+              type={showShareToken ? 'text' : 'password'}
+              value={shareToken}
+              onChange={(e) => setShareToken(e.target.value)}
+              placeholder="Optional"
+              style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+            <button type="button" className="iconButton" onClick={() => setShowShareToken(visible => !visible)} title={showShareToken ? 'Hide share token' : 'Show share token'} aria-label={showShareToken ? 'Hide share token' : 'Show share token'}>
+              <span className="material-symbols-rounded" style={{ fontSize: '16px'}}>{showShareToken ? 'visibility_off' : 'visibility'}</span>
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
           <button className="dialog-btn dialog-btn-primary" onClick={handleSaveConfig}>

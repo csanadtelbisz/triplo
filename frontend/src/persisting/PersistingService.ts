@@ -42,6 +42,15 @@ export interface PersistingService {
   // delete an auxiliary synced preference file, such as a removed style script
   deletePreferenceFile?(path: string): Promise<void>;
 
+  // create a public share for a trip and return an encoded share reference
+  shareTrip(trip: Trip): Promise<string>;
+
+  // revoke a previously created public share reference
+  revokeShare(shareLink: string): Promise<void>;
+
+  // fetch a shared trip from an encoded share reference
+  fetchSharedTrip(shareLink: string): Promise<Trip | null>;
+
   // disconnect from the service and clear the local connection state
   disconnect(): Promise<void>;
 

@@ -119,6 +119,16 @@
   margin-bottom: 0;
 }
 
+.sharing-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f8f9fa;
+  color: #444;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);

@@ -1,4 +1,5 @@
 import type { PersistingService } from './PersistingService';
+import type { Trip } from '../../../shared/types';
 import { GoogleDrivePersistingService } from './GoogleDrivePersistingService';
 import { GitHubPersistingService } from './GitHubPersistingService';
 
@@ -127,6 +128,19 @@ export class PersistingManager {
         await service.deletePreferenceFile(path);
       }
     }
+  }
+
+  async fetchSharedTrip(shareLink: string): Promise<Trip | null> {
+    for (const service of this.services) {
+      const trip = await service.fetchSharedTrip(shareLink);
+      if (trip) {
+        trip.metadata = trip.metadata || {};
+        trip.metadata.shareLink = shareLink;
+        trip.metadata.sharedService = service.name;
+        return trip;
+      }
+    }
+    return null;
   }
 }
 

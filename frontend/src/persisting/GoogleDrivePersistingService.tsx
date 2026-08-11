@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { Trip } from '../../../shared/types';
 import type { PersistingService, ConnectionInstruction } from './PersistingService';
 import gdriveIcon from '../assets/icons/google_drive.png';
+import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -10,7 +11,7 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 declare const google: any;
 
 export class GoogleDrivePersistingService implements PersistingService {
-  name = 'Google Drive';
+  name = 'Google Drive' as const;
   icon = gdriveIcon;
 
   private tokenClient: any = null;
@@ -158,6 +159,16 @@ export class GoogleDrivePersistingService implements PersistingService {
       })
     });
     return createRes.id;
+  }
+
+  private async findTripFile(tripId: string): Promise<{ fileId: string; fileName: string } | null> {
+    const folderId = await this.getOrCreateFolder();
+    const fileName = `${tripId}.triplo.json`;
+    const safeName = fileName.replace(/'/g, "\\'");
+    const q = encodeURIComponent(`'${folderId}' in parents and name='${safeName}' and trashed=false`);
+    const res = await this.request(`files?q=${q}&spaces=drive&fields=files(id, name)`);
+    if (!res.files || res.files.length === 0) return null;
+    return { fileId: res.files[0].id, fileName };
   }
 
   private splitPreferencePath(path: string) {
@@ -373,6 +384,57 @@ export class GoogleDrivePersistingService implements PersistingService {
     } catch (e) {
       console.error(`Failed to delete preference file ${path} from Google Drive:`, e);
       throw e;
+    }
+  }
+
+  async shareTrip(trip: Trip): Promise<string> {
+    const fileName = `${trip.id}.triplo.json`;
+    await this.save(trip);
+    const file = await this.findTripFile(trip.id);
+    if (!file) throw new Error(`Could not locate ${fileName} for sharing.`);
+
+    await this.request(`files/${file.fileId}/permissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'anyone', role: 'reader', allowFileDiscovery: false })
+    });
+
+    return encodeSharePayload({
+      service: this.name,
+      data: file.fileId
+    });
+  }
+
+  async revokeShare(shareLink: string): Promise<void> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return;
+
+    try {
+      const permissions = await this.request(`files/${payload.data}/permissions?fields=permissions(id,type,role,allowFileDiscovery)`);
+      const matches = Array.isArray(permissions.permissions)
+        ? permissions.permissions.filter((permission: any) => permission.type === 'anyone')
+        : [];
+
+      for (const permission of matches) {
+        await this.request(`files/${payload.data}/permissions/${permission.id}`, { method: 'DELETE' });
+      }
+    } catch (error) {
+      console.error('Failed to revoke Google Drive share:', error);
+    }
+  }
+
+  async fetchSharedTrip(shareLink: string): Promise<Trip | null> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return null;
+
+    try {
+      const fileData = await fetch(`https://drive.google.com/uc?export=download&id=${payload.data}`, { cache: 'no-store' });
+      if (!fileData.ok) return null;
+      const text = await fileData.text();
+      return JSON.parse(text) as Trip;
+    } catch (error) {
+      console.error('Failed to fetch shared Google Drive trip:', error);
+      return null;
     }
   }
 

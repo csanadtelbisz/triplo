@@ -32,6 +32,11 @@ import { SetupWizard } from './components/SetupWizard';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 
+const getSharedTripTokenFromPath = () => {
+  const match = window.location.pathname.match(/^\/share\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('TriploDB', 1);
@@ -56,7 +61,7 @@ const saveTripCache = async (trips: Trip[]) => {
     const tx = db.transaction('trips', 'readwrite');
     const store = tx.objectStore('trips');
     store.put(cached, TRIP_CACHE_KEY);
-  } catch(e) { console.warn("Cache save failed", e); }
+  } catch (error) { console.warn("Cache save failed", error); }
 };
 
 const getTripCache = async (): Promise<Trip[]> => {
@@ -69,7 +74,8 @@ const getTripCache = async (): Promise<Trip[]> => {
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);
     });
-  } catch(e) { }
+  } catch {
+  }
   return [];
 };
 
@@ -101,7 +107,9 @@ export default function App() {
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
-  const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0);
+  const [sharedTripError, setSharedTripError] = useState<string | null>(null);
+  const [isViewingSharedTrip, setIsViewingSharedTrip] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0 && !getSharedTripTokenFromPath());
 
   const stripMeta = (t: Trip) => {
     const copy: any = { ...t };
@@ -205,7 +213,8 @@ export default function App() {
           await new Promise(resolve => setTimeout(resolve, 0));
           
           const existing = oldCache.find(t => t.id === trip.id);
-          const { _isCached, ...freshMetadata } = trip.metadata || { _isCached: false };
+          const freshMetadata = { ...(trip.metadata || {}) };
+          delete (freshMetadata as any)._isCached;
           if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary) {
              cachedTrips.push({
                 ...existing,
@@ -233,6 +242,23 @@ export default function App() {
     } finally {
       setIsLoadingTrips(false);
     }
+  };
+
+  const persistTripLocally = async (trip: Trip): Promise<void> => {
+    const cachedTrip = computeTripCaches(trip);
+    await TripAPI.saveTrip(cachedTrip);
+    setTrips(prev => {
+      const existingIndex = prev.findIndex(item => item.id === cachedTrip.id);
+      if (existingIndex === -1) return [...prev, cachedTrip];
+      const next = [...prev];
+      next[existingIndex] = cachedTrip;
+      return next;
+    });
+    setHistories(prev => ({
+      ...prev,
+      [cachedTrip.id]: { past: [], future: [], lastSavedStr: stripMeta(cachedTrip) }
+    }));
+    setSelectedTrip(cachedTrip);
   };
 
   const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false, affectedSegmentIds?: string[]) => {
@@ -287,9 +313,12 @@ export default function App() {
         seg.waypoints = seg.waypoints.map(w => w.id === wpId ? { ...w, coordinates: coords } : w);
         
         if (seg.source === 'router') {
-            const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates);
+            const validCoords = seg.waypoints.filter(w => w.coordinates && w.coordinates.length === 2).map(w => w.coordinates);
             if (validCoords.length >= 2) {
-               seg.geometry = await optimizeSegmentRoute(seg, trip.segments[i]) as any;
+              const optimizedGeometry = await optimizeSegmentRoute(seg, trip.segments[i]);
+              if (optimizedGeometry) {
+                seg.geometry = optimizedGeometry;
+              }
             }
         }
         newSegments[i] = seg;
@@ -351,7 +380,7 @@ export default function App() {
     if (!selectedTrip) return false;
     
     try {
-      let tripToSave = { ...selectedTrip, updatedAt: new Date().toISOString() };
+      const tripToSave = { ...selectedTrip, updatedAt: new Date().toISOString() };
       
       const isNew = tripToSave.id.startsWith('temp_trip_');
       const oldId = tripToSave.id;
@@ -470,7 +499,7 @@ export default function App() {
           waypoints: [
             {
               id: newWpId,
-              coordinates: initialCoords as any,
+              coordinates: initialCoords as [number, number],
               name: initialPoi?.name || initialDetails?.name || initialDetails?.display_name || '',
               ...(initialPoi ? {
                 poi: {
@@ -530,7 +559,7 @@ export default function App() {
     // 1. collect all sources involved
     const conflicts = tripConflicts[tripId] || [];
     const allSources = new Set<string>();
-    conflicts.forEach((c: any) => {
+    conflicts.forEach((c: Trip) => {
       if (c.metadata?._sourceService) allSources.add(c.metadata._sourceService);
       (c.metadata?.syncedServices || []).forEach((s: string) => allSources.add(s));
     });
@@ -666,6 +695,40 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const loadSharedTrip = async () => {
+      const shareLink = getSharedTripTokenFromPath();
+      if (!shareLink) return;
+
+      setShowSetupWizard(false);
+      setSharedTripError(null);
+
+      try {
+        const sharedTrip = await persistingManager.fetchSharedTrip(shareLink);
+        if (!sharedTrip) {
+          throw new Error('This shared trip could not be loaded.');
+        }
+
+        setSelectedTrip(sharedTrip);
+        setIsViewingSharedTrip(true);
+        setIsReadOnly(true);
+        setIsSidebarCollapsed(false);
+      } catch (error) {
+        console.error('Failed to load shared trip:', error);
+        setSharedTripError('This shared trip could not be loaded.');
+      }
+    };
+
+    loadSharedTrip();
+
+    const handlePopState = () => {
+      loadSharedTrip();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
     if (!isLoadingTrips) {
       saveTripCache(trips);
     }
@@ -734,6 +797,7 @@ export default function App() {
     setSelectedWaypointId(null);
     setSelectedSegmentId(null);
     setSelectedTrip(trip);
+    setIsViewingSharedTrip(false);
 
     if (maintainState) return;
 
@@ -1002,10 +1066,11 @@ export default function App() {
           />
         ) : (
           <TripEditor isReadOnly={isReadOnly}
-            onToggleReadOnly={() => setIsReadOnly(!isReadOnly)}
+            onToggleReadOnly={selectedTrip.metadata?.shareLink ? undefined : () => setIsReadOnly(!isReadOnly)}
             trip={selectedTrip}
             allTrips={trips}
             isSidebarCollapsed={isSidebarCollapsed}
+            isSharedTripView={isViewingSharedTrip}
             onSelectTrip={handleSelectTrip}
             onGoBack={handleGoBackTripEditor}
             onSelectSegment={setSelectedSegmentId}
@@ -1022,6 +1087,8 @@ export default function App() {
               setIsSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
+            availablePersistingServices={persistingManager.getAvailableServices()}
+            onPersistTrip={persistTripLocally}
             highlightedWaypointId={highlightedWaypointId}
             onClearHighlight={() => setHighlightedWaypointId(null)}
             onUndo={handleUndo}
@@ -1066,7 +1133,7 @@ export default function App() {
                   const [lon, lat] = poi.coordinates;
                   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=jsonv2&zoom=18&accept-language=${navigator.language || 'en'}`);
                   details = await r.json();
-                } catch (e) {
+                } catch {
                   // ignore
                 }
               }
@@ -1174,6 +1241,22 @@ export default function App() {
     >
       <p>This new trip has not been saved yet. Would you like to save it or discard it?</p>
     </Dialog>}
+
+    <Dialog
+      isOpen={sharedTripError !== null}
+      title="Shared Trip"
+      onClose={() => setSharedTripError(null)}
+      actions={
+        <button className="dialog-btn dialog-btn-primary" onClick={() => {
+          setSharedTripError(null);
+          window.history.replaceState({}, '', '/');
+        }}>
+          Go Home
+        </button>
+      }
+    >
+      <p style={{ margin: 0 }}>{sharedTripError}</p>
+    </Dialog>
     </>
   );
 }
