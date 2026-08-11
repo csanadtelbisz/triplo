@@ -203,6 +203,12 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
 
         {trip && !isReadOnly && (
             <div className="actions-group" style={{marginTop: '20px'}}>
+                <button 
+                  onClick={handleAddToTrip}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)' }}
+                >
+                    <MaterialIcon name="add_location" /> Add {selectedName} to Trip
+                </button>
                 {selectedWaypointId && onAttachToWaypoint && (
                     <button 
                       onClick={() => onAttachToWaypoint({ ...poi, name: selectedName }, details)}
@@ -211,12 +217,6 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
                         <MaterialIcon name="place" /> Attach {selectedName} to Waypoint
                     </button>
                 )}
-                <button 
-                  onClick={handleAddToTrip}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: 'white', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px rgba(25, 118, 210, 0.2)' }}
-                >
-                    <MaterialIcon name="add_location" /> Add {selectedName} to Trip
-                </button>
             </div>
         )}
         {!trip && !isReadOnly && (
