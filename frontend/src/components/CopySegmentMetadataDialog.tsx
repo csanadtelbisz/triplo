@@ -1,16 +1,16 @@
-import { ConfirmDialog } from '../components/Dialog';
-import { MaterialIcon, getModeIcon } from '../components/MaterialIcon';
-import type { CopySectionMetadataData } from '../utils/useCopySectionMetadata';
+import { ConfirmDialog } from './Dialog';
+import { MaterialIcon, getModeIcon } from './MaterialIcon';
+import type { CopySegmentMetadataData } from '../utils/useCopySegmentMetadata';
 import { getCustomOtherModes } from '../utils/customModesPreferences';
 import { useMemo } from 'react';
 
-interface CopySectionMetadataDialogProps {
-  offer: CopySectionMetadataData | null;
+interface CopySegmentMetadataDialogProps {
+  offer: CopySegmentMetadataData | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function CopySectionMetadataDialog({ offer, onConfirm, onCancel }: CopySectionMetadataDialogProps) {
+export function CopySegmentMetadataDialog({ offer, onConfirm, onCancel }: CopySegmentMetadataDialogProps) {
   const customModes = useMemo(() => getCustomOtherModes(), [offer]);
 
   if (!offer) return null;

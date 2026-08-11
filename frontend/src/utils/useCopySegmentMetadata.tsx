@@ -4,7 +4,7 @@ import { getModeColor } from './builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
 import { getCustomOtherModes } from './customModesPreferences';
 
-export interface CopySectionMetadataData {
+export interface CopySegmentMetadataData {
   color: string;
   icon: string;
   mode?: string;
@@ -14,8 +14,8 @@ export interface CopySectionMetadataData {
   newName?: string;
 }
 
-export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined, onUpdateTrip: (newTrip: Trip) => void) {
-  const [sectionMetadataOffer, setSectionMetadataOffer] = useState<CopySectionMetadataData | null>(null);
+export function useCopySegmentMetadata(trip: Trip, allTrips: Trip[] | undefined, onUpdateTrip: (newTrip: Trip) => void) {
+  const [sectionMetadataOffer, setSectionMetadataOffer] = useState<CopySegmentMetadataData | null>(null);
 
   const handleNameChange = (segmentId: string, currentName: string | undefined, newValue: string) => {
     if (newValue !== (currentName || '') && newValue.trim() !== '') {
@@ -25,6 +25,7 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
       let routingProfileToCopy: string | undefined;
       let routingServiceToCopy: string | undefined;
 
+      const current = trip.segments.find(s => s.id === segmentId);
       let found = trip.segments.find(s => s.id !== segmentId && s.name?.toLowerCase() === newValue.toLowerCase());
       if (!found && allTrips) {
         for (const t of allTrips) {
@@ -59,9 +60,17 @@ export function useCopySectionMetadata(trip: Trip, allTrips: Trip[] | undefined,
          }
       }
 
-      if (modeToCopy) {
+      const actualColorToCopy = colorToCopy || getModeColor(modeToCopy as any) || '#000000';
+      const currentColor = current?.customColor || getModeColor(current?.transportMode as any) || '#000000';
+      const anyDifference =
+        (actualColorToCopy !== currentColor) ||
+        (iconToCopy && iconToCopy !== current?.customIcon) ||
+        (modeToCopy && modeToCopy !== current?.transportMode) ||
+        (routingProfileToCopy && routingProfileToCopy !== current?.routingProfile) ||
+        (routingServiceToCopy && routingServiceToCopy !== current?.routingService);
+      if (modeToCopy && anyDifference) {
         setSectionMetadataOffer({
-          color: colorToCopy || getModeColor(modeToCopy as any) || '#000000',
+          color: actualColorToCopy,
           icon: iconToCopy || '',
           mode: modeToCopy,
           routingProfile: routingProfileToCopy,

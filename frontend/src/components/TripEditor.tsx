@@ -7,8 +7,8 @@ import { routingManager } from '../routing/RoutingService';
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { Dialog } from './Dialog';
 import { exportTripGPX, exportTripGeoJSON, downloadFile } from '../utils/exportUtils';
-import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
-import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
+import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
+import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
 import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { TransportMode } from '../../../shared/types';
@@ -81,7 +81,7 @@ export function TripEditor({
     applySectionMetadataOffer,
     cancelSectionMetadataOffer,
     handleNameChange,
-  } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
+  } = useCopySegmentMetadata(trip, allTrips, onUpdateTrip);
 
   const [isSaving, setIsSaving] = useState(false);
   const primeDatePickerMonth = (input: HTMLInputElement, fallbackDate?: string) => {
@@ -1471,7 +1471,7 @@ export function TripEditor({
           </div>
         </div>
       </Dialog>
-      <CopySectionMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer()} onCancel={cancelSectionMetadataOffer} />
+      <CopySegmentMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer()} onCancel={cancelSectionMetadataOffer} />
     </>
   );
 }
