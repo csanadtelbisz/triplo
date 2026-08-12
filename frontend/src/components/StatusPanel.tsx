@@ -229,7 +229,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                 {attr && (
                   <div className="status-panel-attribution">
                     {attr.link ? (
-                      <a href={attr.link} target="_blank" rel="noreferrer">
+                      <a href={attr.link} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
                         {attr.text}
                       </a>
                     ) : (

@@ -6,8 +6,8 @@ import { exportGPX, downloadFile } from '../utils/exportUtils';
 import { routingManager, route } from '../routing/RoutingService';
 import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
-import { useCopySectionMetadata } from '../utils/useCopySectionMetadata';
-import { CopySectionMetadataDialog } from './CopySectionMetadataDialog';
+import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
+import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
 import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 
@@ -27,7 +27,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
   const seg = trip.segments.find(s => s.id === segmentId);
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
   
-  const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySectionMetadata(trip, allTrips, onUpdateTrip);
+  const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySegmentMetadata(trip, allTrips, onUpdateTrip);
   const [showAllProfiles, setShowAllProfiles] = useState(false);
   
   useEffect(() => {
@@ -685,7 +685,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
         onCancel={() => handleConfirmGPXWaypoints(false)}
       />
 
-      <CopySectionMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer(segmentId)} onCancel={cancelSectionMetadataOffer} />
+      <CopySegmentMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer(segmentId)} onCancel={cancelSectionMetadataOffer} />
     </>
   );
 }
