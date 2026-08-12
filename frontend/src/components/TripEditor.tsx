@@ -951,7 +951,7 @@ export function TripEditor({
              </button>
            )}
            {canSaveSharedTripLocally && (
-             <button className="iconButton" title="Save the trip to my trips" onClick={() => persistTripLocally(trip)}>
+             <button className="iconButton" title="Save trip as read-only to my trips" onClick={() => persistTripLocally(trip)}>
                <MaterialIcon name="bookmark_add" size={20} />
              </button>
            )}
@@ -1525,7 +1525,7 @@ export function TripEditor({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <section>
-            <h4 style={{ margin: '0 0 8px', fontSize: '1rem' }}>Sharing</h4>
+            <h4 className="sharing-title">Sharing</h4>
             {shareError && <p style={{ color: '#d9534f', margin: '0 0 12px' }}>{shareError}</p>}
             {isSharing && (
               <div className="sharing-status">
@@ -1533,6 +1533,7 @@ export function TripEditor({
                 <span>{shareLink ? 'Updating sharing...' : 'Activating sharing...'}</span>
               </div>
             )}
+            <br></br>
             {shareLink ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <input readOnly value={shareUrl} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
