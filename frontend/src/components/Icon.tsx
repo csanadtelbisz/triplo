@@ -11,6 +11,10 @@ import tBarLiftUrl from '../assets/custom-icons/t_bar_lift.svg';
 import cabinLiftUrl from '../assets/custom-icons/cabin_lift.svg';
 import mountainPassUrl from '../assets/custom-icons/mountain_pass.svg';
 import caveUrl from '../assets/custom-icons/cave.svg';
+import lighthouseUrl from '../assets/custom-icons/lighthouse.svg';
+import bridgeUrl from '../assets/custom-icons/bridge.svg';
+import oldBridgeUrl from '../assets/custom-icons/old_bridge.svg';
+import viewpointUrl from '../assets/custom-icons/viewpoint.svg';
 
 /**
  * Add custom SVGs here. Callers only use the icon name, regardless of its source.
@@ -25,6 +29,10 @@ export const CUSTOM_ICONS: Readonly<Record<string, string>> = {
   cabin_lift: cabinLiftUrl,
   mountain_pass: mountainPassUrl,
   cave: caveUrl,
+  lighthouse: lighthouseUrl,
+  bridge: bridgeUrl,
+  old_bridge: oldBridgeUrl,
+  viewpoint: viewpointUrl,
 };
 
 export type IconProps = Omit<ComponentPropsWithoutRef<'span'>, 'children'> & {
