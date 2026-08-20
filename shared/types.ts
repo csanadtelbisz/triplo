@@ -69,3 +69,17 @@ export interface Trip {
     distanceByMode: Record<string, number>;
   };
 }
+
+/** The small record stored when a user saves somebody else's shared trip. */
+export interface SharedTripReference {
+  id: string;
+  name: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  shareLink: string;
+  metadata: {
+    isSharedTripReference: true;
+    sharedService?: string;
+  };
+}

@@ -1,5 +1,5 @@
 import type { PersistingService } from './PersistingService';
-import type { Trip } from '../../../shared/types';
+import type { Trip, SharedTripReference } from '../../../shared/types';
 import { GoogleDrivePersistingService } from './GoogleDrivePersistingService';
 import { GitHubPersistingService } from './GitHubPersistingService';
 
@@ -23,17 +23,73 @@ export class PersistingManager {
     for (const service of this.getAvailableServices()) {
       const trips = await service.load();
       // append service indicator to trip metadata
-      trips.forEach((t: any) => {
+      for (const t of trips) {
+        if (t?.metadata?.isSharedTripReference && t.shareLink) {
+          const sharedTrip = await this.fetchSharedTrip(t.shareLink);
+          if (!sharedTrip || sharedTrip.id !== t.id) {
+            // Keep only the saved reference visible. No route geometry or
+            // other shared content is retained when the link is unavailable.
+            allTrips.push({
+              id: t.id,
+              name: t.name,
+              description: t.description,
+              startDate: t.startDate,
+              endDate: t.endDate,
+              createdAt: t.createdAt || '',
+              updatedAt: t.updatedAt || '',
+              segments: [],
+              metadata: {
+                ...(t.metadata || {}),
+                shareLink: t.shareLink,
+                isSharedTripReference: true,
+                sharedTripUnavailable: true,
+                _sourceService: service.name,
+                syncedServices: Array.from(new Set([...(t.metadata?.syncedServices || []), service.name])),
+              },
+            } as Trip);
+            continue;
+          }
+          sharedTrip.metadata = {
+            ...(sharedTrip.metadata || {}),
+            ...t.metadata,
+            shareLink: t.shareLink,
+            isSharedTripReference: true,
+            _sourceService: service.name,
+            syncedServices: Array.from(new Set([...(t.metadata?.syncedServices || []), service.name])),
+          };
+          allTrips.push(sharedTrip);
+          continue;
+        }
         t.metadata = t.metadata || {};
         t.metadata._sourceService = service.name;
         t.metadata.syncedServices = t.metadata.syncedServices || [];
         if (!t.metadata.syncedServices.includes(service.name)) {
           t.metadata.syncedServices.push(service.name);
         }
-      });
-      allTrips.push(...trips);
+        allTrips.push(t);
+      }
     }
     return allTrips;
+  }
+
+  async saveSharedTripReference(trip: Trip): Promise<SharedTripReference> {
+    const reference: SharedTripReference = {
+      id: trip.id,
+      name: trip.name,
+      description: trip.description,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      shareLink: trip.metadata?.shareLink,
+      metadata: {
+        isSharedTripReference: true,
+        sharedService: trip.metadata?.sharedService,
+      },
+    };
+    if (!reference.shareLink) throw new Error('Shared trip is missing a share link.');
+    for (const service of this.getAvailableServices()) {
+      await service.save(reference);
+    }
+    return reference;
   }
 
   async uploadToAll(trip: any): Promise<void> {
@@ -141,6 +197,12 @@ export class PersistingManager {
       }
     }
     return null;
+  }
+
+  async updateSharedTrip(shareLink: string, trip: Trip): Promise<void> {
+    for (const service of this.services) {
+      await service.updateSharedTrip(shareLink, trip);
+    }
   }
 }
 

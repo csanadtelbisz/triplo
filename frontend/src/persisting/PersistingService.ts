@@ -51,6 +51,9 @@ export interface PersistingService {
   // fetch a shared trip from an encoded share reference
   fetchSharedTrip(shareLink: string): Promise<Trip | null>;
 
+  // replace the contents exposed by an existing share reference
+  updateSharedTrip(shareLink: string, trip: Trip): Promise<void>;
+
   // disconnect from the service and clear the local connection state
   disconnect(): Promise<void>;
 

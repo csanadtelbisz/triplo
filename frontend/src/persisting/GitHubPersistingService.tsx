@@ -43,10 +43,6 @@ export class GitHubPersistingService implements PersistingService {
     return btoa(unescape(encodeURIComponent(value)));
   }
 
-  private decodeUtf8Base64(value: string) {
-    return decodeURIComponent(escape(atob(value.replace(/\s/g, ''))));
-  }
-
   private parseTripContent(content: string): Trip | null {
     try {
       return JSON.parse(content) as Trip;
@@ -395,6 +391,28 @@ export class GitHubPersistingService implements PersistingService {
       console.error('Failed to fetch shared GitHub trip:', error);
       return null;
     }
+  }
+
+  async updateSharedTrip(shareLink: string, trip: Trip): Promise<void> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return;
+    const token = this.getShareToken();
+    if (!token) throw new Error('GitHub share token missing');
+
+    const response = await fetch(`https://api.github.com/gists/${payload.data}`, {
+      method: 'PATCH',
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        files: { [`${trip.id}.triplo.json`]: { content: JSON.stringify(trip, null, 2) } }
+      })
+    });
+    if (!response.ok) throw new Error(`Failed to update GitHub shared trip: ${response.status} ${await response.text()}`);
   }
 
   async disconnect(): Promise<void> {

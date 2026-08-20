@@ -247,7 +247,7 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tripListPreferences.displayMode === 'detailed' ? '8px' : 0 }}>
                 <h3 className="trip-card-title" style={{ margin: 0, fontStyle: isUnsaved ? 'italic' : 'normal', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {trip.name} 
-                  {trip.metadata?.shareLink && <MaterialIcon name="share" size={16} title="Shared trip" style={{ color: '#6c757d' }} />}
+                  {trip.metadata?.shareLink && !trip.metadata?.isSharedTripReference && <MaterialIcon name="share" size={16} title="Shared with others" style={{ color: '#6c757d' }} />}
                   {isConflicted ? (
                     <span title="Conflicts found between devices/services" style={{ color: '#d9534f' }}>•</span>
                   ) : isUnsaved ? (
@@ -256,6 +256,13 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
                 </h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ display: 'flex', gap: '4px' }}>
+                    {trip.metadata?.isSharedTripReference && (
+                      trip.metadata?.sharedTripUnavailable ? (
+                        <MaterialIcon name="share_off" size={16} title="This trip was deleted or made private by the owner" style={{ color: '#d9534f' }} />
+                      ) : (
+                        <MaterialIcon name="share" size={16} title="Saved shared trip" style={{ color: '#6c757d' }} />
+                      )
+                    )}
                     {isCached ? (
                       <MaterialIcon name="cached" size={16} style={{ color: '#6c757d' }} />
                     ) : matchedServices.length > 0 ? (

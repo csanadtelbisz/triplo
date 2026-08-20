@@ -40,7 +40,8 @@ interface TripEditorProps {
   isSharedTripView?: boolean;
   onSelectTrip?: (trip: Trip) => void;
   availablePersistingServices?: PersistingService[];
-  onPersistTrip?: (trip: Trip) => Promise<void> | void;
+  onPersistOwnedTrip?: (trip: Trip) => Promise<void> | void;
+  onSaveSharedTripReference?: (trip: Trip) => Promise<void> | void;
 }
 
 const tripEditorScrollPositions: Record<string, number> = {};
@@ -49,9 +50,10 @@ export function TripEditor({
   isReadOnly: propIsReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
-  onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistTrip
+  onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference
 }: TripEditorProps) {
-  const isSharedTrip = !!trip.metadata?.shareLink;
+  const isSavedSharedTrip = !!trip.metadata?.isSharedTripReference;
+  const isSharedTrip = isSharedTripView || isSavedSharedTrip;
   const isReadOnly = propIsReadOnly || isSharedTrip;
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const contentRef = useRef<HTMLDivElement>(null);
@@ -99,6 +101,8 @@ export function TripEditor({
   } = useCopySegmentMetadata(trip, allTrips, onUpdateTrip);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingSharedTrip, setIsSavingSharedTrip] = useState(false);
+  const [isCopyingSharedTrip, setIsCopyingSharedTrip] = useState(false);
   const primeDatePickerMonth = (input: HTMLInputElement, fallbackDate?: string) => {
     if (input.value || !fallbackDate) return;
     const dateOnly = fallbackDate.split('T')[0];
@@ -124,13 +128,13 @@ export function TripEditor({
 
   const shareUrl = shareLink ? `${window.location.origin}/share/${shareLink}` : '';
 
-  const persistTripLocally = async (nextTrip: Trip) => {
-    await onPersistTrip?.(nextTrip);
+  const persistOwnedTrip = async (nextTrip: Trip) => {
+    await onPersistOwnedTrip?.(nextTrip);
   };
 
   const updateSharedTripState = async (nextTrip: Trip) => {
     onUpdateTrip(nextTrip);
-    await persistTripLocally(nextTrip);
+    await persistOwnedTrip(nextTrip);
   };
 
   const createCopyTrip = async () => {
@@ -142,10 +146,17 @@ export function TripEditor({
         const metadata = { ...(trip.metadata || {}) };
         delete (metadata as any).shareLink;
         delete (metadata as any).sharedService;
+        delete (metadata as any).isSharedTripReference;
+        delete (metadata as any)._sourceService;
         return metadata;
       })()
     };
-    await persistTripLocally(copyTrip);
+    setIsCopyingSharedTrip(true);
+    try {
+      await persistOwnedTrip(copyTrip);
+    } finally {
+      setIsCopyingSharedTrip(false);
+    }
   };
 
   const handleShareTrip = async (service: PersistingService) => {
@@ -208,7 +219,17 @@ export function TripEditor({
     setIsShareServicePickerOpen(true);
   };
 
-  const canSaveSharedTripLocally = isSharedTrip && isSharedTripView && !!onPersistTrip;
+  const canSaveSharedTripLocally = isSharedTrip && !isSavedSharedTrip && !!onSaveSharedTripReference;
+  const canCopySharedTrip = isSharedTrip && !!onPersistOwnedTrip;
+
+  const saveSharedTripLocally = async () => {
+    setIsSavingSharedTrip(true);
+    try {
+      await onSaveSharedTripReference?.(trip);
+    } finally {
+      setIsSavingSharedTrip(false);
+    }
+  };
   
   const [dragRender, setDragRender] = useState<{
     activeId: string;
@@ -917,7 +938,7 @@ export function TripEditor({
         <div className="toolbar-actions">
            {!isReadOnly && <button className="iconButton" title="Undo" onClick={onUndo} disabled={!canUndo}><MaterialIcon name="undo" size={20} /></button>}
            {!isReadOnly && <button className="iconButton" title="Redo" onClick={onRedo} disabled={!canRedo}><MaterialIcon name="redo" size={20} /></button>}
-           {!(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
+           {!isSharedTrip && !(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
              <button className="iconButton" title="Share Trip" onClick={() => setIsShareDialogOpen(true)}><MaterialIcon name="share" size={20} /></button>
            )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
@@ -951,13 +972,13 @@ export function TripEditor({
              </button>
            )}
            {canSaveSharedTripLocally && (
-             <button className="iconButton" title="Save trip as read-only to my trips" onClick={() => persistTripLocally(trip)}>
-               <MaterialIcon name="bookmark_add" size={20} />
+             <button className="iconButton" title="Save trip to my trips" onClick={saveSharedTripLocally} disabled={isSavingSharedTrip}>
+               <MaterialIcon name={isSavingSharedTrip ? "sync" : "bookmark_add"} size={20} className={isSavingSharedTrip ? "spinning" : undefined} />
              </button>
            )}
-           {canSaveSharedTripLocally && (
-             <button className="iconButton" title="Create a copy in my trips" onClick={() => createCopyTrip()}>
-               <MaterialIcon name="content_copy" size={20} />
+           {canCopySharedTrip && (
+             <button className="iconButton" title="Make a copy" onClick={() => void createCopyTrip()} disabled={isCopyingSharedTrip}>
+               <MaterialIcon name={isCopyingSharedTrip ? "sync" : "content_copy"} size={20} className={isCopyingSharedTrip ? "spinning" : undefined} />
              </button>
            )}
         </div>

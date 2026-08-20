@@ -427,8 +427,16 @@ export class GoogleDrivePersistingService implements PersistingService {
     const payload = decodeSharePayload(shareLink);
     if (!payload || payload.service !== this.name || !payload.data) return null;
 
+    const apiKey = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY;
+    if (!apiKey) {
+      console.error('Google Drive API key is missing; shared trips cannot be loaded.');
+      return null;
+    }
+
     try {
-      const fileData = await fetch(`https://drive.google.com/uc?export=download&id=${payload.data}`, { cache: 'no-store' });
+      const fileId = encodeURIComponent(payload.data);
+      const key = encodeURIComponent(apiKey);
+      const fileData = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${key}`, { cache: 'no-store' });
       if (!fileData.ok) return null;
       const text = await fileData.text();
       return JSON.parse(text) as Trip;
@@ -436,6 +444,14 @@ export class GoogleDrivePersistingService implements PersistingService {
       console.error('Failed to fetch shared Google Drive trip:', error);
       return null;
     }
+  }
+
+  async updateSharedTrip(shareLink: string, trip: Trip): Promise<void> {
+    const payload = decodeSharePayload(shareLink);
+    if (!payload || payload.service !== this.name || !payload.data) return;
+    // A Drive share points at the owner's normal trip file, so saving it also
+    // replaces the data visible through the existing public link.
+    await this.save(trip);
   }
 
   async disconnect(): Promise<void> {

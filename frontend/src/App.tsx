@@ -37,6 +37,8 @@ const getSharedTripTokenFromPath = () => {
   return match ? decodeURIComponent(match[1]) : '';
 };
 
+const unavailableSharedTripMessage = 'This trip was deleted or made private by the owner.';
+
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('TriploDB', 1);
@@ -53,7 +55,9 @@ const initDB = (): Promise<IDBDatabase> => {
 
 const saveTripCache = async (trips: Trip[]) => {
   try {
-    const cached = trips.map(t => ({
+    // Shared trips are only references in user storage. Never retain their
+    // fetched content in the offline cache.
+    const cached = trips.filter(t => !t.metadata?.isSharedTripReference).map(t => ({
       ...t,
       metadata: { ...t.metadata, _isCached: true }
     }));
@@ -71,7 +75,7 @@ const getTripCache = async (): Promise<Trip[]> => {
     const store = tx.objectStore('trips');
     const request = store.get(TRIP_CACHE_KEY);
     return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve((request.result || []).filter((trip: Trip) => !trip.metadata?.isSharedTripReference));
       request.onerror = () => reject(request.error);
     });
   } catch {
@@ -109,6 +113,8 @@ export default function App() {
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
   const [sharedTripError, setSharedTripError] = useState<string | null>(null);
   const [isViewingSharedTrip, setIsViewingSharedTrip] = useState(false);
+  const [isLoadingSharedTrip, setIsLoadingSharedTrip] = useState(() => !!getSharedTripTokenFromPath());
+  const [sharedTripId, setSharedTripId] = useState<string | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0 && !getSharedTripTokenFromPath());
 
   const stripMeta = (t: Trip) => {
@@ -136,6 +142,9 @@ export default function App() {
       const conflictsFound: Record<string, Trip[]> = {};
 
       apiTrips.forEach(t => {
+        // Shared-trip references are metadata-only records. Their complete
+        // trip is resolved by the persisting manager from the share link.
+        if (t.metadata?.isSharedTripReference) return;
         t.metadata = t.metadata || {};
         t.metadata._sourceService = 'Local Browser Storage';
         variantsByTripId[t.id] = [t];
@@ -191,6 +200,15 @@ export default function App() {
 
           newest.metadata = newest.metadata || {};
           newest.metadata.syncedServices = Array.from(allSyncedServices);
+          const savedSharedReference = variants.find(v => v.metadata?.isSharedTripReference);
+          if (savedSharedReference) {
+            newest.metadata.isSharedTripReference = true;
+            newest.metadata.shareLink = savedSharedReference.metadata?.shareLink;
+            newest.metadata.sharedService = savedSharedReference.metadata?.sharedService;
+            if (!newest.metadata.sharedTripUnavailable) {
+              delete newest.metadata.sharedTripUnavailable;
+            }
+          }
           // Keep Local Browser Storage as the active working source tag
           newest.metadata._sourceService = 'Local Browser Storage';
 
@@ -244,8 +262,9 @@ export default function App() {
     }
   };
 
-  const persistTripLocally = async (trip: Trip): Promise<void> => {
+  const persistOwnedTrip = async (trip: Trip): Promise<void> => {
     const cachedTrip = computeTripCaches(trip);
+    await persistingManager.uploadToAll(cachedTrip);
     await TripAPI.saveTrip(cachedTrip);
     setTrips(prev => {
       const existingIndex = prev.findIndex(item => item.id === cachedTrip.id);
@@ -259,6 +278,31 @@ export default function App() {
       [cachedTrip.id]: { past: [], future: [], lastSavedStr: stripMeta(cachedTrip) }
     }));
     setSelectedTrip(cachedTrip);
+    setIsViewingSharedTrip(false);
+    if (getSharedTripTokenFromPath()) {
+      window.history.replaceState({}, '', '/');
+    }
+  };
+
+  const saveSharedTripReference = async (trip: Trip): Promise<void> => {
+    const reference = await persistingManager.saveSharedTripReference(trip);
+    const savedTrip = {
+      ...computeTripCaches(trip),
+      metadata: { ...(trip.metadata || {}), ...reference.metadata, shareLink: reference.shareLink },
+    };
+    await TripAPI.saveTrip(reference as unknown as Trip);
+    setTrips(prev => {
+      const index = prev.findIndex(item => item.id === savedTrip.id);
+      if (index === -1) return [...prev, savedTrip];
+      const next = [...prev];
+      next[index] = savedTrip;
+      return next;
+    });
+    setHistories(prev => ({
+      ...prev,
+      [savedTrip.id]: { past: [], future: [], lastSavedStr: stripMeta(savedTrip) }
+    }));
+    setSelectedTrip(savedTrip);
   };
 
   const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false, affectedSegmentIds?: string[]) => {
@@ -398,6 +442,9 @@ export default function App() {
       if (persistingManager.getAvailableServices().length > 0) {
         await persistingManager.uploadToAll(tripToSave);
       }
+      if (tripToSave.metadata?.shareLink && !tripToSave.metadata?.isSharedTripReference) {
+        await persistingManager.updateSharedTrip(tripToSave.metadata.shareLink, tripToSave);
+      }
 
       const newTripState = computeTripCaches(tripToSave);
       
@@ -445,6 +492,9 @@ export default function App() {
       if (persistingManager.getAvailableServices().length > 0) {
         await persistingManager.saveAll(updatingTrips);
       }
+      await Promise.all(updatingTrips
+        .filter(trip => trip.metadata?.shareLink && !trip.metadata?.isSharedTripReference)
+        .map(trip => persistingManager.updateSharedTrip(trip.metadata.shareLink, trip)));
 
       const nextTrips = updatingTrips.map(u => computeTripCaches(u));
 
@@ -606,6 +656,10 @@ export default function App() {
     setHighlightedWaypointId(null);
     setSelectedPOI(null);
     setAttachingPoiToWaypointId(null);
+    if (getSharedTripTokenFromPath()) {
+      window.history.replaceState({}, '', '/');
+    }
+    setIsViewingSharedTrip(false);
   };
 
   const handleGoBackSegment = () => setSelectedSegmentId(null);
@@ -701,6 +755,7 @@ export default function App() {
 
       setShowSetupWizard(false);
       setSharedTripError(null);
+      setIsLoadingSharedTrip(true);
 
       try {
         const sharedTrip = await persistingManager.fetchSharedTrip(shareLink);
@@ -708,13 +763,18 @@ export default function App() {
           throw new Error('This shared trip could not be loaded.');
         }
 
-        setSelectedTrip(sharedTrip);
+        const cachedSharedTrip = computeTripCaches(sharedTrip);
+        setSelectedTrip(cachedSharedTrip);
+        setSharedTripId(cachedSharedTrip.id);
         setIsViewingSharedTrip(true);
         setIsReadOnly(true);
         setIsSidebarCollapsed(false);
+        setTimeout(() => mapComponentRef.current?.zoomToTrip(cachedSharedTrip, 'open', 'trip'), 0);
       } catch (error) {
         console.error('Failed to load shared trip:', error);
-        setSharedTripError('This shared trip could not be loaded.');
+        setSharedTripError(unavailableSharedTripMessage);
+      } finally {
+        setIsLoadingSharedTrip(false);
       }
     };
 
@@ -727,6 +787,23 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (isLoadingTrips || !sharedTripId) return;
+    const ownTrip = trips.find(trip => trip.id === sharedTripId && !trip.metadata?.isSharedTripReference);
+    const savedSharedTrip = trips.find(trip => trip.id === sharedTripId && trip.metadata?.isSharedTripReference);
+    if (ownTrip) {
+      setSelectedTrip(ownTrip);
+      setIsViewingSharedTrip(false);
+      if (localStorage.getItem('defaultReadOnly') !== 'true') {
+        setIsReadOnly(false);
+      }
+      setTimeout(() => mapComponentRef.current?.zoomToTrip(ownTrip, 'open', 'trip'), 0);
+    } else if (savedSharedTrip) {
+      setSelectedTrip(savedSharedTrip);
+      setIsViewingSharedTrip(true);
+    }
+  }, [isLoadingTrips, sharedTripId, trips]);
 
   useEffect(() => {
     if (!isLoadingTrips) {
@@ -787,6 +864,10 @@ export default function App() {
   };
 
   const handleSelectTrip = (trip: Trip, maintainState?: boolean) => {
+    if (trip.metadata?.sharedTripUnavailable) {
+      setSharedTripError(unavailableSharedTripMessage);
+      return;
+    }
     if (conflictedTripIds.has(trip.id)) {
       setResolvingTripId(trip.id);
       return;
@@ -1035,6 +1116,11 @@ export default function App() {
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
           />
+        ) : !selectedTrip && isLoadingSharedTrip ? (
+          <div className="trip-editor">
+            <div className="toolbar"><h2 className="toolbar-title">Loading Shared Trip</h2></div>
+            <div className="content">Loading the shared trip…</div>
+          </div>
         ) : !selectedTrip ? (
           <TripManager isReadOnly={isReadOnly}
             onToggleReadOnly={() => setIsReadOnly(!isReadOnly)}
@@ -1066,7 +1152,7 @@ export default function App() {
           />
         ) : (
           <TripEditor isReadOnly={isReadOnly}
-            onToggleReadOnly={selectedTrip.metadata?.shareLink ? undefined : () => setIsReadOnly(!isReadOnly)}
+            onToggleReadOnly={selectedTrip.metadata?.isSharedTripReference || isViewingSharedTrip ? undefined : () => setIsReadOnly(!isReadOnly)}
             trip={selectedTrip}
             allTrips={trips}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -1088,7 +1174,8 @@ export default function App() {
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
             availablePersistingServices={persistingManager.getAvailableServices()}
-            onPersistTrip={persistTripLocally}
+            onPersistOwnedTrip={persistOwnedTrip}
+            onSaveSharedTripReference={saveSharedTripReference}
             highlightedWaypointId={highlightedWaypointId}
             onClearHighlight={() => setHighlightedWaypointId(null)}
             onUndo={handleUndo}

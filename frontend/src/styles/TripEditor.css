@@ -282,10 +282,3 @@ body.is-dragging * {
   margin: 0 0 8px;
   font-size: 1rem;
 }
-.sharing-status {
-  display: inline;
-}
-.sharing-status span.spinning {
-  margin: 0px 4px;
-  vertical-align: text-bottom;
-}
