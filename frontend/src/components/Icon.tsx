@@ -5,8 +5,16 @@ import type { TransportMode } from '../../../shared/types';
 import trolleyBusUrl from '../assets/custom-icons/trolley_bus.svg';
 import horseUrl from '../assets/custom-icons/horse.svg';
 import skiTourUrl from '../assets/custom-icons/ski_tour.svg';
+import discLiftUrl from '../assets/custom-icons/disc_lift.svg';
+import chairliftUrl from '../assets/custom-icons/chairlift.svg';
+import tBarLiftUrl from '../assets/custom-icons/t_bar_lift.svg';
+import cabinLiftUrl from '../assets/custom-icons/cabin_lift.svg';
 import mountainPassUrl from '../assets/custom-icons/mountain_pass.svg';
 import caveUrl from '../assets/custom-icons/cave.svg';
+import lighthouseUrl from '../assets/custom-icons/lighthouse.svg';
+import bridgeUrl from '../assets/custom-icons/bridge.svg';
+import oldBridgeUrl from '../assets/custom-icons/old_bridge.svg';
+import viewpointUrl from '../assets/custom-icons/viewpoint.svg';
 
 /**
  * Add custom SVGs here. Callers only use the icon name, regardless of its source.
@@ -15,8 +23,16 @@ export const CUSTOM_ICONS: Readonly<Record<string, string>> = {
   trolley_bus: trolleyBusUrl,
   horse: horseUrl,
   ski_tour: skiTourUrl,
+  disc_lift: discLiftUrl,
+  chairlift: chairliftUrl,
+  t_bar_lift: tBarLiftUrl,
+  cabin_lift: cabinLiftUrl,
   mountain_pass: mountainPassUrl,
   cave: caveUrl,
+  lighthouse: lighthouseUrl,
+  bridge: bridgeUrl,
+  old_bridge: oldBridgeUrl,
+  viewpoint: viewpointUrl,
 };
 
 export type IconProps = Omit<ComponentPropsWithoutRef<'span'>, 'children'> & {
