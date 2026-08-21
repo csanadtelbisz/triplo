@@ -14,6 +14,7 @@ import { persistingManager } from '../persisting/PersistingManager';
 import { getStyleConfigs, saveStyleConfigs, DEFAULT_STYLE_SCRIPT, setActiveStyleConfigId } from '../utils/mapStylesPreferences';
 import type { RenderStyleConfig } from '../utils/mapStylesPreferences';
 import StyleConfigPanel from './StyleConfigPanel';
+import { IconPickerDialog } from './IconPickerDialog';
 
 interface PreferencesPanelProps {
   onGoBack: () => void;
@@ -23,19 +24,23 @@ interface PreferencesPanelProps {
 
 const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome, onZoomHome }) => {
   const [showSavedMsg, setShowSavedMsg] = useState(false);
-  const [langPrefs, setLangPrefs] = useState<string[]>([]);
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
   const [defaultReadOnly, setDefaultReadOnly] = useState(() => localStorage.getItem('defaultReadOnly') === 'true');
   const [preferencesSyncStatus, setPreferencesSyncStatus] = useState(getPreferencesSyncStatus);
 
+  // Initialize all state directly via lazy initialization to avoid setting state synchronously in useEffect
+  const [langPrefs, setLangPrefs] = useState<string[]>(() => getLanguagePreferences());
   const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [showCustomModes, setShowCustomModes] = useState(() => getShowCustomModesInDefault());
   const [builtInOverrides, setBuiltInOverrides] = useState<BuiltInModesOverrides>(() => getBuiltInModeOverrides());
-
   const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
+  
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const styleConfigsRef = useRef<HTMLElement | null>(null);
+  
+  // State for the icon picker
+  const [iconPickerTargetIdx, setIconPickerTargetIdx] = useState<number | null>(null);
 
   const isIconUsed = (icon: string, currentIndex: number = -1) => {
     if (!icon) return false;
@@ -48,8 +53,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   };
 
   useEffect(() => {
-    setLangPrefs(getLanguagePreferences());
-    
     const handlePreferencesUpdated = () => {
       setLangPrefs(getLanguagePreferences());
       setCustomModes(getCustomOtherModes());
@@ -61,6 +64,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     window.addEventListener('preferences-updated', handlePreferencesUpdated);
     const handleSyncStatus = () => setPreferencesSyncStatus(getPreferencesSyncStatus());
     window.addEventListener('preferences-sync-status', handleSyncStatus);
+    
     return () => {
       window.removeEventListener('preferences-updated', handlePreferencesUpdated);
       window.removeEventListener('preferences-sync-status', handleSyncStatus);
@@ -414,9 +418,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
             Define custom transport modes with an icon, name, color, and default routing profile.
-            <a href="https://fonts.google.com/icons?icon.style=Rounded" target="_blank" rel="noreferrer" style={{ color: '#1976d2', textDecoration: 'none', marginLeft: '4px' }}>
-              Search icons
-            </a>
           </span>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
             <tbody>
@@ -429,7 +430,19 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
                       <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
                         <input type="text" value={mode.name} onChange={(e) => handleUpdateCustomMode(idx, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Name" title="Name" />
+                        
                         <input type="text" value={mode.icon} onChange={(e) => handleUpdateCustomMode(idx, { icon: e.target.value })} onBlur={(e) => handleCustomModeIconBlur(idx, e.target.value)} style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid ' + (isIconUsed(mode.icon, idx) ? 'red' : '#ccc'), borderRadius: '4px', boxSizing: 'border-box', backgroundColor: isIconUsed(mode.icon, idx) ? '#ffebee' : 'transparent' }} placeholder="Icon ID" title={isIconUsed(mode.icon, idx) ? "Icon already in use" : "Material Icon ID"} />
+                        
+                        <button 
+                          type="button" 
+                          className="iconButton" 
+                          onClick={() => setIconPickerTargetIdx(idx)} 
+                          title="Search Icons" 
+                          style={{ width: '26px', height: '26px', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit' }}
+                        >
+                          <MaterialIcon name="search" size={16} />
+                        </button>
+                        
                         <input type="color" value={mode.color} onChange={(e) => handleUpdateCustomMode(idx, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', border: '1px solid #ccc', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Color" />
                       </div>
                       <select value={mode.routingProfile} onChange={(e) => handleUpdateCustomMode(idx, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} title="Default Routing Profile">
@@ -506,6 +519,17 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
         </div>
 
       </div>
+
+      <IconPickerDialog
+        isOpen={iconPickerTargetIdx !== null}
+        onClose={() => setIconPickerTargetIdx(null)}
+        onPick={(iconId) => {
+          if (iconPickerTargetIdx !== null) {
+            handleUpdateCustomMode(iconPickerTargetIdx, { icon: iconId });
+          }
+          setIconPickerTargetIdx(null);
+        }}
+      />
     </>
   );
 };

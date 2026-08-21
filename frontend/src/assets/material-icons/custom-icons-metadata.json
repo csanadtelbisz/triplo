@@ -1,0 +1,72 @@
+{
+  "host": "custom",
+  "asset_url_pattern": "",
+  "families": ["Custom"],
+  "icons": [
+    {
+      "name": "trolley_bus",
+      "categories": ["maps", "transportation"],
+      "tags": ["trolley", "bus", "transport", "public", "vehicle", "electric"]
+    },
+    {
+      "name": "horse",
+      "categories": ["maps", "animals"],
+      "tags": ["horse", "animal", "riding", "equestrian", "nature"]
+    },
+    {
+      "name": "ski_tour",
+      "categories": ["maps", "sports"],
+      "tags": ["ski", "tour", "snow", "winter", "sport", "mountain"]
+    },
+    {
+      "name": "disc_lift",
+      "categories": ["maps", "transportation"],
+      "tags": ["disc", "lift", "platter", "button", "ski", "snow", "mountain"]
+    },
+    {
+      "name": "chairlift",
+      "categories": ["maps", "transportation"],
+      "tags": ["chairlift", "ski", "lift", "mountain", "snow", "transport"]
+    },
+    {
+      "name": "t_bar_lift",
+      "categories": ["maps", "transportation"],
+      "tags": ["t", "bar", "lift", "ski", "snow", "mountain", "drag"]
+    },
+    {
+      "name": "cabin_lift",
+      "categories": ["maps", "transportation"],
+      "tags": ["cabin", "lift", "gondola", "cable", "car", "mountain"]
+    },
+    {
+      "name": "mountain_pass",
+      "categories": ["maps", "places"],
+      "tags": ["mountain", "pass", "nature", "terrain", "col", "saddle"]
+    },
+    {
+      "name": "cave",
+      "categories": ["maps", "places"],
+      "tags": ["cave", "nature", "exploration", "underground", "cavern"]
+    },
+    {
+      "name": "lighthouse",
+      "categories": ["maps", "places"],
+      "tags": ["lighthouse", "ocean", "sea", "coast", "navigation", "light", "tower"]
+    },
+    {
+      "name": "bridge",
+      "categories": ["maps", "places"],
+      "tags": ["bridge", "water", "river", "crossing", "architecture"]
+    },
+    {
+      "name": "old_bridge",
+      "categories": ["maps", "places"],
+      "tags": ["old", "bridge", "historic", "water", "river", "crossing", "stone"]
+    },
+    {
+      "name": "viewpoint",
+      "categories": ["maps", "places"],
+      "tags": ["viewpoint", "view", "scenic", "panorama", "lookout", "sightseeing"]
+    }
+  ]
+}

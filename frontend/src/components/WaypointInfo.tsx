@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import { getPOIEmoji, SUGGESTED_WAYPOINT_ICONS } from '../utils/poiUtils';
-
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
+import { IconPickerDialog } from './IconPickerDialog';
 
 interface WaypointInfoProps {
   isReadOnly?: boolean;
@@ -25,6 +25,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
   });
 
   const [customIconInput, setCustomIconInput] = useState<string>('');
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
 
   useEffect(() => {
     const isCustomIcon = wp?.icon && !SUGGESTED_WAYPOINT_ICONS.includes(wp.icon);
@@ -99,10 +100,6 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
         </div>
       </div>
       <div className="content">
-        {/* <div className="form-group">
-          <label className="form-label">ID (Read-only)</label>
-          <input type="text" readOnly value={wp.id} className="form-input" />
-        </div> */}
         <div className="form-group">
            <label className="form-label">Name</label>
            <input 
@@ -152,7 +149,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
            <div style={{ display: 'flex', gap: '8px' }}>
              <input 
                type="text" 
-               placeholder="Custom material icon name..." 
+               placeholder="Custom material icon name" 
                className="form-input" 
                disabled={isReadOnly}
                value={customIconInput}
@@ -172,16 +169,16 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                  }
                }}
              />
-             <a 
-               href="https://fonts.google.com/icons?icon.style=Rounded" 
-               target="_blank" 
-               rel="noreferrer"
+             <button 
+               type="button"
+               disabled={isReadOnly}
+               onClick={() => setIsIconPickerOpen(true)}
                className="iconButton" 
                title="Search Icons" 
-               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit', textDecoration: 'none' }}
+               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', cursor: isReadOnly ? 'default' : 'pointer' }}
              >
                <MaterialIcon name="search" size={20} />
-             </a>
+             </button>
              <button 
                className="iconButton" 
                disabled={isReadOnly}
@@ -336,6 +333,19 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
           </div>
         ) : null}
       </div>
+      
+      <IconPickerDialog 
+        isOpen={isIconPickerOpen}
+        onClose={() => setIsIconPickerOpen(false)}
+        onPick={(iconId) => {
+          setCustomIconInput(iconId);
+          const newSegments = trip.segments.map(s => ({
+            ...s,
+            waypoints: s.waypoints.map(w => w.id === waypointId ? { ...w, icon: iconId } : w)
+          }));
+          onUpdateTrip({ ...trip, segments: newSegments });
+        }}
+      />
     </>
   );
 }

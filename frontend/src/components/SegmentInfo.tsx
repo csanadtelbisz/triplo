@@ -10,6 +10,7 @@ import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
 import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
 import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
+import { IconPickerDialog } from './IconPickerDialog';
 
 interface SegmentInfoProps {
   isReadOnly?: boolean;
@@ -29,6 +30,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
   
   const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySegmentMetadata(trip, allTrips, onUpdateTrip);
   const [showAllProfiles, setShowAllProfiles] = useState(false);
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   
   useEffect(() => {
     setShowAllProfiles(false);
@@ -608,16 +610,16 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                      }
                    }}
                  />
-                 <a 
-                   href="https://fonts.google.com/icons?icon.style=Rounded" 
-                   target="_blank" 
-                   rel="noreferrer"
+                 <button 
+                   type="button"
+                   disabled={isReadOnly}
+                   onClick={() => setIsIconPickerOpen(true)}
                    className="iconButton" 
                    title="Search Icons" 
-                   style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit', textDecoration: 'none' }}
+                   style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', cursor: isReadOnly ? 'default' : 'pointer' }}
                  >
                    <MaterialIcon name="search" size={20} />
-                 </a>
+                 </button>
                  <button 
                    className="iconButton" 
                    title="Clear Icon" 
@@ -686,6 +688,30 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
       />
 
       <CopySegmentMetadataDialog offer={sectionMetadataOffer} onConfirm={() => applySectionMetadataOffer(segmentId)} onCancel={cancelSectionMetadataOffer} />
+
+      <IconPickerDialog
+        isOpen={isIconPickerOpen}
+        onClose={() => setIsIconPickerOpen(false)}
+        onPick={(iconId) => {
+          setCustomIconInput(iconId);
+          const matchedMode = customModes.find(cm => cm.icon === iconId);
+          
+          const newSegments = trip.segments.map(s => {
+            if (s.id === segmentId) {
+              const updates: any = { customIcon: iconId };
+              if (matchedMode) {
+                updates.customColor = matchedMode.color;
+              }
+              return { ...s, ...updates };
+            }
+            return s;
+          });
+          onUpdateTrip({ ...trip, segments: newSegments });
+          
+          // Trigger the metadata copy offer check
+          handleIconChange(segmentId, seg?.customIcon, seg?.customColor, iconId);
+        }}
+      />
     </>
   );
 }

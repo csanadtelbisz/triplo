@@ -1,39 +1,18 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { CSSProperties, ComponentPropsWithoutRef } from 'react';
 import type { TransportMode } from '../../../shared/types';
+import customIconsData from '../assets/material-icons/custom-icons-metadata.json';
 
-import trolleyBusUrl from '../assets/custom-icons/trolley_bus.svg';
-import horseUrl from '../assets/custom-icons/horse.svg';
-import skiTourUrl from '../assets/custom-icons/ski_tour.svg';
-import discLiftUrl from '../assets/custom-icons/disc_lift.svg';
-import chairliftUrl from '../assets/custom-icons/chairlift.svg';
-import tBarLiftUrl from '../assets/custom-icons/t_bar_lift.svg';
-import cabinLiftUrl from '../assets/custom-icons/cabin_lift.svg';
-import mountainPassUrl from '../assets/custom-icons/mountain_pass.svg';
-import caveUrl from '../assets/custom-icons/cave.svg';
-import lighthouseUrl from '../assets/custom-icons/lighthouse.svg';
-import bridgeUrl from '../assets/custom-icons/bridge.svg';
-import oldBridgeUrl from '../assets/custom-icons/old_bridge.svg';
-import viewpointUrl from '../assets/custom-icons/viewpoint.svg';
+// Create a fast lookup Set for custom icon names using the JSON metadata
+const CUSTOM_ICON_NAMES = new Set(customIconsData.icons.map((icon) => icon.name));
 
 /**
- * Add custom SVGs here. Callers only use the icon name, regardless of its source.
+ * Dynamically resolves the URL for a custom icon.
+ * Note: `new URL(..., import.meta.url)` is standard in Vite/Webpack 5 for dynamic asset bundling.
  */
-export const CUSTOM_ICONS: Readonly<Record<string, string>> = {
-  trolley_bus: trolleyBusUrl,
-  horse: horseUrl,
-  ski_tour: skiTourUrl,
-  disc_lift: discLiftUrl,
-  chairlift: chairliftUrl,
-  t_bar_lift: tBarLiftUrl,
-  cabin_lift: cabinLiftUrl,
-  mountain_pass: mountainPassUrl,
-  cave: caveUrl,
-  lighthouse: lighthouseUrl,
-  bridge: bridgeUrl,
-  old_bridge: oldBridgeUrl,
-  viewpoint: viewpointUrl,
-};
+function getCustomIconUrl(name: string): string {
+  return new URL(`../assets/material-icons/${name}.svg`, import.meta.url).href;
+}
 
 export type IconProps = Omit<ComponentPropsWithoutRef<'span'>, 'children'> & {
   name: string;
@@ -52,15 +31,15 @@ const baseStyle = (size: number): CSSProperties => ({
 });
 
 export function isCustomIcon(name: string): boolean {
-  return name in CUSTOM_ICONS;
+  return CUSTOM_ICON_NAMES.has(name);
 }
 
 /** Renders either a registered SVG or a Google Material Symbol by the same name. */
 export function Icon({ name, size = 20, className, style, ...props }: IconProps) {
   name = name.trim().toLowerCase();
-  const customIconUrl = CUSTOM_ICONS[name];
-
-  if (customIconUrl) {
+  
+  if (isCustomIcon(name)) {
+    const customIconUrl = getCustomIconUrl(name);
     return (
       <span
         {...props}
@@ -88,10 +67,11 @@ export const MaterialIcon = Icon;
 /** Creates an icon for imperative DOM locations such as MapLibre markers. */
 export function createIconElement(name: string, size = 20): HTMLSpanElement {
   const element = document.createElement('span');
-  const customIconUrl = CUSTOM_ICONS[name];
-
+  
   Object.assign(element.style, { ...baseStyle(size), fontSize: `${size}px` });
-  if (customIconUrl) {
+  
+  if (isCustomIcon(name)) {
+    const customIconUrl = getCustomIconUrl(name);
     element.className = 'triplo-icon';
     element.style.maskImage = `url("${customIconUrl}")`;
     element.style.webkitMaskImage = `url("${customIconUrl}")`;
@@ -99,6 +79,7 @@ export function createIconElement(name: string, size = 20): HTMLSpanElement {
     element.className = 'material-symbols-rounded';
     element.textContent = name;
   }
+  
   return element;
 }
 
