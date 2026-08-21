@@ -11,7 +11,7 @@ import { routingManager } from '../routing/RoutingService';
 type SetupMode = 'new' | 'restore';
 type Step = 'welcome' | 'fetching' | 'google-folder' | 'github' | 'api-keys';
 
-export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete: () => void; onStartBackgroundSync: () => void | Promise<void> }) {
+export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete: () => void | Promise<void>; onStartBackgroundSync: () => void | Promise<void> }) {
   const persistingServices = persistingManager.getServices();
   const googleDriveService = persistingServices.find(service => service.name === 'Google Drive')!;
   const githubService = persistingServices.find(service => service.name === 'GitHub')!;
@@ -26,7 +26,7 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
   const continueAfterStorage = (currentMode = mode) => {
     const keys = getApiKeyPreferences();
     if (currentMode === 'new' || (!keys.mapyApiKey && !keys.graphHopperApiKey)) setStep('api-keys');
-    else finish();
+    else void finish();
   };
 
   const fetchSetupAndContinue = async (selectedMode: SetupMode, connection: 'google' | 'github') => {
@@ -57,9 +57,9 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
     continueAfterStorage(selectedMode);
   };
 
-  const finish = () => {
+  const finish = async () => {
     syncPreferencesToCloud(true);
-    onComplete();
+    await onComplete();
   };
 
   const chooseGoogle = (selectedMode: SetupMode) => {
@@ -87,9 +87,9 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
     </Dialog>;
   }
 
-  const saveApiKeys = () => {
+  const saveApiKeys = async () => {
     saveApiKeyPreferences(apiKeys);
-    finish();
+    await finish();
   };
 
   if (step === 'welcome') {

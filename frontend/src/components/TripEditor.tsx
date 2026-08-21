@@ -1,4 +1,4 @@
-﻿import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
+import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -14,6 +14,7 @@ import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/custo
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { TransportMode } from '../../../shared/types';
 import { slugify } from '../utils/slugify';
+import { persistingManager } from '../persisting/PersistingManager';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -42,6 +43,7 @@ interface TripEditorProps {
   availablePersistingServices?: PersistingService[];
   onPersistOwnedTrip?: (trip: Trip) => Promise<void> | void;
   onSaveSharedTripReference?: (trip: Trip) => Promise<void> | void;
+  onRequestSetup?: (onSuccess: () => void | Promise<void>) => void;
 }
 
 const tripEditorScrollPositions: Record<string, number> = {};
@@ -50,7 +52,8 @@ export function TripEditor({
   isReadOnly: propIsReadOnly = false, onToggleReadOnly, trip, onGoBack, onSelectSegment, onSelectWaypoint,
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
-  onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference
+  onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference,
+  onRequestSetup
 }: TripEditorProps) {
   const isSavedSharedTrip = !!trip.metadata?.isSharedTripReference;
   const isSharedTrip = isSharedTripView || isSavedSharedTrip;
@@ -229,6 +232,22 @@ export function TripEditor({
     } finally {
       setIsSavingSharedTrip(false);
     }
+  };
+
+  const handleSaveSharedTrip = () => {
+    if (onRequestSetup && persistingManager.getAvailableServices().length === 0) {
+      onRequestSetup(() => saveSharedTripLocally());
+      return;
+    }
+    void saveSharedTripLocally();
+  };
+
+  const handleMakeCopy = () => {
+    if (onRequestSetup && persistingManager.getAvailableServices().length === 0) {
+      onRequestSetup(() => createCopyTrip());
+      return;
+    }
+    void createCopyTrip();
   };
   
   const [dragRender, setDragRender] = useState<{
@@ -972,12 +991,12 @@ export function TripEditor({
              </button>
            )}
            {canSaveSharedTripLocally && (
-             <button className="iconButton" title="Save trip to my trips" onClick={saveSharedTripLocally} disabled={isSavingSharedTrip}>
+             <button className="iconButton" title="Save trip to my trips" onClick={handleSaveSharedTrip} disabled={isSavingSharedTrip}>
                <MaterialIcon name={isSavingSharedTrip ? "sync" : "bookmark_add"} size={20} className={isSavingSharedTrip ? "spinning" : undefined} />
              </button>
            )}
            {canCopySharedTrip && (
-             <button className="iconButton" title="Make a copy" onClick={() => void createCopyTrip()} disabled={isCopyingSharedTrip}>
+             <button className="iconButton" title="Make a copy" onClick={handleMakeCopy} disabled={isCopyingSharedTrip}>
                <MaterialIcon name={isCopyingSharedTrip ? "sync" : "content_copy"} size={20} className={isCopyingSharedTrip ? "spinning" : undefined} />
              </button>
            )}

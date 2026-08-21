@@ -116,6 +116,21 @@ export default function App() {
   const [isLoadingSharedTrip, setIsLoadingSharedTrip] = useState(() => !!getSharedTripTokenFromPath());
   const [sharedTripId, setSharedTripId] = useState<string | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0 && !getSharedTripTokenFromPath());
+  const [setupWizardCallback, setSetupWizardCallback] = useState<(() => void | Promise<void>) | null>(null);
+
+  const promptSetupWizard = (onSuccess?: () => void | Promise<void>) => {
+    setSetupWizardCallback(() => onSuccess || null);
+    setShowSetupWizard(true);
+  };
+
+  const handleSetupWizardComplete = async () => {
+    setShowSetupWizard(false);
+    if (setupWizardCallback) {
+      const callback = setupWizardCallback;
+      setSetupWizardCallback(null);
+      await callback();
+    }
+  };
 
   const stripMeta = (t: Trip) => {
     const copy: any = { ...t };
@@ -650,16 +665,25 @@ export default function App() {
       return;
     }
 
-    setSelectedTrip(null);
-    setSelectedSegmentId(null);
-    setSelectedWaypointId(null);
-    setHighlightedWaypointId(null);
-    setSelectedPOI(null);
-    setAttachingPoiToWaypointId(null);
-    if (getSharedTripTokenFromPath()) {
-      window.history.replaceState({}, '', '/');
+    const performGoBack = () => {
+      setSelectedTrip(null);
+      setSelectedSegmentId(null);
+      setSelectedWaypointId(null);
+      setHighlightedWaypointId(null);
+      setSelectedPOI(null);
+      setAttachingPoiToWaypointId(null);
+      if (getSharedTripTokenFromPath()) {
+        window.history.replaceState({}, '', '/');
+      }
+      setIsViewingSharedTrip(false);
+    };
+
+    if (persistingManager.getAvailableServices().length === 0) {
+      promptSetupWizard(performGoBack);
+      return;
     }
-    setIsViewingSharedTrip(false);
+
+    performGoBack();
   };
 
   const handleGoBackSegment = () => setSelectedSegmentId(null);
@@ -1189,10 +1213,11 @@ export default function App() {
               setWaitingWaypointId(wpId);
               waitingWaypointIdRef.current = wpId;
             }}
+            onRequestSetup={promptSetupWizard}
           />
         )}
       </div>
-      {showSetupWizard && <SetupWizard onComplete={() => { setShowSetupWizard(false); }} onStartBackgroundSync={loadTrips} />}
+      {showSetupWizard && <SetupWizard onComplete={handleSetupWizardComplete} onStartBackgroundSync={loadTrips} />}
       <Map isReadOnly={isReadOnly}
         ref={mapComponentRef}
         trips={trips}
