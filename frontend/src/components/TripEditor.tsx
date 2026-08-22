@@ -961,7 +961,7 @@ export function TripEditor({
              <button className="iconButton" title="Share Trip" onClick={() => setIsShareDialogOpen(true)}><MaterialIcon name="share" size={20} /></button>
            )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
-           {isReadOnly ? (
+           {!isSharedTrip && (isReadOnly ? (
              <button
                className="iconButton"
                title="Turn Off Read-Only Mode"
@@ -989,7 +989,7 @@ export function TripEditor({
              >
                <MaterialIcon name={isSaving ? "sync" : "save"} size={20} className={isSaving ? "spinning" : undefined} />
              </button>
-           )}
+           ))}
            {canSaveSharedTripLocally && (
              <button className="iconButton" title="Save trip to my trips" onClick={handleSaveSharedTrip} disabled={isSavingSharedTrip}>
                <MaterialIcon name={isSavingSharedTrip ? "sync" : "bookmark_add"} size={20} className={isSavingSharedTrip ? "spinning" : undefined} />

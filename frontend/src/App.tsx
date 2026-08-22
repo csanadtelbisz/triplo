@@ -120,7 +120,9 @@ export default function App() {
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
   const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+    window.innerWidth <= 768 && !!getSharedTripTokenFromPath()
+  );
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
   const [hoveredCoordinate, setHoveredCoordinate] = useState<{ lon: number; lat: number; ele?: number } | null>(null);
@@ -891,7 +893,7 @@ export default function App() {
         setSharedTripId(cachedSharedTrip.id);
         setIsViewingSharedTrip(true);
         setIsReadOnly(true);
-        setIsSidebarCollapsed(false);
+        setIsSidebarCollapsed(window.innerWidth <= 768);
         setTimeout(() => mapComponentRef.current?.zoomToTrip(cachedSharedTrip, 'open', 'trip'), 0);
       } catch (error) {
         console.error('Failed to load shared trip:', error);
@@ -925,6 +927,7 @@ export default function App() {
     } else if (savedSharedTrip) {
       setSelectedTrip(savedSharedTrip);
       setIsViewingSharedTrip(true);
+      setIsSidebarCollapsed(window.innerWidth <= 768);
     }
   }, [isLoadingTrips, sharedTripId, trips]);
 
