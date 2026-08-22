@@ -26,8 +26,7 @@
         const route = path.slice(base.length);
 
         const redirectUrl =
-          base +
-          '?' +
+          base + '?' +
           (route ? '/' + route : '') +
           (search ? '&' + search.slice(1) : '') +
           hash;

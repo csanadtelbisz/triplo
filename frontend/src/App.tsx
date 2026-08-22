@@ -35,7 +35,11 @@ const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
 
 const getSharedTripTokenFromPath = () => {
-  const match = window.location.pathname.match(/^\/share\/([^/]+)$/);
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const path = window.location.pathname;
+  const relativePath = path.startsWith(base) ? path.slice(base.length) : path;
+
+  const match = relativePath.match(/^\/share\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : '';
 };
 
