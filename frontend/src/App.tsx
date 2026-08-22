@@ -893,8 +893,9 @@ export default function App() {
         setSharedTripId(cachedSharedTrip.id);
         setIsViewingSharedTrip(true);
         setIsReadOnly(true);
-        setIsSidebarCollapsed(window.innerWidth <= 768);
-        setTimeout(() => mapComponentRef.current?.zoomToTrip(cachedSharedTrip, 'open', 'trip'), 0);
+        const isMobile = window.innerWidth <= 768;
+        setIsSidebarCollapsed(isMobile);
+        setTimeout(() => mapComponentRef.current?.zoomToTrip(cachedSharedTrip, isMobile ? 'collapsed' : 'open', 'trip'), isMobile ? 350 : 0);
       } catch (error) {
         console.error('Failed to load shared trip:', error);
         setSharedTripError(unavailableSharedTripMessage);
@@ -1244,7 +1245,7 @@ export default function App() {
           />
         ) : !selectedTrip && isLoadingSharedTrip ? (
           <div className="trip-editor">
-            <div className="toolbar"><h2 className="toolbar-title">Loading Shared Trip</h2></div>
+            <div className="toolbar"><h2 className="toolbar-title">Loading Shared Trip...</h2></div>
             <div className="content">Loading the shared trip…</div>
           </div>
         ) : !selectedTrip ? (
