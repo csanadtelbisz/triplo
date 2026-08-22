@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import './styles/App.css';
 import './styles/Shared.css';
 import './styles/TripManager.css';
@@ -24,13 +25,14 @@ import { StatusPanel } from './components/StatusPanel';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import { persistingManager } from './persisting/PersistingManager';
-import { hasUnsyncedPreferences, loadPreferencesFromCloud } from './utils/preferencesSync';
+import { hasUnsyncedPreferences, loadPreferencesFromCloud, syncPreferencesToCloud } from './utils/preferencesSync';
 import { resolvePOIName } from './utils/poiUtils';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 import { SetupWizard } from './components/SetupWizard';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
+type PreferenceVersion = { source: string; preferences: any };
 
 const getSharedTripTokenFromPath = () => {
   const match = window.location.pathname.match(/^\/share\/([^/]+)$/);
@@ -90,7 +92,18 @@ export default function App() {
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [tripConflicts, setTripConflicts] = useState<Record<string, Trip[]>>({});
   const conflictedTripIds = new Set(Object.keys(tripConflicts));
-  const [resolvingTripId, setResolvingTripId] = useState<string | null>(null);
+  const [preferenceConflicts, setPreferenceConflicts] = useState<PreferenceVersion[]>([]);
+  const [missingTrips, setMissingTrips] = useState<Record<string, string[]>>({});
+  const [showConflictResolution, setShowConflictResolution] = useState(false);
+  const [activeConflictSave, setActiveConflictSave] = useState<string | null>(null);
+  const [uploadingMissingTripId, setUploadingMissingTripId] = useState<string | null>(null);
+  const [isAcceptingAllConflicts, setIsAcceptingAllConflicts] = useState(false);
+
+  useEffect(() => {
+    if (showConflictResolution && preferenceConflicts.length === 0 && Object.keys(tripConflicts).length === 0 && Object.keys(missingTrips).length === 0) {
+      setShowConflictResolution(false);
+    }
+  }, [showConflictResolution, preferenceConflicts, tripConflicts, missingTrips]);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
@@ -150,8 +163,21 @@ export default function App() {
 
       const apiTrips = await TripAPI.getTrips();
       const remoteTrips = await persistingManager.loadAllTrips();
-      // Load preferences from cloud
-      await loadPreferencesFromCloud();
+      const preferenceVersions = await persistingManager.loadPreferencesFromAll();
+      const preferenceTimestamp = (prefs: any) => {
+        const timestamp = prefs?.updatedAt ? new Date(prefs.updatedAt).getTime() : Number.NEGATIVE_INFINITY;
+        return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+      };
+      const newestPreferences = [...preferenceVersions].sort((a, b) => preferenceTimestamp(b.preferences) - preferenceTimestamp(a.preferences))[0];
+      if (newestPreferences) await loadPreferencesFromCloud(newestPreferences.preferences, newestPreferences.source);
+      const comparablePreferences = (prefs: any) => {
+        const copy = { ...prefs };
+        delete copy.updatedAt;
+        return JSON.stringify(copy);
+      };
+      const uniquePreferenceVersions = new Set(preferenceVersions.map(version => comparablePreferences(version.preferences)));
+      const preferencesInConflict = uniquePreferenceVersions.size > 1 ? preferenceVersions : [];
+      setPreferenceConflicts(preferencesInConflict);
 
       const variantsByTripId: Record<string, Trip[]> = {};
       const conflictsFound: Record<string, Trip[]> = {};
@@ -171,8 +197,15 @@ export default function App() {
       });
 
       const tripsMap = new globalThis.Map<string, Trip>();
+      const missingServicesByTrip: Record<string, string[]> = {};
+      const serviceNames = persistingManager.getAvailableServices().map(service => service.name);
 
       Object.entries(variantsByTripId).forEach(([id, variants]) => {
+        const presentServices = new Set(variants
+          .map(variant => variant.metadata?._sourceService)
+          .filter((source): source is string => !!source && source !== 'Local Browser Storage'));
+        const missingServices = serviceNames.filter(service => !presentServices.has(service));
+        if (missingServices.length > 0) missingServicesByTrip[id] = missingServices;
         // Find remote variants
         const remoteVariants = variants.filter(v => v.metadata?._sourceService && v.metadata._sourceService !== 'Local Browser Storage');
         
@@ -232,6 +265,7 @@ export default function App() {
       });
 
       setTripConflicts(conflictsFound);
+      setMissingTrips(missingServicesByTrip);
 
       const fetchedTrips = Array.from(tripsMap.values());
 
@@ -621,6 +655,8 @@ export default function App() {
   }, [unsavedTripIds.size]);
 
   const handleResolveConflict = async (tripId: string, acceptedVersion: Trip) => {
+    setActiveConflictSave(`trip:${tripId}`);
+    try {
     // 1. collect all sources involved
     const conflicts = tripConflicts[tripId] || [];
     const allSources = new Set<string>();
@@ -639,13 +675,6 @@ export default function App() {
     const newTrips = trips.map(t => t.id === tripId ? finalTrip : t);
     setTrips(newTrips);
     
-    setTripConflicts(prev => {
-      const next = { ...prev };
-      delete next[tripId];
-      return next;
-    });
-    setResolvingTripId(null);
-    
     // 4. save locally and upload all to sync remote places
     try {
       await TripAPI.saveTrip(finalTrip);
@@ -654,8 +683,74 @@ export default function App() {
         [tripId]: { past: [], future: [], lastSavedStr: stripMeta(finalTrip) }
       }));
       await persistingManager.uploadToAll(finalTrip);
+      setTripConflicts(prev => {
+        const next = { ...prev };
+        delete next[tripId];
+        return next;
+      });
+      setMissingTrips(prev => {
+        const next = { ...prev };
+        delete next[tripId];
+        return next;
+      });
     } catch (err) {
       console.error('Failed to upload resolved trip:', err);
+    }
+    } finally {
+      setActiveConflictSave(null);
+    }
+  };
+
+  const handleResolvePreferenceConflict = async (version: PreferenceVersion) => {
+    setActiveConflictSave('preferences');
+    try {
+      await loadPreferencesFromCloud(version.preferences, version.source);
+      await syncPreferencesToCloud(true, undefined, true);
+      setPreferenceConflicts([]);
+    } finally {
+      setActiveConflictSave(null);
+    }
+  };
+
+  const handleUploadMissingTrip = async (tripId: string) => {
+    const services = missingTrips[tripId];
+    const trip = trips.find(item => item.id === tripId);
+    if (!trip || !services) return;
+    setUploadingMissingTripId(tripId);
+    try {
+      await persistingManager.uploadToServices(trip, services);
+      setMissingTrips(prev => {
+        const next = { ...prev };
+        delete next[tripId];
+        return next;
+      });
+    } finally {
+      setUploadingMissingTripId(null);
+    }
+  };
+
+  const handleAcceptLatestAndUploadMissing = async () => {
+    flushSync(() => setIsAcceptingAllConflicts(true));
+    try {
+      const newestPreference = [...preferenceConflicts].sort((a, b) =>
+        new Date(b.preferences.updatedAt || 0).getTime() - new Date(a.preferences.updatedAt || 0).getTime()
+      )[0];
+      if (newestPreference) await handleResolvePreferenceConflict(newestPreference);
+
+      for (const [tripId, versions] of Object.entries(tripConflicts)) {
+        const newestTrip = [...versions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+        if (newestTrip) await handleResolveConflict(tripId, newestTrip);
+      }
+      const conflictedIds = new Set(Object.keys(tripConflicts));
+      await Promise.all(Object.entries(missingTrips).map(async ([tripId, services]) => {
+        if (conflictedIds.has(tripId)) return;
+        const trip = trips.find(item => item.id === tripId);
+        if (trip) await persistingManager.uploadToServices(trip, services);
+      }));
+      setMissingTrips({});
+      setShowConflictResolution(false);
+    } finally {
+      setIsAcceptingAllConflicts(false);
     }
   };
 
@@ -893,7 +988,7 @@ export default function App() {
       return;
     }
     if (conflictedTripIds.has(trip.id)) {
-      setResolvingTripId(trip.id);
+      setShowConflictResolution(true);
       return;
     }
     setIsStatusOpen(false);
@@ -1153,6 +1248,8 @@ export default function App() {
             onDeleteTrip={handleDeleteTrip}
               onUploadTrip={handleUploadTrip}
               onReloadTrips={loadTrips}              isTripsLoading={isLoadingTrips}
+            hasSyncIssues={Object.keys(tripConflicts).length > 0 || preferenceConflicts.length > 0 || Object.keys(missingTrips).length > 0}
+            onOpenConflictResolver={() => setShowConflictResolution(true)}
             unsavedTripIds={unsavedTripIds}              conflictedTripIds={conflictedTripIds}            onSaveAll={handleSaveAllUnsaved}
             onCreateTrip={handleCreateTrip}
             onOpenStatus={() => {
@@ -1301,27 +1398,63 @@ export default function App() {
       />
     </div>
 
-    {resolvingTripId && <Dialog
-      isOpen={true}
-      title="Resolve Trip Conflict"
-      onClose={() => setResolvingTripId(null)}
+    <Dialog
+      isOpen={showConflictResolution}
+      title="Resolve Sync Conflicts"
+      onClose={() => setShowConflictResolution(false)}
       actions={
-        <button className="dialog-btn dialog-btn-cancel" onClick={() => setResolvingTripId(null)}>Cancel</button>
+        <>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => setShowConflictResolution(false)} disabled={isAcceptingAllConflicts}>Close</button>
+          <button className="dialog-btn dialog-btn-primary" onClick={handleAcceptLatestAndUploadMissing} disabled={isAcceptingAllConflicts || activeConflictSave !== null || uploadingMissingTripId !== null}>
+            {isAcceptingAllConflicts ? 'Accepting and uploading all...' : 'Accept latest and upload missing'}
+          </button>
+        </>
       }
     >
-      <div className="conflict-dialog">
-        <p>This trip has conflicting versions from different sources. Please select the version you want to keep. The chosen version will overwrite the others.</p>
-        <div className="conflict-list">
-          {(tripConflicts[resolvingTripId] || []).map((t, i) => (
-            <div key={i} className="conflict-item">
-              <h4>Source: {t.metadata?._sourceService || 'Unknown'}</h4>
-              <p>Last modified: {new Date(t.updatedAt).toLocaleString()}</p>
-              <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolveConflict(resolvingTripId, t)}>Keep this version</button>
-            </div>
-          ))}
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '60vh', overflowY: 'auto' }}>
+        {preferenceConflicts.length > 0 && (
+          <section>
+            <h4 style={{ margin: '0 0 6px' }}>Preferences</h4>
+            {preferenceConflicts.map(version => (
+              <div key={version.source} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                <span style={{ flex: 1 }}>{version.source}</span>
+                <span style={{ fontSize: '0.85em', color: '#666' }}>{version.preferences.updatedAt ? new Date(version.preferences.updatedAt).toLocaleString() : 'No timestamp'}</span>
+                <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolvePreferenceConflict(version)} disabled={isAcceptingAllConflicts || activeConflictSave === 'preferences'}>
+                  {activeConflictSave === 'preferences' ? 'Saving...' : 'Accept'}
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+        {Object.entries(tripConflicts).map(([tripId, versions]) => (
+          <section key={tripId}>
+            <h4 style={{ margin: '0 0 6px' }}>{versions[0]?.name || 'Unnamed trip'}</h4>
+            {versions.map((trip, index) => (
+              <div key={`${trip.metadata?._sourceService}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                <span style={{ flex: 1 }}>{trip.metadata?._sourceService || 'Unknown source'}</span>
+                <span style={{ fontSize: '0.85em', color: '#666' }}>{trip.updatedAt ? new Date(trip.updatedAt).toLocaleString() : 'No timestamp'}</span>
+                <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolveConflict(tripId, trip)} disabled={isAcceptingAllConflicts || activeConflictSave === `trip:${tripId}`}>
+                  {activeConflictSave === `trip:${tripId}` ? 'Saving...' : 'Accept'}
+                </button>
+              </div>
+            ))}
+          </section>
+        ))}
+        {Object.entries(missingTrips).length > 0 && (
+          <section>
+            <h4 style={{ margin: '0 0 6px' }}>Trips missing from a service</h4>
+            {Object.entries(missingTrips).map(([tripId, services]) => (
+              <div key={tripId} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0', fontSize: '0.9em' }}>
+                <span style={{ flex: 1 }}>{trips.find(trip => trip.id === tripId)?.name || tripId}: missing from {services.join(', ')}</span>
+                <button className="dialog-btn dialog-btn-primary" onClick={() => handleUploadMissingTrip(tripId)} disabled={isAcceptingAllConflicts || uploadingMissingTripId === tripId}>
+                  {uploadingMissingTripId === tripId ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
       </div>
-    </Dialog>}
+    </Dialog>
 
     {exitingTempTripAlert && <Dialog
       isOpen={true}

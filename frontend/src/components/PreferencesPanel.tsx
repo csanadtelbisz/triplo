@@ -207,7 +207,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const newConfig: RenderStyleConfig = {
       id: crypto.randomUUID(),
       name: 'New Style Config',
-      script: DEFAULT_STYLE_SCRIPT
+      script: DEFAULT_STYLE_SCRIPT,
+      updatedAt: new Date().toISOString()
     };
     const newConfigs = [...styleConfigs, newConfig];
     setStyleConfigs(newConfigs);
@@ -221,7 +222,13 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const index = styleConfigs.findIndex(c => c.id === config.id);
     if (index === -1) return;
     const newConfigs = [...styleConfigs];
-    newConfigs[index] = config;
+    const existingConfig = styleConfigs[index];
+    newConfigs[index] = {
+      ...config,
+      updatedAt: existingConfig.name !== config.name || existingConfig.script !== config.script
+        ? new Date().toISOString()
+        : existingConfig.updatedAt
+    };
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
     syncPreferencesToCloud(false, config.id);

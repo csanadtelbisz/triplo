@@ -23,11 +23,13 @@ interface TripManagerProps {
   onOpenSettings: () => void;
   onOpenAnalytics?: () => void;
   isTripsLoading?: boolean;
+  hasSyncIssues?: boolean;
+  onOpenConflictResolver?: () => void;
 }
 
 let tripManagerScrollPos = 0;
 
-export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, onOpenAnalytics, isTripsLoading }: TripManagerProps) {
+export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSelectTrip, onDeleteTrip, onUploadTrip, onReloadTrips, unsavedTripIds, conflictedTripIds, onSaveAll, onCreateTrip, onOpenStatus, onOpenSettings, onOpenAnalytics, isTripsLoading, hasSyncIssues = false, onOpenConflictResolver }: TripManagerProps) {
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
   const [uploadingTripId, setUploadingTripId] = useState<string | null>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -187,6 +189,11 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {hasSyncIssues && (
+                <button className="iconButton" onClick={onOpenConflictResolver} title="Sync conflicts or missing trips" style={{ color: '#d39e00' }}>
+                  <MaterialIcon name="warning" size={18} />
+                </button>
+              )}
             <button className="iconButton" onClick={handleReload} title="Reload from all services" disabled={isReloading || isTripsLoading}>
               <MaterialIcon name="sync" size={20} className={isReloading || isTripsLoading ? "spinning" : ""} />
             </button>

@@ -146,6 +146,27 @@ export class PersistingManager {
     return null;
   }
 
+  async uploadToServices(trip: any, serviceNames: string[]): Promise<void> {
+    const services = this.getAvailableServices().filter(service => serviceNames.includes(service.name));
+    for (const service of services) {
+      await service.save(trip);
+      trip.metadata = trip.metadata || {};
+      trip.metadata.syncedServices = trip.metadata.syncedServices || [];
+      if (!trip.metadata.syncedServices.includes(service.name)) {
+        trip.metadata.syncedServices.push(service.name);
+      }
+    }
+  }
+
+  async loadPreferencesFromAll(): Promise<{ source: string; preferences: any }[]> {
+    const loaded = await Promise.all(this.getAvailableServices().map(async service => {
+      if (!service.loadPreferences) return null;
+      const preferences = await service.loadPreferences();
+      return preferences ? { source: service.name, preferences } : null;
+    }));
+    return loaded.filter((item): item is { source: string; preferences: any } => item !== null);
+  }
+
   async savePreferences(prefs: any): Promise<void> {
     const available = this.getAvailableServices();
     for (const service of available) {
@@ -166,6 +187,11 @@ export class PersistingManager {
       }
     }
     return null;
+  }
+
+  async loadPreferenceFileFromService(source: string, path: string): Promise<string | null> {
+    const service = this.getAvailableServices().find(item => item.name === source);
+    return service?.loadPreferenceFile ? service.loadPreferenceFile(path) : null;
   }
 
   async savePreferenceFile(path: string, content: string): Promise<void> {

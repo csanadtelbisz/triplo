@@ -27,6 +27,7 @@ interface SyncedStyleConfigMetadata {
   fileName: string;
   order: number;
   readonly?: boolean;
+  updatedAt?: string;
 }
 
 interface SyncedStyleConfigurations {
@@ -53,7 +54,11 @@ function getSyncedStyleConfigs(): SyncedStyleConfigurations {
       name: config.name,
       fileName: toSafeStyleFileName(config),
       order: index,
-      readonly: config.readonly
+      readonly: config.readonly,
+      // Legacy configurations predate per-style timestamps. Give them a stable
+      // old value so they can participate in conflict detection without being
+      // treated as newly edited on every sync.
+      updatedAt: config.updatedAt || new Date(0).toISOString()
     }));
 
   return {
@@ -101,10 +106,13 @@ async function deleteRemovedStyleConfigScripts(previousStyleConfigurations: Sync
   }
 }
 
-async function loadStyleConfigScripts(styleConfigurations: SyncedStyleConfigurations): Promise<RenderStyleConfig[]> {
+async function loadStyleConfigScripts(styleConfigurations: SyncedStyleConfigurations, source?: string): Promise<RenderStyleConfig[]> {
   const orderedMetadata = [...styleConfigurations.configs].sort((a, b) => a.order - b.order);
   const loaded = await Promise.all(orderedMetadata.map(async (metadata): Promise<RenderStyleConfig | null> => {
-    const script = await persistingManager.loadPreferenceFile(getStyleScriptPath(metadata.fileName));
+    const path = getStyleScriptPath(metadata.fileName);
+    const script = source
+      ? await persistingManager.loadPreferenceFileFromService(source, path)
+      : await persistingManager.loadPreferenceFile(path);
     if (script === null) {
       console.warn(`Style configuration script missing from synced preferences: styles/${metadata.fileName}`);
       return null;
@@ -117,13 +125,16 @@ async function loadStyleConfigScripts(styleConfigurations: SyncedStyleConfigurat
     if (metadata.readonly !== undefined) {
       config.readonly = metadata.readonly;
     }
+    if (metadata.updatedAt !== undefined) {
+      config.updatedAt = metadata.updatedAt;
+    }
     return config;
   }));
 
   return loaded.filter((config): config is RenderStyleConfig => config !== null);
 }
 
-export const syncPreferencesToCloud = async (immediate = false, changedStyleConfigId?: string) => {
+export const syncPreferencesToCloud = async (immediate = false, changedStyleConfigId?: string, forceAllStyleScripts = false) => {
   if (changedStyleConfigId) {
     pendingStyleConfigScriptIds.add(changedStyleConfigId);
   }
@@ -140,7 +151,7 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
       const styleConfigurations = getSyncedStyleConfigs();
       styleConfigIdsToSave = pendingStyleConfigScriptIds;
       pendingStyleConfigScriptIds = new Set<string>();
-      if (!previousPrefs?.styleConfigurations?.configs) {
+      if (forceAllStyleScripts || !previousPrefs?.styleConfigurations?.configs) {
         for (const config of styleConfigurations.configs) {
           styleConfigIdsToSave.add(config.id);
         }
@@ -158,7 +169,14 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
         apiKeys: getApiKeyPreferences(),
         styleConfigurations
       };
-      await persistingManager.savePreferences(prefs);
+      const previousComparable = previousPrefs ? { ...previousPrefs } : null;
+      if (previousComparable) delete previousComparable.updatedAt;
+      const nextComparable = { ...prefs };
+      const hasChanged = JSON.stringify(nextComparable) !== JSON.stringify(previousComparable);
+      await persistingManager.savePreferences({
+        ...prefs,
+        updatedAt: hasChanged || !previousPrefs?.updatedAt ? new Date().toISOString() : previousPrefs.updatedAt
+      });
       setPreferencesSyncStatus('synced', false);
     } catch (e) {
       for (const configId of styleConfigIdsToSave || []) {
@@ -186,9 +204,9 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
   }
 };
 
-export const loadPreferencesFromCloud = async (): Promise<boolean> => {
+export const loadPreferencesFromCloud = async (preferences?: any, source?: string): Promise<boolean> => {
   try {
-    const prefs = await persistingManager.loadPreferences();
+    const prefs = preferences || await persistingManager.loadPreferences();
     if (prefs) {
       let changed = false;
       
@@ -240,7 +258,7 @@ export const loadPreferencesFromCloud = async (): Promise<boolean> => {
       }
 
       if (prefs.styleConfigurations?.configs && Array.isArray(prefs.styleConfigurations.configs)) {
-        const loadedStyleConfigs = await loadStyleConfigScripts(prefs.styleConfigurations);
+        const loadedStyleConfigs = await loadStyleConfigScripts(prefs.styleConfigurations, source);
         const prevStyleConfigs = JSON.stringify(getStyleConfigs().filter(c => c.id !== 'default'));
         if (JSON.stringify(loadedStyleConfigs) !== prevStyleConfigs) {
           saveStyleConfigs(loadedStyleConfigs);

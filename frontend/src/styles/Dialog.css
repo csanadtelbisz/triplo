@@ -162,6 +162,12 @@
   transition: all 0.2s;
 }
 
+.dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .dialog-btn-cancel {
   background: white;
   border-color: #ccc;

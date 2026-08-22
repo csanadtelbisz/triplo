@@ -21,6 +21,7 @@ export interface RenderStyleConfig {
   name: string;
   script: string;
   readonly?: boolean;
+  updatedAt?: string;
 }
 
 let transientStyleConfig: RenderStyleConfig | null = null;

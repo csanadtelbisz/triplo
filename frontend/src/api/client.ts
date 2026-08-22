@@ -2,10 +2,10 @@
 import type { Trip } from '../../../shared/types';
 import { mockTrips as defaultMockTrips } from './mockData';
 
-const isLocalhostOrIP = window.location.hostname === 'localhost' || 
+/* const isLocalhostOrIP = window.location.hostname === 'localhost' || 
                         window.location.hostname === '127.0.0.1' || 
-                        /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname);
-
+                        /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname); */
+const isLocalhostOrIP = false; // Disable mock data for now, as we already have realistic test data
 const mockTrips: Trip[] = isLocalhostOrIP ? [...defaultMockTrips] : [];
 
 export const TripAPI = {
