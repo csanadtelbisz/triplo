@@ -86,6 +86,8 @@ export class GitHubPersistingService implements PersistingService {
   private async saveTextFile(path: string, content: string, message: string): Promise<void> {
     if (!this.isAvailable()) return;
     const repo = this.getRepo();
+    const existingContent = await this.loadTextFile(path);
+    if (existingContent === content) return;
     const encodedContent = this.encodeUtf8Base64(content);
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -200,6 +202,9 @@ export class GitHubPersistingService implements PersistingService {
     if (!this.isAvailable()) throw new Error('GitHub service unavailable');
     const repo = this.getRepo();
     const path = `trips/${trip.id}.triplo.json`;
+    const serializedTrip = JSON.stringify(trip, null, 2);
+    const existingContent = await this.loadTextFile(path);
+    if (existingContent === serializedTrip) return;
     
     let sha: string | undefined;
     
@@ -214,7 +219,7 @@ export class GitHubPersistingService implements PersistingService {
       // Ignored: probably 404 which means new file
     }
 
-    const content = this.encodeUtf8Base64(JSON.stringify(trip, null, 2));
+    const content = this.encodeUtf8Base64(serializedTrip);
     
     const body = JSON.stringify({
       message: `Triplo: Sync trip ${trip.name || trip.id}`,

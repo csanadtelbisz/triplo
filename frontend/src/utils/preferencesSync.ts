@@ -10,6 +10,7 @@ import type { RenderStyleConfig } from './mapStylesPreferences';
 let syncTimeout: any;
 let preferencesSyncStatus: 'idle' | 'pending' | 'syncing' | 'synced' | 'error' | 'unavailable' = 'idle';
 let preferencesDirty = false;
+let pendingStyleConfigScriptIds = new Set<string>();
 
 const setPreferencesSyncStatus = (status: typeof preferencesSyncStatus, dirty = preferencesDirty) => {
   preferencesSyncStatus = status;
@@ -67,9 +68,13 @@ function getStyleScriptPath(fileName: string) {
   return `styles/${fileName}`;
 }
 
-async function saveStyleConfigScripts(styleConfigurations: SyncedStyleConfigurations) {
+async function saveStyleConfigScripts(
+  styleConfigurations: SyncedStyleConfigurations,
+  styleConfigIds: ReadonlySet<string>
+) {
   const configs = getStyleConfigs().filter(config => config.id !== 'default');
   for (const config of configs) {
+    if (!styleConfigIds.has(config.id)) continue;
     const metadata = styleConfigurations.configs.find(item => item.id === config.id);
     if (!metadata) continue;
     try {
@@ -118,17 +123,29 @@ async function loadStyleConfigScripts(styleConfigurations: SyncedStyleConfigurat
   return loaded.filter((config): config is RenderStyleConfig => config !== null);
 }
 
-export const syncPreferencesToCloud = async (immediate = false) => {
+export const syncPreferencesToCloud = async (immediate = false, changedStyleConfigId?: string) => {
+  if (changedStyleConfigId) {
+    pendingStyleConfigScriptIds.add(changedStyleConfigId);
+  }
+
   const doSync = async () => {
     if (persistingManager.getAvailableServices().length === 0) {
       setPreferencesSyncStatus('unavailable', true);
       return;
     }
     setPreferencesSyncStatus('syncing', true);
+    let styleConfigIdsToSave: Set<string> | undefined;
     try {
       const previousPrefs = await persistingManager.loadPreferences();
       const styleConfigurations = getSyncedStyleConfigs();
-      await saveStyleConfigScripts(styleConfigurations);
+      styleConfigIdsToSave = pendingStyleConfigScriptIds;
+      pendingStyleConfigScriptIds = new Set<string>();
+      if (!previousPrefs?.styleConfigurations?.configs) {
+        for (const config of styleConfigurations.configs) {
+          styleConfigIdsToSave.add(config.id);
+        }
+      }
+      await saveStyleConfigScripts(styleConfigurations, styleConfigIdsToSave);
       await deleteRemovedStyleConfigScripts(previousPrefs?.styleConfigurations, styleConfigurations);
 
       const prefs = {
@@ -144,6 +161,9 @@ export const syncPreferencesToCloud = async (immediate = false) => {
       await persistingManager.savePreferences(prefs);
       setPreferencesSyncStatus('synced', false);
     } catch (e) {
+      for (const configId of styleConfigIdsToSave || []) {
+        pendingStyleConfigScriptIds.add(configId);
+      }
       console.error('Failed to sync preferences to cloud:', e);
       setPreferencesSyncStatus('error', true);
     }

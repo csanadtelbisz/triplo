@@ -181,6 +181,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     [newConfigs[index - 1], newConfigs[index]] = [newConfigs[index], newConfigs[index - 1]];
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
+    syncPreferencesToCloud();
   };
 
   const handleMoveStyleConfigDown = (index: number) => {
@@ -189,6 +190,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     [newConfigs[index + 1], newConfigs[index]] = [newConfigs[index], newConfigs[index + 1]];
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
+    syncPreferencesToCloud();
   };
 
   const handleDeleteStyleConfig = (index: number) => {
@@ -198,6 +200,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     newConfigs.splice(index, 1);
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
+    syncPreferencesToCloud();
   };
 
   const handleAddStyleConfig = () => {
@@ -210,6 +213,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
     setActiveStyleConfigId(newConfig.id);
+    syncPreferencesToCloud(false, newConfig.id);
     setEditingConfigId(newConfig.id);
   };
 
@@ -220,6 +224,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     newConfigs[index] = config;
     setStyleConfigs(newConfigs);
     saveStyleConfigs(newConfigs);
+    syncPreferencesToCloud(false, config.id);
   };
 
   const handleCloseEditor = () => {
