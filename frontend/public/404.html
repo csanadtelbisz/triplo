@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Triplo</title>
+
+    <script>
+      // GitHub Pages serves this file for routes that don't correspond
+      // to an actual file. Convert the requested path into a query
+      // parameter so that index.html can be loaded.
+      //
+      // Example:
+      //   /triplo/share/abc123
+      // becomes:
+      //   /triplo/?/share/abc123
+
+      const path = window.location.pathname;
+      const search = window.location.search;
+      const hash = window.location.hash;
+
+      const base = '/triplo/';
+
+      if (path.startsWith(base)) {
+        const route = path.slice(base.length);
+
+        const redirectUrl =
+          base +
+          '?' +
+          (route ? '/' + route : '') +
+          (search ? '&' + search.slice(1) : '') +
+          hash;
+
+        window.location.replace(redirectUrl);
+      } else {
+        // simply redirect to the root of the app if the path doesn't start with the base
+        window.location.replace(base);
+      }
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

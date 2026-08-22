@@ -22,6 +22,25 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <script>
+      // Restore the original SPA route encoded by 404.html.
+      //
+      // /triplo/?/share/abc123
+      //             ^^^^^^^^^^^^^
+      //             becomes
+      // /triplo/share/abc123
+      
+      const base = '/triplo/';
+      const route = window.location.search.startsWith('?/')
+        ? window.location.search.slice(1).split('&')[0]
+        : null;
+
+      if (route) {
+        window.history.replaceState(null, '', base.slice(0, -1) + route);
+      }
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
