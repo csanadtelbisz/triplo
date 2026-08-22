@@ -42,9 +42,8 @@ jobs:
         working-directory: frontend
         env:
           # Inject your GitHub Actions secrets as environment variables so Vite can bake them into the static dist files
-          VITE_MAPY_API_KEY: ${{ secrets.VITE_MAPY_API_KEY }}
-          VITE_GRAPHHOPPER_API_KEY: ${{ secrets.VITE_GRAPHHOPPER_API_KEY }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_DRIVE_API_KEY: ${{ secrets.VITE_GOOGLE_DRIVE_API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
