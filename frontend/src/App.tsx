@@ -335,7 +335,7 @@ export default function App() {
     setSelectedTrip(cachedTrip);
     setIsViewingSharedTrip(false);
     if (getSharedTripTokenFromPath()) {
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({}, '', import.meta.env.BASE_URL);
     }
   };
 
@@ -774,7 +774,7 @@ export default function App() {
       setSelectedPOI(null);
       setAttachingPoiToWaypointId(null);
       if (getSharedTripTokenFromPath()) {
-        window.history.replaceState({}, '', '/');
+        window.history.replaceState({}, '', import.meta.env.BASE_URL);
       }
       setIsViewingSharedTrip(false);
     };
