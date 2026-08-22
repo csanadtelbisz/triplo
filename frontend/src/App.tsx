@@ -1498,7 +1498,7 @@ export default function App() {
       actions={
         <button className="dialog-btn dialog-btn-primary" onClick={() => {
           setSharedTripError(null);
-          window.history.replaceState({}, '', '/');
+          window.history.replaceState({}, '', import.meta.env.BASE_URL);
         }}>
           Go Home
         </button>
