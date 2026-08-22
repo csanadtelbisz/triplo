@@ -480,8 +480,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     if (!mapContainer.current) return;
     if (mapRef.current) return;
 
-    let initCenter: [number, number] = [11.3933, 47.2692];
-    let initZoom = 9;
+    let initCenter: [number, number] = [15, 55];
+    let initZoom = 2.5;
     const homeRaw = localStorage.getItem('homeMapPosition');
     if (homeRaw) {
       try {
