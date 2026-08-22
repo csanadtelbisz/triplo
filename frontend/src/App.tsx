@@ -1499,6 +1499,9 @@ export default function App() {
         <button className="dialog-btn dialog-btn-primary" onClick={() => {
           setSharedTripError(null);
           window.history.replaceState({}, '', import.meta.env.BASE_URL);
+          if (persistingManager.getAvailableServices().length === 0) {
+            promptSetupWizard();
+          }
         }}>
           Go Home
         </button>
