@@ -8,6 +8,8 @@ import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getModeColor } from '../utils/builtInModesPreferences';
 import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD, getMapStyleUrl } from '../config/mapStyles';
+import { getApiKey } from '../utils/apiKeyPreferences';
+import { showApiKeyConfigurationWarning } from '../utils/apiKeyConfigurationWarning';
 import { getPOIEmoji } from '../utils/poiUtils';
 import { getCustomOtherModes } from '../utils/customModesPreferences';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
@@ -212,6 +214,13 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
   useEffect(() => {
     localStorage.setItem('activeMapStyle', activeMapStyle);
+  }, [activeMapStyle]);
+
+  useEffect(() => {
+    const configuration = MAP_STYLES[activeMapStyle]?.apiKeyConfiguration;
+    if (configuration && !getApiKey(configuration.preferenceKey).trim()) {
+      showApiKeyConfigurationWarning(configuration);
+    }
   }, [activeMapStyle]);
 
   useEffect(() => {
@@ -1619,6 +1628,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       fontWeight: activeMapStyle === key ? 'bold' : 'normal'
                     }}
                     onClick={() => {
+                      const configuration = style.apiKeyConfiguration;
+                      if (configuration && !getApiKey(configuration.preferenceKey).trim()) {
+                        showApiKeyConfigurationWarning(configuration, true);
+                        return;
+                      }
                       setActiveMapStyle(key);
                       setShowLayerSelector(false);
                     }}

@@ -30,6 +30,10 @@ import { resolvePOIName } from './utils/poiUtils';
 import { Map } from './components/Map';
 import type { MapRef } from './components/Map';
 import { SetupWizard } from './components/SetupWizard';
+import { ApiKeyDialog } from './components/ApiKeyDialog';
+import { routingManager } from './routing/RoutingService';
+import type { ApiKeyServiceConfiguration } from './utils/apiKeyPreferences';
+import { API_KEY_CONFIGURATION_WARNING_EVENT } from './utils/apiKeyConfigurationWarning';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -136,6 +140,16 @@ export default function App() {
   const [sharedTripId, setSharedTripId] = useState<string | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(() => persistingManager.getAvailableServices().length === 0 && !getSharedTripTokenFromPath());
   const [setupWizardCallback, setSetupWizardCallback] = useState<(() => void | Promise<void>) | null>(null);
+  const [apiKeyWarningConfiguration, setApiKeyWarningConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
+  const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
+
+  useEffect(() => {
+    const handleApiKeyConfigurationWarning = (event: Event) => {
+      setApiKeyWarningConfiguration((event as CustomEvent<ApiKeyServiceConfiguration>).detail);
+    };
+    window.addEventListener(API_KEY_CONFIGURATION_WARNING_EVENT, handleApiKeyConfigurationWarning);
+    return () => window.removeEventListener(API_KEY_CONFIGURATION_WARNING_EVENT, handleApiKeyConfigurationWarning);
+  }, []);
 
   const promptSetupWizard = (onSuccess?: () => void | Promise<void>) => {
     setSetupWizardCallback(() => onSuccess || null);
@@ -1513,6 +1527,32 @@ export default function App() {
     >
       <p style={{ margin: 0 }}>{sharedTripError}</p>
     </Dialog>
+
+    <Dialog
+      isOpen={apiKeyWarningConfiguration !== null}
+      title="Service Not Configured"
+      onClose={() => setApiKeyWarningConfiguration(null)}
+      actions={
+        <>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => setApiKeyWarningConfiguration(null)}>Cancel</button>
+          <button className="dialog-btn dialog-btn-primary" onClick={() => {
+            setApiKeyConfiguration(apiKeyWarningConfiguration);
+            setApiKeyWarningConfiguration(null);
+          }}>Configure</button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>This service is not configured. You need to provide an API key to use this service.</p>
+    </Dialog>
+
+    <ApiKeyDialog
+      key={apiKeyConfiguration?.preferenceKey}
+      configuration={apiKeyConfiguration}
+      testApiKey={apiKeyConfiguration
+        ? routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === apiKeyConfiguration.preferenceKey)?.testApiKey
+        : undefined}
+      onClose={() => setApiKeyConfiguration(null)}
+    />
     </>
   );
 }

@@ -5,6 +5,7 @@ import { GraphHopperRouter } from './GraphHopperRouter';
 import { RailRouter } from './RailRouter';
 import { MapyRouter } from './MapyRouter';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
+import { showApiKeyConfigurationWarning } from '../utils/apiKeyConfigurationWarning';
 
 export interface IRoutingService {
   name: string;
@@ -69,8 +70,10 @@ class RoutingServiceManager {
       return { type: 'LineString', coordinates: waypoints };
     }
 
-    const service = this.getService(serviceName) || this.straightLine;
+    const service: IRoutingService = this.getService(serviceName) || this.straightLine;
     if (!service.isAvailable()) {
+       const configuration = service.getApiKeyConfiguration?.();
+       if (configuration) showApiKeyConfigurationWarning(configuration);
        return this.straightLine.route(waypoints, 'straight');
     }
     return service.route(waypoints, profile);
