@@ -1,4 +1,4 @@
-﻿import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
+import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -10,7 +10,7 @@ import { Dialog } from './Dialog';
 import { exportTripGPX, downloadFile } from '../utils/exportUtils';
 import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
 import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
-import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
+import { getCustomOtherModes } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { TransportMode } from '../../../shared/types';
 import { slugify } from '../utils/slugify';
@@ -80,8 +80,15 @@ export function TripEditor({
   const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
   const [openTransportModeMenuSegmentId, setOpenTransportModeMenuSegmentId] = useState<string | null>(null);
 
-  const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const [showCustomModes] = useState(() => getShowCustomModesInDefault());
+  const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
+
+  useEffect(() => {
+    const handlePrefsUpdated = () => {
+      setCustomModes(getCustomOtherModes());
+    };
+    window.addEventListener('preferences-updated', handlePrefsUpdated);
+    return () => window.removeEventListener('preferences-updated', handlePrefsUpdated);
+  }, []);
 
   useEffect(() => {
     setShareLink(trip.metadata?.shareLink || '');
@@ -1266,7 +1273,7 @@ export function TripEditor({
                                        {getModeIcon(mode, 20)}
                                      </button>
                                    ))}
-                                   {showCustomModes && customModes.map(customMode => {
+                                    {customModes.filter(customMode => customMode.showInList !== false).map(customMode => {
                                      const label = customMode.name || customMode.icon.replaceAll('_', ' ');
                                      const isSelected = seg.transportMode === 'other' && seg.customIcon === customMode.icon;
                                      return (

@@ -1,4 +1,4 @@
-﻿import type { TransportMode } from "../../../shared/types";
+import type { TransportMode } from "../../../shared/types";
 import { getModeColor } from "./builtInModesPreferences";
 
 export interface CustomOtherMode {
@@ -6,12 +6,23 @@ export interface CustomOtherMode {
   name: string;
   color: string;
   routingProfile: string;
+  showInList?: boolean;
 }
 
 export const getCustomOtherModes = (): CustomOtherMode[] => {
   try {
     const data = localStorage.getItem("customOtherModes");
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed)
+      ? parsed.map((m: Partial<CustomOtherMode>) => ({
+          icon: m.icon || '',
+          name: m.name || '',
+          color: m.color || '#000000',
+          routingProfile: m.routingProfile || 'Straight Line Router|straight_line',
+          showInList: m.showInList !== undefined ? m.showInList : true,
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -19,14 +30,6 @@ export const getCustomOtherModes = (): CustomOtherMode[] => {
 
 export const saveCustomOtherModes = (modes: CustomOtherMode[]) => {
   localStorage.setItem("customOtherModes", JSON.stringify(modes));
-};
-
-export const getShowCustomModesInDefault = (): boolean => {
-  return localStorage.getItem("showCustomModesInDefault") === "true";
-};
-
-export const setShowCustomModesInDefault = (show: boolean) => {
-  localStorage.setItem("showCustomModesInDefault", show ? "true" : "false");
 };
 
 export const getModeAndIconColor = (mode: TransportMode, icon: string): string => {

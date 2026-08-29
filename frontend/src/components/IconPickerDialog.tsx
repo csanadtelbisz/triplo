@@ -3,6 +3,7 @@ import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import materialIconsData from '../assets/material-icons/google-material-icons-metadata.json';
 import customIconsData from '../assets/material-icons/custom-icons-metadata.json';
+import { getCustomOtherModes } from '../utils/customModesPreferences';
 
 interface IconPickerDialogProps {
   isOpen: boolean;
@@ -39,17 +40,42 @@ export function IconPickerDialog({ isOpen, onClose, onPick }: IconPickerDialogPr
   }, []);
 
   const filteredIcons = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().replaceAll(/[-_]/g, ' ').toLowerCase();
     if (!query) return [];
 
-    return allIcons.filter(icon => {
+    const customModes = getCustomOtherModes();
+
+    const matched = allIcons.filter(icon => {
+      const matchesCustomMode = customModes.some(cm => {
+        if (!cm.icon || !cm.name) return false;
+        if (cm.icon.toLowerCase() !== icon.name.toLowerCase()) return false;
+        const modeName = cm.name.toLowerCase();
+        const modeNameNormalized = modeName.replaceAll(/[-_]/g, ' ');
+        return modeName.includes(query) || modeNameNormalized.includes(query);
+      });
+
       return (
         icon.name.toLowerCase().includes(query) ||
-        icon.name.toLowerCase().replace(/[-_]/g, ' ').includes(query) ||
+        icon.name.toLowerCase().replaceAll(/[-_]/g, ' ').includes(query) ||
         icon.tags?.some((tag: string) => tag.toLowerCase().includes(query)) ||
-        icon.categories?.some((cat: string) => cat.toLowerCase().includes(query))
+        icon.categories?.some((cat: string) => cat.toLowerCase().includes(query)) ||
+        matchesCustomMode
       );
     });
+
+    const existingMatchedNames = new Set(matched.map(i => i.name.toLowerCase()));
+    for (const cm of customModes) {
+      if (cm.icon && !existingMatchedNames.has(cm.icon.toLowerCase())) {
+        const modeName = (cm.name || '').toLowerCase();
+        const modeNameNormalized = modeName.replaceAll(/[-_]/g, ' ');
+        if (modeName.includes(query) || modeNameNormalized.includes(query)) {
+          matched.push({ name: cm.icon, categories: [], tags: [] });
+          existingMatchedNames.add(cm.icon.toLowerCase());
+        }
+      }
+    }
+
+    return matched;
   }, [searchQuery, allIcons]);
 
   const handlePick = () => {

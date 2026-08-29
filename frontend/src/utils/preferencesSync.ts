@@ -1,6 +1,6 @@
 import { persistingManager } from '../persisting/PersistingManager';
 import { getLanguagePreferences, saveLanguagePreferences } from './languagePreferences';
-import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault, setShowCustomModesInDefault } from './customModesPreferences';
+import { getCustomOtherModes, saveCustomOtherModes } from './customModesPreferences';
 import { getBuiltInModeOverrides, saveBuiltInModeOverrides } from './builtInModesPreferences';
 import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './mapStylesPreferences';
 import { getTripListPreferences, saveTripListPreferences } from './tripListPreferences';
@@ -162,7 +162,6 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
       const prefs = {
         language: getLanguagePreferences(),
         customModes: getCustomOtherModes(),
-        showCustomModesInDefault: getShowCustomModesInDefault(),
         builtInModes: getBuiltInModeOverrides(),
         homePosition: localStorage.getItem('homeMapPosition') ? JSON.parse(localStorage.getItem('homeMapPosition')!) : null,
         tripList: getTripListPreferences(),
@@ -225,11 +224,6 @@ export const loadPreferencesFromCloud = async (preferences?: any, source?: strin
       const prevBuiltIn = JSON.stringify(getBuiltInModeOverrides());
       if (prefs.builtInModes && JSON.stringify(prefs.builtInModes) !== prevBuiltIn) {
         saveBuiltInModeOverrides(prefs.builtInModes);
-        changed = true;
-      }
-
-      if (prefs.showCustomModesInDefault !== undefined && prefs.showCustomModesInDefault !== getShowCustomModesInDefault()) {
-        setShowCustomModesInDefault(prefs.showCustomModesInDefault);
         changed = true;
       }
 

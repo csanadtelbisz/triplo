@@ -8,7 +8,7 @@ import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
 import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
 import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
-import { getCustomOtherModes, getShowCustomModesInDefault } from '../utils/customModesPreferences';
+import { getCustomOtherModes } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import { IconPickerDialog } from './IconPickerDialog';
 
@@ -36,8 +36,15 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
     setShowAllProfiles(false);
   }, [segmentId]);
   const [customIconInput, setCustomIconInput] = useState<string>('');
-  const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const [showCustomModes] = useState(() => getShowCustomModesInDefault());
+  const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
+
+  useEffect(() => {
+    const handlePrefsUpdated = () => {
+      setCustomModes(getCustomOtherModes());
+    };
+    window.addEventListener('preferences-updated', handlePrefsUpdated);
+    return () => window.removeEventListener('preferences-updated', handlePrefsUpdated);
+  }, []);
 
   useEffect(() => {
     setCustomIconInput(seg?.customIcon || '');
@@ -284,7 +291,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                 );
               })}
               
-              {showCustomModes && customModes.map(cm => {
+              {customModes.filter(cm => cm.showInList !== false).map(cm => {
                 const isSelected = seg.transportMode === 'other' && seg.customIcon === cm.icon;
                 return (
                   <button
@@ -344,11 +351,11 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
 
               {/* Keep the original 'other' handler at the end */}
               {TRANSPORT_MODES.filter(m => m === 'other').map(m => {
-                const themeColor = getModeColor(m);
                 // Should only be indicated if customIcon doesn't match any custom modes, 
                 // but visually distinguishing it is nice if they selected a built-in other mode manually.
                 const isModeSelected = seg.transportMode === m;
-                const isBuiltinSelected = isModeSelected && (!showCustomModes || !customModes.some(cm => cm.icon === seg.customIcon));
+                const themeColor = (isModeSelected ? seg.customColor : undefined) || getModeColor(m);
+                const isBuiltinSelected = isModeSelected && !customModes.some(cm => cm.showInList !== false && cm.icon === seg.customIcon);
                 return (
                   <button
                     key={m}
@@ -570,7 +577,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              </div>
           </div>
 
-          {seg.transportMode === 'other' && (!showCustomModes || !customModes.some(cm => cm.icon === seg.customIcon)) && (
+          {seg.transportMode === 'other' && !customModes.some(cm => cm.showInList !== false && cm.icon === seg.customIcon) && (
             <div className="form-col" style={{ flex: 2 }}>
                <label className="form-label">Icon</label>
                <div style={{ display: 'flex', gap: '8px' }}>
@@ -578,7 +585,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                    type="text" 
                    placeholder="Custom icon name..." 
                    className="form-input" 
-                   disabled={isReadOnly}
+                   disabled={true}
                    value={customIconInput}
                    onChange={(e) => {
                      setCustomIconInput(e.target.value);

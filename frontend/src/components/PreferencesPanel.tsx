@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/StatusPanel.css';
 import { OSM_LANGUAGES, getLanguagePreferences, saveLanguagePreferences } from '../utils/languagePreferences';
-import { getCustomOtherModes, saveCustomOtherModes, getShowCustomModesInDefault, setShowCustomModesInDefault } from '../utils/customModesPreferences';
+import { getCustomOtherModes, saveCustomOtherModes } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import { BUILT_IN_MODES, BUILT_IN_ICONS, getDefaultColor, getBuiltInModeOverrides, saveBuiltInModeOverrides } from '../utils/builtInModesPreferences';
 import type { BuiltInModesOverrides } from '../utils/builtInModesPreferences';
@@ -32,7 +32,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   // Initialize all state directly via lazy initialization to avoid setting state synchronously in useEffect
   const [langPrefs, setLangPrefs] = useState<string[]>(() => getLanguagePreferences());
   const [customModes, setCustomModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const [showCustomModes, setShowCustomModes] = useState(() => getShowCustomModesInDefault());
   const [builtInOverrides, setBuiltInOverrides] = useState<BuiltInModesOverrides>(() => getBuiltInModeOverrides());
   const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
   
@@ -56,7 +55,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const handlePreferencesUpdated = () => {
       setLangPrefs(getLanguagePreferences());
       setCustomModes(getCustomOtherModes());
-      setShowCustomModes(getShowCustomModesInDefault());
       setBuiltInOverrides(getBuiltInModeOverrides());
       setStyleConfigs(getStyleConfigs());
     };
@@ -152,15 +150,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     }
   };
 
-  const handleToggleShowCustomModes = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.checked;
-    setShowCustomModes(val);
-    setShowCustomModesInDefault(val);
-    syncPreferencesToCloud();
-  };
-
   const handleAddCustomMode = () => {
-    handleUpdateCustomModes([...customModes, { icon: '', name: '', color: '#000000', routingProfile: 'Straight Line Router|straight_line' }]);
+    handleUpdateCustomModes([...customModes, { icon: '', name: '', color: '#000000', routingProfile: 'Straight Line Router|straight_line', showInList: true }]);
   };
 
   const handleUpdateCustomMode = (index: number, updates: Partial<CustomOtherMode>) => {
@@ -467,6 +458,15 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                           ))
                         )}
                       </select>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#555', cursor: 'pointer', marginTop: '2px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={mode.showInList ?? true} 
+                          onChange={(e) => handleUpdateCustomMode(idx, { showInList: e.target.checked })} 
+                          style={{ width: '14px', height: '14px', margin: 0, cursor: 'pointer' }} 
+                        />
+                        Show in transport mode list
+                      </label>
                     </div>
                   </td>
                   <td style={{ padding: '6px 4px', textAlign: 'right', verticalAlign: 'middle', width: '30px' }}>
@@ -486,12 +486,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
               </tr>
             </tbody>
           </table>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 12px', marginTop: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-              <input type="checkbox" checked={showCustomModes} onChange={handleToggleShowCustomModes} style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }} />
-              Show these extra modes among available transport modes
-            </label>
-          </div>
         </div>
 
         <h3 ref={styleConfigsRef as any} className="status-panel-section-title">Style Configurations</h3>
