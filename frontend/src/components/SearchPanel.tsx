@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 
 export interface NominatimResult {
@@ -37,6 +37,11 @@ export const SearchPanel = ({ onGoBack, onResultClick }: SearchPanelProps) => {
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const coords = parseCoordinates(query);
@@ -80,6 +85,7 @@ export const SearchPanel = ({ onGoBack, onResultClick }: SearchPanelProps) => {
       <div className="content">
         <div className="form-group">
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search name, address or coordinates..."
             value={query}

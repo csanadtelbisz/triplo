@@ -1414,6 +1414,7 @@ export default function App() {
           setIsSearchOpen(true);
           setIsStatusOpen(false);
           setIsPreferencesOpen(false);
+          setIsAnalyticsOpen(false);
           setIsSidebarCollapsed(false);
         }}
         onSelectTrip={handleSelectTrip}

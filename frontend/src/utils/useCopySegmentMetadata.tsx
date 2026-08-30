@@ -64,8 +64,8 @@ export function useCopySegmentMetadata(trip: Trip, allTrips: Trip[] | undefined,
       const currentColor = current?.customColor || getModeColor(current?.transportMode as any) || '#000000';
       const anyDifference =
         (actualColorToCopy !== currentColor) ||
-        (iconToCopy && iconToCopy !== current?.customIcon) ||
         (modeToCopy && modeToCopy !== current?.transportMode) ||
+        (modeToCopy === "other" && iconToCopy && iconToCopy !== current?.customIcon) ||
         (routingProfileToCopy && routingProfileToCopy !== current?.routingProfile) ||
         (routingServiceToCopy && routingServiceToCopy !== current?.routingService);
       if (modeToCopy && anyDifference) {

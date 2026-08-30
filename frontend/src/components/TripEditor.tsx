@@ -1,4 +1,4 @@
-import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
+﻿import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -1644,4 +1644,3 @@ export function TripEditor({
     </>
   );
 }
-
