@@ -77,14 +77,16 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                       ...lastSegment,
                       waypoints: [...lastSegment.waypoints, newWaypoint]
                     };
-                    onUpdateTrip({ ...trip, segments: newSegments });
 
                     const validCoords = newSegments[lastSegIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
                     if (validCoords.length >= 2 && lastSegment.source === 'router') {
                         optimizeSegmentRoute(newSegments[lastSegIndex], lastSegment).then((geom: any) => {
                             newSegments[lastSegIndex] = { ...newSegments[lastSegIndex], geometry: geom };
+                          }).finally(() => {
                             onUpdateTrip({ ...trip, segments: [...newSegments] });
                         });
+                    } else {
+                      onUpdateTrip({ ...trip, segments: newSegments });
                     }
                     if (setHighlightedWaypointId) {
                       setHighlightedWaypointId(newWaypoint.id);
