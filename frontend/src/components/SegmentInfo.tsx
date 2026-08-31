@@ -354,8 +354,8 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                 // Should only be indicated if customIcon doesn't match any custom modes, 
                 // but visually distinguishing it is nice if they selected a built-in other mode manually.
                 const isModeSelected = seg.transportMode === m;
-                const themeColor = (isModeSelected ? seg.customColor : undefined) || getModeColor(m);
                 const isBuiltinSelected = isModeSelected && !customModes.some(cm => cm.showInList !== false && cm.icon === seg.customIcon);
+                const themeColor = (isBuiltinSelected ? seg.customColor : undefined) || getModeColor(m);
                 return (
                   <button
                     key={m}
@@ -399,6 +399,8 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                         
                         newSegments[segIndex] = updatedSeg;
                         onUpdateTrip({ ...trip, segments: newSegments });
+
+                        setIsIconPickerOpen(true);
                       }
                     }}
                   >
