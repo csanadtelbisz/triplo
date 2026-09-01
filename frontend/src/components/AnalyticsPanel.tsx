@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getCustomOtherModes, getModeAndIconColor } from '../utils/customModesPreferences';
@@ -41,9 +41,271 @@ function getSegmentLabel(segment: Segment) {
   return segment.name || `Untitled segment`;
 }
 
+interface YearDistance {
+  year: number;
+  distance: number;
+}
+
+function calculateDaysOverlapInYear(startDate: Date, endDate: Date, year: number): number {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+
+  const overlapStart = new Date(Math.max(startDate.getTime(), yearStart.getTime()));
+  const overlapEnd = new Date(Math.min(endDate.getTime(), yearEnd.getTime()));
+
+  if (overlapStart > overlapEnd) return 0;
+
+  return Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function getDistancePerYear(trips: Trip[], selectedModeKey: string | null): YearDistance[] {
+  const distanceByYear: Record<number, number> = {};
+  const yearSet = new Set<number>();
+
+  trips.forEach(trip => {
+    const startDate = trip.startDate ? new Date(trip.startDate) : null;
+    const endDate = trip.endDate ? new Date(trip.endDate) : null;
+
+    if (!startDate || !endDate) return;
+
+    // Determine which years this trip spans
+    const startYear = startDate.getFullYear();
+    const endYear = endDate.getFullYear();
+    const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    for (let year = startYear; year <= endYear; year++) {
+      yearSet.add(year);
+      const daysInYear = calculateDaysOverlapInYear(startDate, endDate, year);
+
+      // Get distance for this trip, filtered by mode
+      let distanceForMode = 0;
+
+      if (selectedModeKey) {
+        // Only count distance for the selected mode
+        const modeKey = selectedModeKey;
+        const summary = trip.tripDistanceSummary;
+        if (summary?.distanceByMode) {
+          distanceForMode = (summary.distanceByMode[modeKey] as number) || 0;
+        }
+      } else {
+        // Count all modes
+        const summary = trip.tripDistanceSummary;
+        if (summary?.totalDistance) {
+          distanceForMode = summary.totalDistance;
+        }
+      }
+
+      // Distribute proportionally by days
+      const distributedDistance = (distanceForMode * daysInYear) / totalDays;
+      distanceByYear[year] = (distanceByYear[year] || 0) + distributedDistance;
+    }
+  });
+
+  return Array.from(yearSet)
+    .sort((a, b) => a - b)
+    .map(year => ({ year, distance: distanceByYear[year] || 0 }));
+}
+
+function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDistances: YearDistance[]; maxDistance: number; modeColor?: string }) {
+  const [hoveredYear, setHoveredYear] = useState<number | null>(null);
+  const [tooltipXPosition, setTooltipXPosition] = useState<number>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const chartHeight = 150;
+  const tooltipHeight = 20; // Space for tooltip above the chart
+  const padding = 20;
+  const innerHeight = chartHeight - padding * 2;
+  const barColor = modeColor || '#82b1ff';
+  
+  // For responsive sizing, we'll calculate bar width based on the number of years
+  const minBarWidth = 20;
+  const maxBarWidth = 60;
+  const calculatedBarWidth = Math.min(maxBarWidth, Math.max(minBarWidth, 280 / yearDistances.length));
+
+  // Determine which year labels to show based on available space
+  const estimatedLabelWidth = 32;
+  const spacingPerBar = calculatedBarWidth;
+  const labelInterval = Math.max(1, Math.ceil(estimatedLabelWidth / spacingPerBar));
+
+  const hoveredIndex = hoveredYear !== null ? yearDistances.findIndex(d => d.year === hoveredYear) : -1;
+  const hoveredData = hoveredYear !== null ? yearDistances[hoveredIndex] : null;
+  
+  // Update tooltip position when hoveredIndex changes
+  useEffect(() => {
+    if (hoveredIndex < 0 || !containerRef.current || !svgRef.current) {
+      return;
+    }
+
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // Bar center in SVG viewBox coordinates
+    const barCenterSvgX = padding + hoveredIndex * calculatedBarWidth + calculatedBarWidth / 2;
+    
+    // Convert SVG viewBox coordinate to SVG element's pixel coordinate
+    const viewBoxWidth = Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2);
+    const scale = svgRect.width / viewBoxWidth;
+    const barCenterPixelX = barCenterSvgX * scale;
+    
+    // Convert to container-relative position
+    const tooltipPos = svgRect.left - containerRect.left + barCenterPixelX;
+    
+    setTooltipXPosition(tooltipPos);
+  }, [hoveredIndex, calculatedBarWidth, yearDistances.length]);
+
+  return (
+    <div style={{ marginTop: '20px' }}>
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#222' }}>Distance per Year</h3>
+      {yearDistances.length === 0 ? (
+        <div 
+          style={{ 
+            backgroundColor: '#fafafa', 
+            borderRadius: '4px', 
+            padding: '12px',
+            height: '150px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#999',
+            fontSize: '0.9rem'
+          }}
+        >
+          Loading chart data...
+        </div>
+      ) : (
+      <div 
+        ref={containerRef}
+        style={{ 
+          position: 'relative', 
+          backgroundColor: '#fafafa', 
+          borderRadius: '4px', 
+          padding: '12px',
+          paddingLeft: '36px',
+          paddingTop: `${tooltipHeight}px`,
+          overflow: 'visible'
+        }}
+      >
+        {/* Y-axis labels positioned outside SVG */}
+        <div
+          style={{
+            position: 'absolute',
+            left: '4px',
+            top: `calc(${tooltipHeight}px + ${chartHeight - padding}px - 13px)`,
+            fontSize: '11px',
+            color: '#999',
+            width: '36px',
+            textAlign: 'right',
+            lineHeight: '1'
+          }}
+        >
+          0
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            left: '4px',
+            top: `calc(${tooltipHeight}px + ${padding}px)`,
+            fontSize: '11px',
+            color: '#999',
+            width: '36px',
+            textAlign: 'right',
+            lineHeight: '1'
+          }}
+        >
+          {maxDistance.toFixed(0)}
+        </div>
+        <svg 
+          ref={svgRef}
+          width="100%" 
+          height={chartHeight}
+          viewBox={`0 0 ${Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2)} ${chartHeight}`}
+          onMouseLeave={() => setHoveredYear(null)}
+          style={{ display: 'block' }}
+        >
+
+          {yearDistances.map((item, index) => {
+            const barHeight = (item.distance / maxDistance) * innerHeight;
+            const x = padding + index * calculatedBarWidth + calculatedBarWidth * 0.1;
+            const y = chartHeight - padding - barHeight;
+            const otherHovered = hoveredYear !== null && hoveredYear !== item.year;
+
+            return (
+              <g key={item.year}>
+                {/* Invisible hit area for hovering (full column height) */}
+                <rect
+                  x={padding + index * calculatedBarWidth}
+                  y={padding}
+                  width={calculatedBarWidth}
+                  height={innerHeight}
+                  fill="transparent"
+                  onMouseEnter={() => setHoveredYear(item.year)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {/* Actual bar */}
+                <rect
+                  x={x}
+                  y={y}
+                  width={calculatedBarWidth * 0.8}
+                  height={barHeight}
+                  fill={barColor}
+                  opacity={otherHovered ? 0.5 : 1}
+                  style={{ transition: 'opacity 100ms ease, fill 150ms ease', pointerEvents: 'none' }}
+                />
+                {/* Year label - show based on labelInterval to avoid crowding */}
+                {index % labelInterval === 0 && (
+                  <text 
+                    x={x + calculatedBarWidth * 0.4} 
+                    y={chartHeight - padding + 15} 
+                    textAnchor="middle" 
+                    fontSize="12" 
+                    fill="#666"
+                    pointerEvents="none"
+                  >
+                    {item.year}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        
+        {/* Tooltip positioned above the chart with overflow visible */}
+        {hoveredData !== null && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '-10px',
+              left: `${tooltipXPosition}px`,
+              transform: 'translateX(-50%)',
+              backgroundColor: '#333',
+              color: 'white',
+              padding: '8px 10px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              whiteSpace: 'nowrap',
+              zIndex: 10,
+              pointerEvents: 'none',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              transition: 'left 150ms',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontWeight: 'bold', lineHeight: '1.4' }}>{hoveredYear}</div>
+            <div style={{ lineHeight: '1.4' }}>{hoveredData.distance.toFixed(1)} km</div>
+          </div>
+        )}
+      </div>
+      )}
+    </div>
+  );
+}
+
 export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment }: AnalyticsPanelProps) {
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [selectedModeKey, setSelectedModeKey] = useState<string | null>(null);
+  const [yearlyDistances, setYearlyDistances] = useState<YearDistance[]>([]);
+  const [maxYearlyDistance, setMaxYearlyDistance] = useState<number>(1);
 
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
     const distanceByMode: Record<string, number> = {};
@@ -68,6 +330,24 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
 
     return { globalDistanceByMode: distanceByMode, segmentsByMode: segmentsByModeLocal };
   }, [trips]);
+
+  // Async calculation of yearly distances
+  useEffect(() => {
+    // Use two requestAnimationFrames to ensure the UI renders before calculation
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(async () => {
+        const yearDists = getDistancePerYear(trips, selectedModeKey);
+        const maxDist = Math.max(1, ...yearDists.map(d => d.distance));
+        setYearlyDistances(yearDists);
+        setMaxYearlyDistance(maxDist);
+      });
+      return raf2;
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+    };
+  }, [trips, selectedModeKey]);
 
   const modeRows = useMemo(() => {
     return Object.entries(globalDistanceByMode)
@@ -128,6 +408,29 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
   const clearModeFilter = () => {
     setSelectedModeKey(null);
     clearTransientStyleConfig();
+  };
+
+  const getSelectedModeColor = () => {
+    if (!selectedModeKey) return undefined;
+    
+    const isOther = selectedModeKey.startsWith('other:');
+    const actualMode = isOther ? 'other' : selectedModeKey;
+    const targetIcon = isOther ? selectedModeKey.split(':')[1] : undefined;
+    
+    let color = getModeAndIconColor(actualMode as TransportMode, targetIcon || '');
+
+    // For custom other modes, check if all segments have the same color
+    if (isOther && targetIcon) {
+      const segmentEntries = segmentsByMode[selectedModeKey] || [];
+      const allColors = segmentEntries
+        .map(({ segment }) => segment.customColor)
+        .filter((value): value is string => typeof value === 'string' && value !== '');
+      if (allColors.length > 0 && new Set(allColors).size === 1) {
+        color = allColors[0]!;
+      }
+    }
+    
+    return color;
   };
 
   const handleModeClick = (modeKey: string) => {
@@ -204,6 +507,8 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
                 })}
               </div>
             </div>
+
+            <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} />
 
             {selectedModeKey && (
               <div style={{ marginTop: '20px' }}>
