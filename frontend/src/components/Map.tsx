@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import type { Segment, Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -141,7 +141,15 @@ export const Map = forwardRef<MapRef, MapProps>(({
   });
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string | undefined, mode: string } | null>(null);
+  const hoverTooltipRef = useRef<HTMLDivElement>(null);
+  const [hoverTooltipSize, setHoverTooltipSize] = useState({ width: 0, height: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hoverInfo || !hoverTooltipRef.current) return;
+    const { width, height } = hoverTooltipRef.current.getBoundingClientRect();
+    setHoverTooltipSize(previous => previous.width === width && previous.height === height ? previous : { width, height });
+  }, [hoverInfo]);
 
   const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
   const [activeStyleConfigIdState, setActiveStyleConfigIdState] = useState(() => localStorage.getItem('activeRenderStyleConfigId') || 'default');
@@ -1306,6 +1314,17 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     return () => window.removeEventListener('preferences-updated', refreshMapyStyle);
   }, [activeMapStyle, mapLoaded]);
 
+  const tooltipMargin = 8;
+  const tooltipOffset = 15;
+  const tooltipWidth = Math.min(hoverTooltipSize.width, window.innerWidth - tooltipMargin * 2);
+  const tooltipHeight = Math.min(hoverTooltipSize.height, window.innerHeight - tooltipMargin * 2);
+  const tooltipLeft = hoverInfo
+    ? Math.min(Math.max(tooltipMargin, hoverInfo.x + tooltipOffset), window.innerWidth - tooltipWidth - tooltipMargin)
+    : tooltipMargin;
+  const tooltipTop = hoverInfo
+    ? Math.min(Math.max(tooltipMargin, hoverInfo.y + tooltipOffset), window.innerHeight - tooltipHeight - tooltipMargin)
+    : tooltipMargin;
+
   return (
     <div className="map-panel" style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <div ref={mapContainer} id="map" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}></div>
@@ -1457,12 +1476,13 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       
       {hoverInfo && (
         <div 
+          ref={hoverTooltipRef}
           className="hover-tooltip"
           style={{ 
-            position: 'fixed', top: hoverInfo.y + 15, left: hoverInfo.x + 15, 
+            position: 'fixed', top: tooltipTop, left: tooltipLeft,
             background: 'rgba(0,0,0,0.8)', padding: '6px 10px', 
             zIndex: 1000, borderRadius: '4px', fontSize: '13px', color: 'white',
-            pointerEvents: 'none', whiteSpace: 'nowrap'
+            pointerEvents: 'none', whiteSpace: 'normal', maxWidth: `calc(100vw - ${tooltipMargin * 2}px)`, overflowWrap: 'anywhere'
           }}
         >
           {hoverInfo.name && (
