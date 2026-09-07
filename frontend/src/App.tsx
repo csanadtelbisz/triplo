@@ -49,6 +49,20 @@ const getSharedTripTokenFromPath = () => {
 
 const unavailableSharedTripMessage = 'This trip was deleted or made private by the owner.';
 
+type PanelHistoryState = {
+  panel: 'manager' | 'editor' | 'segment' | 'waypoint' | 'poi' | 'search' | 'status' | 'analytics' | 'analytics-segment' | 'preferences' | 'style-config';
+  tripId?: string;
+  segmentId?: string;
+  waypointId?: string;
+  poi?: any;
+  analyticsSegmentInfo?: { tripId: string; segmentId: string };
+  styleConfigId?: string;
+};
+
+type AppHistoryState = {
+  triploPanel?: PanelHistoryState;
+};
+
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('TriploDB', 1);
@@ -119,6 +133,7 @@ export default function App() {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [editingStyleConfigId, setEditingStyleConfigId] = useState<string | null>(null);
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
@@ -141,6 +156,95 @@ export default function App() {
   const [setupWizardCallback, setSetupWizardCallback] = useState<(() => void | Promise<void>) | null>(null);
   const [apiKeyWarningConfiguration, setApiKeyWarningConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
+  const tripsRef = useRef(trips);
+  const historyInitializedRef = useRef(false);
+  const historyUpdateModeRef = useRef<'replace' | 'restore' | null>(null);
+  const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
+
+  useEffect(() => {
+    tripsRef.current = trips;
+  }, [trips]);
+
+  const getPanelHistoryState = useCallback((): PanelHistoryState => {
+    if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
+    if (isPreferencesOpen) return { panel: 'preferences' };
+    if (isStatusOpen) return { panel: 'status' };
+    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo };
+    if (isAnalyticsOpen) return { panel: 'analytics' };
+    if (isSearchOpen) return { panel: 'search' };
+    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
+    if (selectedSegmentId && selectedTrip) return { panel: 'segment', tripId: selectedTrip.id, segmentId: selectedSegmentId };
+    if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
+    if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
+    return { panel: 'manager' };
+  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId]);
+
+  const isSamePanelHistoryState = (a: PanelHistoryState | null, b: PanelHistoryState) =>
+    a?.panel === b.panel &&
+    a?.tripId === b.tripId &&
+    a?.segmentId === b.segmentId &&
+    a?.waypointId === b.waypointId &&
+    a?.poi?.id === b.poi?.id &&
+    a?.analyticsSegmentInfo?.tripId === b.analyticsSegmentInfo?.tripId &&
+    a?.analyticsSegmentInfo?.segmentId === b.analyticsSegmentInfo?.segmentId &&
+    a?.styleConfigId === b.styleConfigId;
+
+  useEffect(() => {
+    const panelState = getPanelHistoryState();
+    const updateMode = historyUpdateModeRef.current;
+
+    if (!historyInitializedRef.current || updateMode === 'replace') {
+      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
+      historyInitializedRef.current = true;
+      historyUpdateModeRef.current = null;
+      currentPanelHistoryRef.current = panelState;
+      return;
+    }
+
+    // Browser Back/Forward already selected the target entry. Rendering that
+    // entry must not be mistaken for a new navigation, which would discard
+    // the browser's forward stack.
+    if (updateMode === 'restore') {
+      historyUpdateModeRef.current = null;
+      currentPanelHistoryRef.current = panelState;
+      return;
+    }
+
+    if (!isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) {
+      window.history.pushState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
+      currentPanelHistoryRef.current = panelState;
+    }
+  }, [getPanelHistoryState]);
+
+  const goBackPanel = () => window.history.back();
+
+  useEffect(() => {
+    const handlePanelPopState = (event: PopStateEvent) => {
+      const panelState = (event.state as AppHistoryState | null)?.triploPanel;
+      if (!panelState) return;
+
+      historyUpdateModeRef.current = 'restore';
+      currentPanelHistoryRef.current = panelState;
+      const trip = panelState.tripId ? tripsRef.current.find(item => item.id === panelState.tripId) || null : null;
+      flushSync(() => {
+        setSelectedTrip(trip);
+        setSelectedSegmentId(panelState.panel === 'segment' ? panelState.segmentId || null : null);
+        setSelectedWaypointId(panelState.panel === 'waypoint' ? panelState.waypointId || null : null);
+        setSelectedPOI(panelState.panel === 'poi' ? panelState.poi || null : null);
+        setIsSearchOpen(panelState.panel === 'search');
+        setIsStatusOpen(panelState.panel === 'status');
+        setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
+        setEditingStyleConfigId(panelState.panel === 'style-config' ? panelState.styleConfigId || null : null);
+        setIsAnalyticsOpen(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment');
+        setAnalyticsSegmentInfo(panelState.panel === 'analytics-segment' ? panelState.analyticsSegmentInfo || null : null);
+        setAttachingPoiToWaypointId(null);
+        setHighlightedWaypointId(null);
+      });
+    };
+
+    window.addEventListener('popstate', handlePanelPopState);
+    return () => window.removeEventListener('popstate', handlePanelPopState);
+  }, []);
 
   useEffect(() => {
     const handleApiKeyConfigurationWarning = (event: Event) => {
@@ -780,6 +884,11 @@ export default function App() {
     }
 
     const performGoBack = () => {
+      if (!getSharedTripTokenFromPath()) {
+        goBackPanel();
+        return;
+      }
+
       setSelectedTrip(null);
       setSelectedSegmentId(null);
       setSelectedWaypointId(null);
@@ -789,6 +898,7 @@ export default function App() {
       if (getSharedTripTokenFromPath()) {
         window.history.replaceState({}, '', import.meta.env.BASE_URL);
       }
+      historyUpdateModeRef.current = 'replace';
       setIsViewingSharedTrip(false);
     };
 
@@ -800,12 +910,9 @@ export default function App() {
     performGoBack();
   };
 
-  const handleGoBackSegment = () => setSelectedSegmentId(null);
-  const handleGoBackWaypoint = () => { 
-    setSelectedWaypointId(null);
-    setAttachingPoiToWaypointId(null);
-  };
-  const handleGoBackPOI = () => setSelectedPOI(null);
+  const handleGoBackSegment = goBackPanel;
+  const handleGoBackWaypoint = goBackPanel;
+  const handleGoBackPOI = goBackPanel;
 
   useEffect(() => {
     if (
@@ -1101,13 +1208,15 @@ export default function App() {
         <div className="mobile-drag-handle"></div>
         {isPreferencesOpen ? (
           <PreferencesPanel
-            onGoBack={() => setIsPreferencesOpen(false)}
+            onGoBack={goBackPanel}
             onSetHome={() => mapComponentRef.current?.setHome?.()}
             onZoomHome={() => mapComponentRef.current?.zoomToHome?.()}
+            editingConfigId={editingStyleConfigId}
+            onEditingConfigChange={setEditingStyleConfigId}
           />
         ) : isStatusOpen ? (
           <StatusPanel
-            onGoBack={() => setIsStatusOpen(false)}
+            onGoBack={goBackPanel}
             trips={trips}
             onUpdateTrips={handleUpdateExternalTrips}
           />
@@ -1116,8 +1225,7 @@ export default function App() {
             <div style={{ display: analyticsSegmentInfo ? 'none' : 'block', height: '100%' }}>
               <AnalyticsPanel
                 onGoBack={() => {
-                  setAnalyticsSegmentInfo(null);
-                  setIsAnalyticsOpen(false);
+                  goBackPanel();
                 }}
                 trips={trips}
                 onOpenSegmentInfo={(tripId, segmentId) => {
@@ -1145,7 +1253,7 @@ export default function App() {
                   segmentId={analyticsSegmentInfo.segmentId}
                   trip={targetTrip}
                   allTrips={trips}
-                  onGoBack={() => setAnalyticsSegmentInfo(null)}
+                  onGoBack={goBackPanel}
                   onUpdateTrip={(newTrip) => updateTripState(targetTrip.id, newTrip)}
                   onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
                   onZoomToSegment={(seg) => {
@@ -1162,7 +1270,7 @@ export default function App() {
           </>
         ) : isSearchOpen ? (
           <SearchPanel 
-            onGoBack={() => setIsSearchOpen(false)}
+            onGoBack={goBackPanel}
             onResultClick={(result) => {
               if (Array.isArray(result)) {
                     mapComponentRef.current?.flyTo(result[0], result[1], 'open', true, 'poi');
@@ -1279,6 +1387,7 @@ export default function App() {
             }}
             onOpenSettings={() => {
               setIsPreferencesOpen(true);
+              setEditingStyleConfigId(null);
               setIsStatusOpen(false);
               setIsAnalyticsOpen(false);
               setIsSidebarCollapsed(false);
@@ -1482,21 +1591,13 @@ export default function App() {
         <>
           <button className="dialog-btn dialog-btn-cancel" onClick={() => {
              setExitingTempTripAlert(false);
-             setSelectedTrip(null);
-             setSelectedSegmentId(null);
-             setSelectedWaypointId(null);
-             setHighlightedWaypointId(null);
-             setSelectedPOI(null);
+             goBackPanel();
           }}>Discard</button>
           <button className="dialog-btn dialog-btn-primary" onClick={async () => {
              const success = await handleSave();
              if (success) {
                setExitingTempTripAlert(false);
-               setSelectedTrip(null);
-               setSelectedSegmentId(null);
-               setSelectedWaypointId(null);
-               setHighlightedWaypointId(null);
-               setSelectedPOI(null);
+               goBackPanel();
              }
           }}>Save & Exit</button>
         </>

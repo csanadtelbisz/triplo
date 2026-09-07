@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/StatusPanel.css';
 import { OSM_LANGUAGES, getLanguagePreferences, saveLanguagePreferences } from '../utils/languagePreferences';
@@ -20,9 +20,11 @@ interface PreferencesPanelProps {
   onGoBack: () => void;
   onSetHome: () => void;
   onZoomHome: () => void;
+  editingConfigId: string | null;
+  onEditingConfigChange: (id: string | null) => void;
 }
 
-const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome, onZoomHome }) => {
+const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome, onZoomHome, editingConfigId, onEditingConfigChange }) => {
   const [showSavedMsg, setShowSavedMsg] = useState(false);
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
@@ -35,8 +37,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const [builtInOverrides, setBuiltInOverrides] = useState<BuiltInModesOverrides>(() => getBuiltInModeOverrides());
   const [styleConfigs, setStyleConfigs] = useState<RenderStyleConfig[]>(() => getStyleConfigs());
   
-  const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
-  const styleConfigsRef = useRef<HTMLElement | null>(null);
   
   // State for the icon picker
   const [iconPickerTargetIdx, setIconPickerTargetIdx] = useState<number | null>(null);
@@ -206,7 +206,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     saveStyleConfigs(newConfigs);
     setActiveStyleConfigId(newConfig.id);
     syncPreferencesToCloud(false, newConfig.id);
-    setEditingConfigId(newConfig.id);
+    onEditingConfigChange(newConfig.id);
   };
 
   const handleUpdateStyleConfig = (config: RenderStyleConfig) => {
@@ -225,20 +225,6 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     syncPreferencesToCloud(false, config.id);
   };
 
-  const handleCloseEditor = () => {
-    setEditingConfigId(null);
-    // After returning to the preferences panel, scroll to the Style Configurations section
-    // Use a short timeout so the panel content has rendered
-    setTimeout(() => {
-      if (styleConfigsRef.current) {
-        styleConfigsRef.current.scrollIntoView({ block: 'start' });
-      } else {
-        const container = document.querySelector('.status-panel-content');
-        if (container) (container as HTMLElement).scrollTo({ top: 0 });
-      }
-    }, 80);
-  };
-
   if (editingConfigId) {
     const config = styleConfigs.find(c => c.id === editingConfigId);
     if (config) {
@@ -248,7 +234,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           onSave={(updated) => {
             handleUpdateStyleConfig(updated);
           }}
-          onGoBack={handleCloseEditor}
+          onGoBack={onGoBack}
         />
       );
     }
@@ -488,7 +474,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           </table>
         </div>
 
-        <h3 ref={styleConfigsRef as any} className="status-panel-section-title">Style Configurations</h3>
+        <h3 className="status-panel-section-title">Style Configurations</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
             Configure custom rendering styles for routes and pins.
@@ -504,7 +490,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
                       <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigDown(idx)} disabled={idx === styleConfigs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); setEditingConfigId(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '2px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); onEditingConfigChange(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
                       <button className="iconButton" style={{ padding: '2px', color: '#d32f2f', visibility: config.readonly ? 'hidden' : 'visible' }} onClick={() => handleDeleteStyleConfig(idx)} title="Delete" disabled={config.readonly}><MaterialIcon name="delete" size={16} /></button>
                     </div>
                   </td>
