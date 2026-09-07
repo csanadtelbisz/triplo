@@ -61,6 +61,7 @@ export interface MapRef {
     flyTo: (lon: number, lat: number, targetSidebarState?: 'open' | 'collapsed' | 'current', onlyIfNotVisible?: boolean, targetView?: 'trip' | 'poi' | 'manager') => void;
     setHome: () => void;
     zoomToHome: () => void;
+    setHoveredCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
 }
 
 export interface MapProps {
@@ -229,10 +230,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
 
 const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick, onDragStart });
 
-  useEffect(() => {
+  const setHoveredCoordinate = (coord: { lon: number; lat: number; ele?: number } | null) => {
     if (!mapRef.current) return;
 
-    if (hoveredCoordinate) {
+    if (coord) {
       if (!hoverCoordMarkerRef.current) {
         const el = document.createElement('div');
         el.style.width = '12px';
@@ -245,13 +246,18 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
 
         hoverCoordMarkerRef.current = new Marker({ element: el });
       }
-      hoverCoordMarkerRef.current.setLngLat([hoveredCoordinate.lon, hoveredCoordinate.lat]).addTo(mapRef.current);
+      hoverCoordMarkerRef.current.setLngLat([coord.lon, coord.lat]).addTo(mapRef.current);
     } else {
       if (hoverCoordMarkerRef.current) {
         hoverCoordMarkerRef.current.remove();
         hoverCoordMarkerRef.current = null;
       }
     }
+  };
+
+  // Map-originated hovering still uses app state so the profile can mirror it.
+  useEffect(() => {
+    setHoveredCoordinate(hoveredCoordinate);
   }, [hoveredCoordinate]);
 
   useEffect(() => {
@@ -482,7 +488,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     handleJumpToWaypoint,
     flyTo,
     setHome,
-    zoomToHome
+    zoomToHome,
+    setHoveredCoordinate
   }));
 
   useEffect(() => {

@@ -130,6 +130,31 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
 
   const hoveredIndex = hoveredYear !== null ? yearDistances.findIndex(d => d.year === hoveredYear) : -1;
   const hoveredData = hoveredYear !== null ? yearDistances[hoveredIndex] : null;
+  const viewBoxWidth = Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2);
+
+  const updateHoveredYearFromPointer = (e: React.PointerEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    // Convert the pointer from viewport pixels to viewBox coordinates. This keeps
+    // hit testing accurate if the chart is resized on a narrow screen.
+    const point = svg.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const screenMatrix = svg.getScreenCTM();
+    if (!screenMatrix) return;
+    const svgPoint = point.matrixTransform(screenMatrix.inverse());
+    const index = Math.floor((svgPoint.x - padding) / calculatedBarWidth);
+
+    if (index >= 0 && index < yearDistances.length) {
+      setHoveredYear(yearDistances[index].year);
+    }
+  };
+
+  const handleChartPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateHoveredYearFromPointer(e);
+  };
   
   // Update tooltip position when hoveredIndex changes
   useEffect(() => {
@@ -144,7 +169,6 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
     const barCenterSvgX = padding + hoveredIndex * calculatedBarWidth + calculatedBarWidth / 2;
     
     // Convert SVG viewBox coordinate to SVG element's pixel coordinate
-    const viewBoxWidth = Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2);
     const scale = svgRect.width / viewBoxWidth;
     const barCenterPixelX = barCenterSvgX * scale;
     
@@ -219,9 +243,17 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
           ref={svgRef}
           width="100%" 
           height={chartHeight}
-          viewBox={`0 0 ${Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2)} ${chartHeight}`}
+          viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`}
+          onPointerDown={handleChartPointerDown}
+          onPointerMove={updateHoveredYearFromPointer}
+          onPointerUp={() => setHoveredYear(null)}
+          onPointerCancel={() => setHoveredYear(null)}
           onMouseLeave={() => setHoveredYear(null)}
-          style={{ display: 'block' }}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onTouchCancel={(e) => e.stopPropagation()}
+          style={{ display: 'block', touchAction: 'none' }}
         >
 
           {yearDistances.map((item, index) => {
@@ -239,7 +271,6 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
                   width={calculatedBarWidth}
                   height={innerHeight}
                   fill="transparent"
-                  onMouseEnter={() => setHoveredYear(item.year)}
                   style={{ cursor: 'pointer' }}
                 />
                 {/* Actual bar */}

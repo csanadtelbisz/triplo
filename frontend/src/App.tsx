@@ -1149,7 +1149,7 @@ export default function App() {
                   onGoBack={() => setAnalyticsSegmentInfo(null)}
                   onUpdateTrip={(newTrip) => updateTripState(targetTrip.id, newTrip)}
                   hoveredCoordinate={hoveredCoordinate}
-                  onHoverCoordinate={setHoveredCoordinate}
+                  onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
                   onZoomToSegment={(seg) => {
                     if (window.innerWidth <= 768) {
                       mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
@@ -1233,7 +1233,7 @@ export default function App() {
             onGoBack={handleGoBackSegment} 
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
             hoveredCoordinate={hoveredCoordinate}
-            onHoverCoordinate={setHoveredCoordinate}
+            onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
             onZoomToSegment={(seg) => {
               if (window.innerWidth <= 768) {
                 mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
