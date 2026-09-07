@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface ElevationProfileProps {
   geometry: GeoJSON.LineString;
-  hoveredCoordinate?: { lon: number; lat: number; ele?: number } | null;
   onHoverCoordinate?: (coord: { lon: number; lat: number; ele?: number } | null) => void;
 }
 
-export function ElevationProfile({ geometry, hoveredCoordinate, onHoverCoordinate }: ElevationProfileProps) {
+export function ElevationProfile({ geometry, onHoverCoordinate }: ElevationProfileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number, ele: number, dist: number } | null>(null);
   const hoveredIndexRef = useRef<number | null>(null);
@@ -134,28 +133,6 @@ export function ElevationProfile({ geometry, hoveredCoordinate, onHoverCoordinat
     onHoverCoordinate?.(null);
   };
 
-  // If hoveredCoordinate comes from map, find matching x position
-  const syncData = useMemo(() => {
-    // During a profile drag, tooltip already describes the selected point. Skipping
-    // this reverse lookup avoids another full route scan for every marker update.
-    if (!profile || tooltip || !hoveredCoordinate || !maxDist) return null;
-
-      let minDist = Infinity;
-      let closestIdx = -1;
-      for (let i = 0; i < geometry.coordinates.length; i++) {
-          const coord = geometry.coordinates[i];
-          const dist = Math.pow(coord[0] - hoveredCoordinate.lon, 2) + Math.pow(coord[1] - hoveredCoordinate.lat, 2);
-          if (dist < minDist) {
-              minDist = dist;
-              closestIdx = i;
-          }
-      }
-      if (closestIdx !== -1) {
-        return { x: (data[closestIdx].dist / maxDist) * 100, ele: data[closestIdx].ele, dist: data[closestIdx].dist };
-      }
-      return null;
-  }, [data, geometry.coordinates, hoveredCoordinate, maxDist, profile, tooltip]);
-
   if (!profile) return null;
 
   return (
@@ -214,31 +191,6 @@ export function ElevationProfile({ geometry, hoveredCoordinate, onHoverCoordinat
             </div>
         )}
         
-        {syncData && !tooltip && (
-            <div style={{
-                position: 'absolute',
-                left: `${syncData.x}%`,
-                top: 0,
-                bottom: 0,
-                width: '1px',
-                backgroundColor: 'red',
-                pointerEvents: 'none'
-            }}>
-                <div style={{
-                        position: 'absolute',
-                        top: '10px',
-                        ...(syncData.x > 80 ? { right: '5px' } : { left: '5px' }),
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        color: 'white',
-                        padding: '2px 4px',
-                        borderRadius: '2px',
-                        fontSize: '10px',
-                        whiteSpace: 'nowrap'
-                    }}>
-                        {Math.round(syncData.ele)}m ({syncData.dist.toFixed(1)}km)
-                    </div>
-            </div>
-        )}
       </div>
     </div>
   );

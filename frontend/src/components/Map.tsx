@@ -79,8 +79,6 @@ export interface MapProps {
     setSelectedSegmentId: (id: string | null) => void;
     selectedPOI: any | null;
     setSelectedPOI: (poi: any | null) => void;
-    hoveredCoordinate: { lon: number; lat: number; ele?: number } | null;
-    onHoverCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
     onSearchClick: () => void;
     onSelectTrip?: (trip: Trip) => void;
     onEmptyClick?: () => void;
@@ -104,8 +102,6 @@ export const Map = forwardRef<MapRef, MapProps>(({
     setSelectedSegmentId,
     selectedPOI,
     setSelectedPOI,
-    hoveredCoordinate,
-    onHoverCoordinate,
     onSearchClick,
     onSelectTrip,
     onEmptyClick,
@@ -119,10 +115,6 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const tempMarkerRef = useRef<Marker | null>(null);
   const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
-  const ghostMarkerRef = useRef<Marker | null>(null);
-  const ghostMarkerDataRef = useRef<{ segmentId: string, originalWaypoints: any[], insertIndex: number } | null>(null);
-  const isDraggingGhostRef = useRef(false);
-  const isHoveringWaypointRef = useRef(false);
   const multiTouchRef = useRef(false);
 
   // Track multi-touch for preventing weird zooming + dragging marker intersections
@@ -254,11 +246,6 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
       }
     }
   };
-
-  // Map-originated hovering still uses app state so the profile can mirror it.
-  useEffect(() => {
-    setHoveredCoordinate(hoveredCoordinate);
-  }, [hoveredCoordinate]);
 
   useEffect(() => {
     waitingWaypointIdRef.current = waitingWaypointId;
@@ -638,11 +625,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         });
         mapRef.current.on('dragstart', () => { setContextMenu(null); hotkeyRefs.current.onDragStart?.(); });
         mapRef.current.on('movestart', () => { setContextMenu(null); hotkeyRefs.current.onDragStart?.(); });
-        // Ghost marker logic
         mapRef.current.on('mousemove', (e) => {
-          if (isDraggingGhostRef.current) return;
-          if (isHoveringWaypointRef.current) return;
-
           let features: any[] = [];
           let poiFeatures: any[] = [];
           try {
@@ -689,195 +672,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 mode: hoverMode
               });
             
-            if (hotkeyRefs.current.selectedTrip && segInfo && segInfo.geometry && segInfo.geometry.coordinates.length > 1) {
-              const line = turf.lineString(segInfo.geometry.coordinates as [number, number][]);
-              const mousePoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
-              const snapped = turf.nearestPointOnLine(line, mousePoint);
-              
-              if (onHoverCoordinate && snapped && snapped.geometry) {
-                const snappedCoords = snapped.geometry.coordinates;
-                const origCoords = segInfo.geometry.coordinates;
-                // Find index of nearest original coord to get elevation
-                let minIdx = 0;
-                let minDist = Infinity;
-                for (let i = 0; i < origCoords.length; i++) {
-                  const dist = Math.pow(origCoords[i][0] - snappedCoords[0], 2) + Math.pow(origCoords[i][1] - snappedCoords[1], 2);
-                  if (dist < minDist) {
-                    minDist = dist;
-                    minIdx = i;
-                  }
-                }
-                onHoverCoordinate({
-                  lon: snappedCoords[0],
-                  lat: snappedCoords[1],
-                  ele: origCoords[minIdx][2]
-                });
-              }
-
-              let snappedDist = snapped.properties?.location as number;
-              if (snappedDist === undefined) {
-                  snappedDist = turf.length(turf.lineSlice(turf.point(line.geometry.coordinates[0] as [number, number]), snapped, line));
-              }
-              
-              let insertIndex = 1;
-              for (let i = 0; i < segInfo.waypoints.length - 1; i++) {
-                  const wpA = segInfo.waypoints[i];
-                  const wpB = segInfo.waypoints[i+1];
-                  if (!wpA.coordinates || !wpB.coordinates || wpA.coordinates.length < 2 || wpB.coordinates.length < 2) continue;
-                  
-                  const pA = turf.nearestPointOnLine(line, turf.point(wpA.coordinates as [number, number]));
-                  const pB = turf.nearestPointOnLine(line, turf.point(wpB.coordinates as [number, number]));
-                  
-                  let dA = pA.properties?.location as number ?? turf.length(turf.lineSlice(turf.point(line.geometry.coordinates[0] as [number, number]), pA, line));
-                  let dB = pB.properties?.location as number ?? turf.length(turf.lineSlice(turf.point(line.geometry.coordinates[0] as [number, number]), pB, line));
-                  
-                  if (dA > dB) {
-                      const temp = dA;
-                      dA = dB;
-                      dB = temp;
-                  }
-                  
-                  if (snappedDist >= dA && snappedDist <= dB) {
-                      insertIndex = i + 1;
-                      break;
-                  }
-              }
-              
-              ghostMarkerDataRef.current = {
-                  segmentId: segId,
-                  originalWaypoints: [],
-                  insertIndex
-              };
-              
-              if (!ghostMarkerRef.current) {
-                const el = document.createElement('div');
-                el.style.width = '12px';
-                el.style.height = '12px';
-                el.style.backgroundColor = 'red';
-                el.style.border = '2px solid white';
-                el.style.borderRadius = '50%';
-                el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.4)';
-                el.style.cursor = 'pointer';
-                
-                ghostMarkerRef.current = new Marker({ element: el, draggable: !isReadOnly })
-                  .setLngLat(snapped.geometry!.coordinates as [number, number])
-                  .addTo(mapRef.current!);
-                  
-                let originalGhostCoords: [number, number] | null = null;
-                let abortGhostDrag = false;
-                const handleGhostZoom = () => { abortGhostDrag = true; };
-                
-                // Capture coordinates before MapLibre mutates them internally during drag setup
-                el.addEventListener('mousedown', () => {
-                  if (!isDraggingGhostRef.current && ghostMarkerRef.current) {
-                    originalGhostCoords = [ghostMarkerRef.current.getLngLat().lng, ghostMarkerRef.current.getLngLat().lat];
-                    abortGhostDrag = false;
-                  }
-                });
-                el.addEventListener('touchstart', () => {
-                  if (!isDraggingGhostRef.current && ghostMarkerRef.current) {
-                    originalGhostCoords = [ghostMarkerRef.current.getLngLat().lng, ghostMarkerRef.current.getLngLat().lat];
-                    abortGhostDrag = false;
-                  }
-                }, { passive: true });
-
-                ghostMarkerRef.current.on('dragstart', () => {
-                  if (!originalGhostCoords) {
-                    originalGhostCoords = [ghostMarkerRef.current!.getLngLat().lng, ghostMarkerRef.current!.getLngLat().lat];
-                  }
-                  if (multiTouchRef.current === true) abortGhostDrag = true;
-                  mapRef.current?.on('zoom', handleGhostZoom);
-                  isDraggingGhostRef.current = true;
-                  setHoverInfo(null);
-                    hotkeyRefs.current.onDragStart?.();
-                  if (multiTouchRef.current) abortGhostDrag = true;
-                  if (abortGhostDrag && ghostMarkerRef.current && originalGhostCoords) {
-                    ghostMarkerRef.current.setLngLat(originalGhostCoords);
-                  }
-                });
-                
-                ghostMarkerRef.current.on('dragend', () => {
-                  mapRef.current?.off('zoom', handleGhostZoom);
-                  isDraggingGhostRef.current = false;
-                  if (abortGhostDrag && ghostMarkerRef.current && originalGhostCoords) {
-                    ghostMarkerRef.current.setLngLat(originalGhostCoords);
-                    originalGhostCoords = null;
-                    return;
-                  }
-                  originalGhostCoords = null;
-                  if (ghostMarkerRef.current && ghostMarkerDataRef.current) {
-                     const wpCoords = ghostMarkerRef.current.getLngLat();
-                     const { segmentId, insertIndex } = ghostMarkerDataRef.current;
-                     const targetTrip = hotkeyRefs.current.selectedTrip!;
-                     
-                     const newSegments = [...targetTrip.segments];
-                     const segIndex = newSegments.findIndex(s => s.id === segmentId);
-                     if (segIndex > -1) {
-                        const newWaypoint = {
-                            id: 'wp-' + Date.now(),
-                            name: '',
-                            coordinates: [wpCoords.lng, wpCoords.lat] as [number, number],
-                            importance: 'hidden' as 'hidden'
-                        };
-                        const targetSeg = newSegments[segIndex];
-                        const newWps = [...targetSeg.waypoints];
-                        newWps.splice(insertIndex, 0, newWaypoint);
-                        newSegments[segIndex] = { ...targetSeg, waypoints: newWps };
-                        
-                        hotkeyRefs.current.updateTripState(targetTrip.id, { ...targetTrip, segments: newSegments });
-                        
-                        if (targetSeg.source === 'router') {
-
-                                const validCoords = newSegments[segIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-                                if (validCoords.length >= 2) {
-                                    optimizeSegmentRoute(newSegments[segIndex], targetSeg).then((geom: any) => {
-                                        newSegments[segIndex] = { ...newSegments[segIndex], geometry: geom };
-                                        hotkeyRefs.current.updateTripState(targetTrip.id, { ...targetTrip, segments: [...newSegments] }, true);
-                                    });
-                                }
-                        }
-                     }
-                  }
-                  
-                  if (ghostMarkerRef.current) {
-                     ghostMarkerRef.current.getElement().style.display = 'none';
-                  }
-                });
-              } else {
-                ghostMarkerRef.current.getElement().style.display = 'block';
-                ghostMarkerRef.current.setLngLat(snapped.geometry!.coordinates as [number, number]);
-              }
-              
-            }
           } else if (poiFeatures.length > 0) {
             mapRef.current!.getCanvas().style.cursor = 'pointer';
             setHoverInfo(null);
-            if (onHoverCoordinate) {
-              onHoverCoordinate(null);
-            }
-
-            if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
-                ghostMarkerRef.current.getElement().style.display = 'none';
-            }
           } else {
             setHoverInfo(null);
             mapRef.current!.getCanvas().style.cursor = '';
-            
-            if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
-                const markerEl = ghostMarkerRef.current.getElement();
-                if (e.originalEvent.target !== markerEl && !markerEl.contains(e.originalEvent.target as Node)) {
-                    markerEl.style.display = 'none';
-                }
-            }
-            if (onHoverCoordinate) {
-              onHoverCoordinate(null);
-            }
-          }
-        });
-
-        mapRef.current.on('mouseout', () => {
-          if (onHoverCoordinate) {
-            onHoverCoordinate(null);
           }
         });
 
@@ -1248,20 +1048,15 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             }
             
             el.addEventListener('mouseenter', (e) => {
-              isHoveringWaypointRef.current = true;
               setHoverInfo({
                 x: e.clientX,
                 y: e.clientY,
                 name: wp.name,
                 mode: 'Waypoint'
               });
-              if (ghostMarkerRef.current && !isDraggingGhostRef.current) {
-                 ghostMarkerRef.current.getElement().style.display = 'none';
-              }
             });
             
             el.addEventListener('mouseleave', () => {
-              isHoveringWaypointRef.current = false;
               setHoverInfo(null);
             });
 
@@ -1660,7 +1455,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
           </button>
       </div>
       
-      {hoverInfo && !isDraggingGhostRef.current && (
+      {hoverInfo && (
         <div 
           className="hover-tooltip"
           style={{ 

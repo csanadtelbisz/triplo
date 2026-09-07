@@ -19,12 +19,11 @@ interface SegmentInfoProps {
   allTrips?: Trip[];
   onGoBack: () => void;
   onUpdateTrip: (newTrip: Trip) => void;
-  hoveredCoordinate?: { lon: number; lat: number; ele?: number } | null;
   onHoverCoordinate?: (coord: { lon: number; lat: number; ele?: number } | null) => void;
   onZoomToSegment?: (segment: Segment) => void;
 }
 
-export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, onUpdateTrip, hoveredCoordinate, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
+export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, onUpdateTrip, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
   const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
   
@@ -672,7 +671,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              </div>
            )}
            {seg.geometry && seg.distanceStats?.hasElevation && (
-             <ElevationProfile geometry={seg.geometry} hoveredCoordinate={hoveredCoordinate} onHoverCoordinate={onHoverCoordinate} />
+             <ElevationProfile geometry={seg.geometry} onHoverCoordinate={onHoverCoordinate} />
            )}
         </div>
 

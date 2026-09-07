@@ -129,7 +129,6 @@ export default function App() {
   );
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
-  const [hoveredCoordinate, setHoveredCoordinate] = useState<{ lon: number; lat: number; ele?: number } | null>(null);
   const [exitingTempTripAlert, setExitingTempTripAlert] = useState<boolean>(false);
   const [waitingWaypointId, setWaitingWaypointId] = useState<string | null>(null);
   const waitingWaypointIdRef = useRef<string | null>(null);
@@ -1148,7 +1147,6 @@ export default function App() {
                   allTrips={trips}
                   onGoBack={() => setAnalyticsSegmentInfo(null)}
                   onUpdateTrip={(newTrip) => updateTripState(targetTrip.id, newTrip)}
-                  hoveredCoordinate={hoveredCoordinate}
                   onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
                   onZoomToSegment={(seg) => {
                     if (window.innerWidth <= 768) {
@@ -1232,7 +1230,6 @@ export default function App() {
             allTrips={trips}
             onGoBack={handleGoBackSegment} 
             onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
-            hoveredCoordinate={hoveredCoordinate}
             onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
             onZoomToSegment={(seg) => {
               if (window.innerWidth <= 768) {
@@ -1406,8 +1403,6 @@ export default function App() {
           }
           if (poi) setIsSidebarCollapsed(false);
         }}
-        hoveredCoordinate={hoveredCoordinate}
-        onHoverCoordinate={setHoveredCoordinate}
         onEmptyClick={() => setIsSidebarCollapsed(true)}
         isSidebarCollapsed={isSidebarCollapsed}
         onSearchClick={() => {
