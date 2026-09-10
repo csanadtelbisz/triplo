@@ -120,6 +120,7 @@ export default function App() {
   const [activeConflictSave, setActiveConflictSave] = useState<string | null>(null);
   const [uploadingMissingTripId, setUploadingMissingTripId] = useState<string | null>(null);
   const [isAcceptingAllConflicts, setIsAcceptingAllConflicts] = useState(false);
+  const [conflictResolutionProgress, setConflictResolutionProgress] = useState({ currentItem: '', percentage: 0 });
 
   useEffect(() => {
     if (showConflictResolution && preferenceConflicts.length === 0 && Object.keys(tripConflicts).length === 0 && Object.keys(missingTrips).length === 0) {
@@ -790,7 +791,7 @@ export default function App() {
     
     // 2. make accepted version definitive 
     const finalTrip = { ...acceptedVersion };
-    finalTrip.metadata = finalTrip.metadata || {};
+    finalTrip.metadata = { ...(finalTrip.metadata || {}) };
     finalTrip.metadata.syncedServices = Array.from(allSources).filter(s => s !== 'Local Browser Storage');
     delete finalTrip.metadata._sourceService; // clean up internal marker
 
@@ -853,23 +854,45 @@ export default function App() {
   };
 
   const handleAcceptLatestAndUploadMissing = async () => {
-    flushSync(() => setIsAcceptingAllConflicts(true));
+    flushSync(() => {
+      setIsAcceptingAllConflicts(true);
+      setConflictResolutionProgress({ currentItem: 'Starting...', percentage: 0 });
+    });
     try {
+      let totalSteps = (preferenceConflicts.length > 0 ? 1 : 0) + Object.keys(tripConflicts).length;
+      const conflictedIds = new Set(Object.keys(tripConflicts));
+      const missingUploads = Object.entries(missingTrips).filter(([tripId]) => !conflictedIds.has(tripId));
+      totalSteps += missingUploads.length;
+      let completedSteps = 0;
+
       const newestPreference = [...preferenceConflicts].sort((a, b) =>
         new Date(b.preferences.updatedAt || 0).getTime() - new Date(a.preferences.updatedAt || 0).getTime()
       )[0];
-      if (newestPreference) await handleResolvePreferenceConflict(newestPreference);
+      if (newestPreference) {
+        setConflictResolutionProgress({ currentItem: 'Resolving preferences', percentage: (completedSteps / totalSteps) * 100 });
+        await handleResolvePreferenceConflict(newestPreference);
+        completedSteps++;
+      }
 
       for (const [tripId, versions] of Object.entries(tripConflicts)) {
         const newestTrip = [...versions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-        if (newestTrip) await handleResolveConflict(tripId, newestTrip);
+        if (newestTrip) {
+          setConflictResolutionProgress({ currentItem: `Resolving ${newestTrip.name || 'Unnamed trip'}`, percentage: (completedSteps / totalSteps) * 100 });
+          await handleResolveConflict(tripId, newestTrip);
+        }
+        completedSteps++;
       }
-      const conflictedIds = new Set(Object.keys(tripConflicts));
-      await Promise.all(Object.entries(missingTrips).map(async ([tripId, services]) => {
-        if (conflictedIds.has(tripId)) return;
+      
+      for (const [tripId, services] of missingUploads) {
         const trip = trips.find(item => item.id === tripId);
-        if (trip) await persistingManager.uploadToServices(trip, services);
-      }));
+        if (trip) {
+          setConflictResolutionProgress({ currentItem: `Uploading ${trip.name || tripId}`, percentage: (completedSteps / totalSteps) * 100 });
+          await persistingManager.uploadToServices(trip, services);
+        }
+        completedSteps++;
+      }
+      
+      setConflictResolutionProgress({ currentItem: 'Done', percentage: 100 });
       setMissingTrips({});
       setShowConflictResolution(false);
     } finally {
@@ -1539,46 +1562,57 @@ export default function App() {
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '60vh', overflowY: 'auto' }}>
-        {preferenceConflicts.length > 0 && (
-          <section>
-            <h4 style={{ margin: '0 0 6px' }}>Preferences</h4>
-            {preferenceConflicts.map(version => (
-              <div key={version.source} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
-                <span style={{ flex: 1 }}>{version.source}</span>
-                <span style={{ fontSize: '0.85em', color: '#666' }}>{version.preferences.updatedAt ? new Date(version.preferences.updatedAt).toLocaleString() : 'No timestamp'}</span>
-                <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolvePreferenceConflict(version)} disabled={isAcceptingAllConflicts || activeConflictSave === 'preferences'}>
-                  {activeConflictSave === 'preferences' ? 'Saving...' : 'Accept'}
-                </button>
-              </div>
+        {isAcceptingAllConflicts ? (
+          <div style={{ padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ marginBottom: '12px' }}>{conflictResolutionProgress.currentItem}</div>
+            <div style={{ width: '100%', height: '8px', backgroundColor: '#eee', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${conflictResolutionProgress.percentage}%`, height: '100%', backgroundColor: '#007bff', transition: 'width 0.2s' }} />
+            </div>
+          </div>
+        ) : (
+          <>
+            {preferenceConflicts.length > 0 && (
+              <section>
+                <h4 style={{ margin: '0 0 6px' }}>Preferences</h4>
+                {preferenceConflicts.map(version => (
+                  <div key={version.source} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                    <span style={{ flex: 1 }}>{version.source}</span>
+                    <span style={{ fontSize: '0.85em', color: '#666' }}>{version.preferences.updatedAt ? new Date(version.preferences.updatedAt).toLocaleString() : 'No timestamp'}</span>
+                    <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolvePreferenceConflict(version)} disabled={isAcceptingAllConflicts || activeConflictSave === 'preferences'}>
+                      {activeConflictSave === 'preferences' ? 'Saving...' : 'Accept'}
+                    </button>
+                  </div>
+                ))}
+              </section>
+            )}
+            {Object.entries(tripConflicts).map(([tripId, versions]) => (
+              <section key={tripId}>
+                <h4 style={{ margin: '0 0 6px' }}>{versions[0]?.name || 'Unnamed trip'}</h4>
+                {versions.map((trip, index) => (
+                  <div key={`${trip.metadata?._sourceService}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                    <span style={{ flex: 1 }}>{trip.metadata?._sourceService || 'Unknown source'}</span>
+                    <span style={{ fontSize: '0.85em', color: '#666' }}>{trip.updatedAt ? new Date(trip.updatedAt).toLocaleString() : 'No timestamp'}</span>
+                    <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolveConflict(tripId, trip)} disabled={isAcceptingAllConflicts || activeConflictSave === `trip:${tripId}`}>
+                      {activeConflictSave === `trip:${tripId}` ? 'Saving...' : 'Accept'}
+                    </button>
+                  </div>
+                ))}
+              </section>
             ))}
-          </section>
-        )}
-        {Object.entries(tripConflicts).map(([tripId, versions]) => (
-          <section key={tripId}>
-            <h4 style={{ margin: '0 0 6px' }}>{versions[0]?.name || 'Unnamed trip'}</h4>
-            {versions.map((trip, index) => (
-              <div key={`${trip.metadata?._sourceService}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
-                <span style={{ flex: 1 }}>{trip.metadata?._sourceService || 'Unknown source'}</span>
-                <span style={{ fontSize: '0.85em', color: '#666' }}>{trip.updatedAt ? new Date(trip.updatedAt).toLocaleString() : 'No timestamp'}</span>
-                <button className="dialog-btn dialog-btn-primary" onClick={() => handleResolveConflict(tripId, trip)} disabled={isAcceptingAllConflicts || activeConflictSave === `trip:${tripId}`}>
-                  {activeConflictSave === `trip:${tripId}` ? 'Saving...' : 'Accept'}
-                </button>
-              </div>
-            ))}
-          </section>
-        ))}
-        {Object.entries(missingTrips).length > 0 && (
-          <section>
-            <h4 style={{ margin: '0 0 6px' }}>Trips missing from a service</h4>
-            {Object.entries(missingTrips).map(([tripId, services]) => (
-              <div key={tripId} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0', fontSize: '0.9em' }}>
-                <span style={{ flex: 1 }}>{trips.find(trip => trip.id === tripId)?.name || tripId}: missing from {services.join(', ')}</span>
-                <button className="dialog-btn dialog-btn-primary" onClick={() => handleUploadMissingTrip(tripId)} disabled={isAcceptingAllConflicts || uploadingMissingTripId === tripId}>
-                  {uploadingMissingTripId === tripId ? 'Uploading...' : 'Upload'}
-                </button>
-              </div>
-            ))}
-          </section>
+            {Object.entries(missingTrips).length > 0 && (
+              <section>
+                <h4 style={{ margin: '0 0 6px' }}>Trips missing from a service</h4>
+                {Object.entries(missingTrips).map(([tripId, services]) => (
+                  <div key={tripId} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0', fontSize: '0.9em' }}>
+                    <span style={{ flex: 1 }}>{trips.find(trip => trip.id === tripId)?.name || tripId}: missing from {services.join(', ')}</span>
+                    <button className="dialog-btn dialog-btn-primary" onClick={() => handleUploadMissingTrip(tripId)} disabled={isAcceptingAllConflicts || uploadingMissingTripId === tripId}>
+                      {uploadingMissingTripId === tripId ? 'Uploading...' : 'Upload'}
+                    </button>
+                  </div>
+                ))}
+              </section>
+            )}
+          </>
         )}
       </div>
     </Dialog>
