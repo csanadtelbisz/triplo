@@ -19,8 +19,8 @@
 
 .top-left-controls {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 8px;
+  left: 8px;
   z-index: 1000;
   display: flex;
   flex-direction: column;

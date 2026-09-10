@@ -24,6 +24,7 @@ import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
 import { AnalyticsPanel } from './components/AnalyticsPanel';
 import PreferencesPanel from './components/PreferencesPanel';
+import { Icon } from './components/Icon';
 import { persistingManager } from './persisting/PersistingManager';
 import { hasUnsyncedPreferences, loadPreferencesFromCloud, syncPreferencesToCloud } from './utils/preferencesSync';
 import { resolvePOIName } from './utils/poiUtils';
@@ -1546,6 +1547,25 @@ export default function App() {
         }}
         onSelectTrip={handleSelectTrip}
       />
+      <div className={`pc-sidebar-toggle-trigger ${isSidebarCollapsed ? 'collapsed' : ''}`}
+        onMouseEnter={(e) => {
+          const btn = e.currentTarget.nextElementSibling as HTMLElement;
+          if (btn) btn.style.opacity = '1';
+        }}
+        onMouseLeave={(e) => {
+          const btn = e.currentTarget.nextElementSibling as HTMLElement;
+          if (btn) btn.style.opacity = '0';
+        }}
+      />
+      <div 
+        className={`pc-sidebar-toggle ${isSidebarCollapsed ? 'collapsed' : ''}`}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}
+        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <Icon name={isSidebarCollapsed ? "chevron_right" : "chevron_left"} />
+      </div>
     </div>
 
     <Dialog

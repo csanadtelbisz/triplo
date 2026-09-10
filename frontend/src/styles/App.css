@@ -13,7 +13,7 @@ body, html, #root {
 }
 
 .layout {
-  display: flex;
+  position: relative;
   height: 100vh; /* Fallback for older browsers */
   height: 100dvh; /* Dynamic viewport height to account for mobile URL bars correctly */
   width: 100vw;
@@ -23,16 +23,106 @@ body, html, #root {
 .sidebar {
   width: 380px;
   background-color: #fcfcfc;
-  border-right: 1px solid #ddd;
   display: flex;
   flex-direction: column;
   z-index: 10000;
   box-shadow: 2px 0 8px rgba(0,0,0,0.05);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 0.3s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+}
+
+/* PC specific toggle and sidebar styles */
+@media (min-width: 769px) {
+  .sidebar {
+    top: 8px;
+    left: 8px;
+    bottom: 8px;
+    border-radius: 8px;
+    border-right: 1px solid #ddd;
+    overflow: hidden;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar .toolbar {
+    border-radius: 8px;
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pc-sidebar-toggle-trigger {
+    position: absolute;
+    top: 30%;
+    height: 40%;
+    z-index: 10002;
+    /* invisible hover target area */
+  }
+
+  .pc-sidebar-toggle-trigger:not(.collapsed) {
+    left: 382px;
+    width: 16px;
+  }
+
+  .pc-sidebar-toggle-trigger.collapsed {
+    left: 0;
+    width: 30px;
+  }
+
+  .pc-sidebar-toggle {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10003;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    width: 24px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 0.2s, left 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  }
+
+  .pc-sidebar-toggle:not(.collapsed) {
+    left: 396px;
+  }
+
+  .pc-sidebar-toggle.collapsed {
+    left: 8px;
+  }
+
+  .layout .top-left-controls {
+    left: 396px;
+  }
+
+  .layout:has(.sidebar.collapsed) .top-left-controls {
+    left: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pc-sidebar-toggle-trigger,
+  .pc-sidebar-toggle {
+    display: none;
+  }
 }
 
 #map {
-  flex: 1;
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 1;
 }

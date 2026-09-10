@@ -265,7 +265,12 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
-      return { top: 50, bottom: 50, left: 50, right: 50 };
+      const shouldBeOpen = targetSidebarState === 'open'
+        ? true
+        : targetSidebarState === 'collapsed'
+          ? false
+          : !isSidebarCollapsed;
+      return { top: 50, bottom: 50, left: shouldBeOpen ? 380 + 50 : 50, right: 50 };
     }
     // Mobile height offset calculation.
     let heightOffset = 64; // Collapsed height
