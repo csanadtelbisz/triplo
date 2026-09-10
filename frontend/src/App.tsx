@@ -141,9 +141,10 @@ export default function App() {
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
   const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+  const [isMobileSidebarCollapsed, setMobileSidebarCollapsed] = useState(() =>
     window.innerWidth <= 768 && !!getSharedTripTokenFromPath()
   );
+  const [isPcSidebarCollapsed, setPcSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
   const [exitingTempTripAlert, setExitingTempTripAlert] = useState<boolean>(false);
@@ -516,7 +517,7 @@ export default function App() {
 
   const handleSetHighlightedWaypointId = useCallback((id: string | null) => {
     setHighlightedWaypointId(id);
-    if (id) setIsSidebarCollapsed(false);
+    if (id) setMobileSidebarCollapsed(false);
   }, []);
 
   const handleCoordinateChange = async (trip: Trip, wpId: string, coords: [number, number]) => {
@@ -747,7 +748,7 @@ export default function App() {
     setSelectedTrip(newTrip);
     setSelectedSegmentId(null);
     setSelectedWaypointId(null);
-    setIsSidebarCollapsed(false);
+    setMobileSidebarCollapsed(false);
 
     // Give it a bit of time to render the new trip editor
     setTimeout(() => {
@@ -1038,7 +1039,7 @@ export default function App() {
         setIsViewingSharedTrip(true);
         setIsReadOnly(true);
         const isMobile = window.innerWidth <= 768;
-        setIsSidebarCollapsed(isMobile);
+        setMobileSidebarCollapsed(isMobile);
         setTimeout(() => mapComponentRef.current?.zoomToTrip(cachedSharedTrip, isMobile ? 'collapsed' : 'open', 'trip'), isMobile ? 350 : 0);
       } catch (error) {
         console.error('Failed to load shared trip:', error);
@@ -1072,7 +1073,7 @@ export default function App() {
     } else if (savedSharedTrip) {
       setSelectedTrip(savedSharedTrip);
       setIsViewingSharedTrip(true);
-      setIsSidebarCollapsed(window.innerWidth <= 768);
+      setMobileSidebarCollapsed(window.innerWidth <= 768);
     }
   }, [isLoadingTrips, sharedTripId, trips]);
 
@@ -1153,7 +1154,7 @@ export default function App() {
 
     if (maintainState) return;
 
-    setIsSidebarCollapsed(true);
+    setMobileSidebarCollapsed(true);
 
     setTimeout(() => {
       if (mapComponentRef.current) {
@@ -1176,6 +1177,8 @@ export default function App() {
     Promise.all(updatedTrips.map(t => TripAPI.saveTrip(t)));
   };
 
+  const isMobileViewport = window.innerWidth <= 768;
+  const isSidebarCollapsed = isMobileViewport ? isMobileSidebarCollapsed : isPcSidebarCollapsed;
   const isMobileSearchOpen = isSearchOpen;
   const isMobilePoiSmaller = !!selectedPOI;
   const sidebarClasses = `sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isMobileSearchOpen ? 'search-maximized' : ''} ${isMobilePoiSmaller && !isSearchOpen ? 'poi-info-smaller' : ''}`;
@@ -1212,13 +1215,13 @@ export default function App() {
       const deltaY = touchEndY - y;
       
       if (deltaY > 50) {
-        setIsSidebarCollapsed(true);
+        setMobileSidebarCollapsed(true);
       } else if (deltaY < -50 && (!isContentEdge || isSidebarCollapsed)) {
-        setIsSidebarCollapsed(false);
+        setMobileSidebarCollapsed(false);
       } else if (Math.abs(deltaY) < 10) {
         // It was a tap, toggle if it was on the handle itself
         if (isSidebarCollapsed && (e.target as HTMLElement).closest('.mobile-drag-handle')) {
-          setIsSidebarCollapsed(false);
+          setMobileSidebarCollapsed(false);
         }
       }
       touchStartRef.current = null;
@@ -1261,7 +1264,7 @@ export default function App() {
                   if (!segment) return;
                   if (window.innerWidth <= 768) {
                     mapComponentRef.current?.zoomToSegment(segment, 'collapsed', 'trip');
-                    setIsSidebarCollapsed(true);
+                    setMobileSidebarCollapsed(true);
                   } else {
                     mapComponentRef.current?.zoomToSegment(segment, 'current', 'trip');
                   }
@@ -1283,7 +1286,7 @@ export default function App() {
                   onZoomToSegment={(seg) => {
                     if (window.innerWidth <= 768) {
                       mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
-                      setIsSidebarCollapsed(true);
+                      setMobileSidebarCollapsed(true);
                     } else {
                       mapComponentRef.current?.zoomToSegment(seg, 'current', 'trip');
                     }
@@ -1366,7 +1369,7 @@ export default function App() {
             onZoomToSegment={(seg) => {
               if (window.innerWidth <= 768) {
                 mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip');
-                setIsSidebarCollapsed(true);
+                setMobileSidebarCollapsed(true);
               } else {
                 mapComponentRef.current?.zoomToSegment(seg, 'current', 'trip');
               }
@@ -1382,7 +1385,7 @@ export default function App() {
             attachingPoiToWaypointId={attachingPoiToWaypointId}
             setAttachingPoiToWaypointId={setAttachingPoiToWaypointId}
             onJumpToWaypoint={(id) => {
-              setIsSidebarCollapsed(true);
+              setMobileSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
           />
@@ -1407,20 +1410,20 @@ export default function App() {
               setIsStatusOpen(true);
               setIsAnalyticsOpen(false);
               setIsPreferencesOpen(false);
-              setIsSidebarCollapsed(false);
+              setMobileSidebarCollapsed(false);
             }}
             onOpenSettings={() => {
               setIsPreferencesOpen(true);
               setEditingStyleConfigId(null);
               setIsStatusOpen(false);
               setIsAnalyticsOpen(false);
-              setIsSidebarCollapsed(false);
+              setMobileSidebarCollapsed(false);
             }}
             onOpenAnalytics={() => {
               setIsAnalyticsOpen(true);
               setIsStatusOpen(false);
               setIsPreferencesOpen(false);
-              setIsSidebarCollapsed(false);
+              setMobileSidebarCollapsed(false);
             }}
           />
         ) : (
@@ -1435,15 +1438,15 @@ export default function App() {
             onSelectSegment={setSelectedSegmentId}
             onSelectWaypoint={setSelectedWaypointId}
             onZoomToTrip={() => {
-              setIsSidebarCollapsed(true);
+              setMobileSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.zoomToTrip(selectedTrip, 'collapsed', 'trip'); }, 350);
             }}
             onZoomToSegment={(seg) => {
-              setIsSidebarCollapsed(true);
+              setMobileSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.zoomToSegment(seg, 'collapsed', 'trip'); }, 350);
             }}
             onJumpToWaypoint={(id) => {
-              setIsSidebarCollapsed(true);
+              setMobileSidebarCollapsed(true);
               setTimeout(() => { mapComponentRef.current?.handleJumpToWaypoint(id, 'collapsed', 'trip'); }, 350);
             }}
             availablePersistingServices={persistingManager.getAvailableServices()}
@@ -1534,16 +1537,20 @@ export default function App() {
           if (poi && mapComponentRef.current && poi.coordinates) {
              mapComponentRef.current.flyTo(poi.coordinates[0], poi.coordinates[1], 'open', true, 'poi');
           }
-          if (poi) setIsSidebarCollapsed(false);
+          if (poi) setMobileSidebarCollapsed(false);
         }}
-        onEmptyClick={() => setIsSidebarCollapsed(true)}
+        onEmptyClick={() => setMobileSidebarCollapsed(true)}
         isSidebarCollapsed={isSidebarCollapsed}
         onSearchClick={() => {
           setIsSearchOpen(true);
           setIsStatusOpen(false);
           setIsPreferencesOpen(false);
           setIsAnalyticsOpen(false);
-          setIsSidebarCollapsed(false);
+          if (window.innerWidth > 768) {
+            setPcSidebarCollapsed(false);
+          } else {
+            setMobileSidebarCollapsed(false);
+          }
         }}
         onSelectTrip={handleSelectTrip}
       />
@@ -1561,7 +1568,7 @@ export default function App() {
         className={`pc-sidebar-toggle ${isSidebarCollapsed ? 'collapsed' : ''}`}
         onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
         onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}
-        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onClick={() => setPcSidebarCollapsed(!isPcSidebarCollapsed)}
         title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         <Icon name={isSidebarCollapsed ? "chevron_right" : "chevron_left"} />

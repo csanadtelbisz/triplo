@@ -265,12 +265,18 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
     if (window.innerWidth > 768) {
-      const shouldBeOpen = targetSidebarState === 'open'
-        ? true
-        : targetSidebarState === 'collapsed'
-          ? false
-          : !isSidebarCollapsed;
-      return { top: 50, bottom: 50, left: shouldBeOpen ? 380 + 50 : 50, right: 50 };
+      const mapRect = mapRef.current?.getContainer().getBoundingClientRect();
+      const sidebarRect = document.querySelector<HTMLElement>('.sidebar')?.getBoundingClientRect();
+      const sidebarOverlap = !isSidebarCollapsed && mapRect && sidebarRect
+        ? Math.max(0, Math.min(mapRect.right, sidebarRect.right) - mapRect.left)
+        : 0;
+      const focusPadding = 60;
+      return {
+        top: focusPadding + 10, // markers on top consume more space
+        bottom: focusPadding,
+        left: sidebarOverlap + focusPadding,
+        right: focusPadding
+      };
     }
     // Mobile height offset calculation.
     let heightOffset = 64; // Collapsed height
@@ -332,11 +338,11 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
+      mapRef.current.resize();
       const camera = mapRef.current.cameraForBounds(bounds, { padding: paddingLayer });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
-          padding: paddingLayer,
           essential: true,
           duration: 1200
         });
@@ -368,12 +374,12 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
+      mapRef.current.resize();
       const targetPadding = getPadding(targetSidebarState, targetView);
       const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
         mapRef.current.flyTo({
           ...camera,
-          padding: targetPadding,
           essential: true,
           duration: 1200
         });
@@ -415,6 +421,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
     requestAnimationFrame(() => {
       if (!mapRef.current) return;
+      mapRef.current.resize();
       const targetPadding = getPadding(targetSidebarState, targetView);
       const camera = mapRef.current.cameraForBounds(bounds, { padding: targetPadding });
       if (camera) {
@@ -426,7 +433,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
           ...camera,
           center: targetCoord,
           zoom: targetZoom,
-          padding: targetPadding,
           duration: 1200,
           essential: true
         });
@@ -477,7 +483,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     if (homeRaw) {
       try {
         const home = JSON.parse(homeRaw);
-        mapRef.current.flyTo({ center: home.center, zoom: home.zoom, duration: 1200, bearing: 0, pitch: 0 });
+        mapRef.current.flyTo({ center: home.center, zoom: home.zoom, padding: getPadding(), duration: 1200, bearing: 0, pitch: 0 });
       } catch(e) {}
     }
   };
