@@ -611,13 +611,13 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
                     })}
                   </div>
                 ) : (
-                  <p style={{ color: '#777', fontStyle: 'italic' }}>No segments found for this transport mode.</p>
+                  <p style={{ color: '#777' }}>No segments found for this transport mode.</p>
                 )}
               </div>
             )}
           </>
         ) : (
-          <p style={{ color: '#777', fontStyle: 'italic' }}>No distance data available.</p>
+          <p style={{ color: '#777', textAlign: 'center' }}>No trips to analyze.</p>
         )}
       </div>
     </div>
