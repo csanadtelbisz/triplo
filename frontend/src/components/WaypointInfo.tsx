@@ -63,7 +63,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
             <button 
               className="iconButton" 
               title="Add point again as last waypoint" 
-              onClick={() => {
+              onClick={async () => {
                 if (wp) {
                   const newWaypoint = {
                     ...wp,
@@ -81,10 +81,15 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
 
                     const validCoords = newSegments[lastSegIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
                     if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                      optimizeSegmentRoute(newSegments[lastSegIndex], lastSegment).then((geom: any) => {
-                        newSegments[lastSegIndex] = { ...newSegments[lastSegIndex], geometry: geom };
-                        onUpdateTrip({ ...trip, segments: [...newSegments] });
-                      });
+                      try {
+                        const geom = await optimizeSegmentRoute(newSegments[lastSegIndex], lastSegment) as any;
+                        if (geom) {
+                          newSegments[lastSegIndex] = { ...newSegments[lastSegIndex], geometry: geom };
+                          onUpdateTrip({ ...trip, segments: [...newSegments] });
+                        }
+                      } catch (error) {
+                        console.error('Failed to update route after adding waypoint', error);
+                      }
                     }
                     if (setHighlightedWaypointId) {
                       setHighlightedWaypointId(newWaypoint.id);

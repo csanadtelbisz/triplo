@@ -219,7 +219,29 @@ export default function App() {
     }
   }, [getPanelHistoryState]);
 
-  const goBackPanel = () => window.history.back();
+  const replacePanelHistoryOnNextRender = () => {
+    historyUpdateModeRef.current = 'replace';
+  };
+
+  const goBackPanel = () => {
+    replacePanelHistoryOnNextRender();
+    if (isSearchOpen) {
+      setIsSearchOpen(false);
+    } else if (selectedPOI) {
+      setSelectedPOI(null);
+    } else if (selectedSegmentId) {
+      setSelectedSegmentId(null);
+    } else if (selectedWaypointId) {
+      setSelectedWaypointId(null);
+      setAttachingPoiToWaypointId(null);
+    } else if (isPreferencesOpen || isStatusOpen || isAnalyticsOpen) {
+      setIsPreferencesOpen(false);
+      setIsStatusOpen(false);
+      setIsAnalyticsOpen(false);
+      setAnalyticsSegmentInfo(null);
+      setEditingStyleConfigId(null);
+    }
+  };
 
   useEffect(() => {
     const handlePanelPopState = (event: PopStateEvent) => {
@@ -902,15 +924,21 @@ export default function App() {
     }
   };
 
-  const handleGoBackTripEditor = () => {
-    if (selectedTrip && selectedTrip.id.startsWith('temp_trip_')) {
+  const handleGoBackTripEditor = (confirmation?: boolean | React.MouseEvent) => {
+    const confirmedExit = confirmation === true;
+    if (!confirmedExit && selectedTrip && selectedTrip.id.startsWith('temp_trip_')) {
       setExitingTempTripAlert(true);
       return;
     }
 
     const performGoBack = () => {
       if (!getSharedTripTokenFromPath()) {
-        goBackPanel();
+        replacePanelHistoryOnNextRender();
+        setSelectedTrip(null);
+        setSelectedSegmentId(null);
+        setSelectedWaypointId(null);
+        setSelectedPOI(null);
+        setHighlightedWaypointId(null);
         return;
       }
 
@@ -935,9 +963,19 @@ export default function App() {
     performGoBack();
   };
 
-  const handleGoBackSegment = goBackPanel;
-  const handleGoBackWaypoint = goBackPanel;
-  const handleGoBackPOI = goBackPanel;
+  const handleGoBackSegment = () => {
+    replacePanelHistoryOnNextRender();
+    setSelectedSegmentId(null);
+  };
+  const handleGoBackWaypoint = () => {
+    replacePanelHistoryOnNextRender();
+    setSelectedWaypointId(null);
+    setAttachingPoiToWaypointId(null);
+  };
+  const handleGoBackPOI = () => {
+    replacePanelHistoryOnNextRender();
+    setSelectedPOI(null);
+  };
 
   useEffect(() => {
     if (
@@ -1135,7 +1173,7 @@ export default function App() {
     }
   };
 
-  const handleSelectTrip = (trip: Trip, maintainState?: boolean) => {
+  const handleSelectTrip = (trip: Trip, maintainState?: boolean, fromMobileReadOnlySwipe = false) => {
     if (trip.metadata?.sharedTripUnavailable) {
       setSharedTripError(unavailableSharedTripMessage);
       return;
@@ -1152,7 +1190,18 @@ export default function App() {
     setSelectedTrip(trip);
     setIsViewingSharedTrip(false);
 
-    if (maintainState) return;
+    if (fromMobileReadOnlySwipe && window.innerWidth <= 768 && isReadOnly) {
+      replacePanelHistoryOnNextRender();
+    }
+
+    if (maintainState) {
+      if (fromMobileReadOnlySwipe) {
+        setTimeout(() => {
+          mapComponentRef.current?.zoomToTrip(trip, 'current', 'trip');
+        }, 150);
+      }
+      return;
+    }
 
     setMobileSidebarCollapsed(true);
 
@@ -1652,13 +1701,13 @@ export default function App() {
         <>
           <button className="dialog-btn dialog-btn-cancel" onClick={() => {
              setExitingTempTripAlert(false);
-             goBackPanel();
+             handleGoBackTripEditor(true);
           }}>Discard</button>
           <button className="dialog-btn dialog-btn-primary" onClick={async () => {
              const success = await handleSave();
              if (success) {
                setExitingTempTripAlert(false);
-               goBackPanel();
+               handleGoBackTripEditor(true);
              }
           }}>Save & Exit</button>
         </>

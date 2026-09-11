@@ -39,7 +39,7 @@ interface TripEditorProps {
   allTrips?: Trip[];
   isSidebarCollapsed?: boolean;
   isSharedTripView?: boolean;
-  onSelectTrip?: (trip: Trip) => void;
+  onSelectTrip?: (trip: Trip, maintainState?: boolean, fromMobileReadOnlySwipe?: boolean) => void;
   availablePersistingServices?: PersistingService[];
   onPersistOwnedTrip?: (trip: Trip) => Promise<void> | void;
   onSaveSharedTripReference?: (trip: Trip) => Promise<void> | void;
@@ -336,7 +336,7 @@ export function TripEditor({
           if (currentIndex < sortedTrips.length - 1) {
             setSwipeAnim({ direction: 'left', phase: 'out' });
             setTimeout(() => {
-              onSelectTrip(sortedTrips[currentIndex + 1]);
+              onSelectTrip(sortedTrips[currentIndex + 1], true, true);
               setSwipeAnim({ direction: 'left', phase: 'in' });
               setTimeout(() => setSwipeAnim(null), 50);
             }, 150);
@@ -346,7 +346,7 @@ export function TripEditor({
           if (currentIndex > 0) {
             setSwipeAnim({ direction: 'right', phase: 'out' });
             setTimeout(() => {
-              onSelectTrip(sortedTrips[currentIndex - 1]);
+              onSelectTrip(sortedTrips[currentIndex - 1], true, true);
               setSwipeAnim({ direction: 'right', phase: 'in' });
               setTimeout(() => setSwipeAnim(null), 50);
             }, 150);

@@ -272,7 +272,7 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
         : 0;
       const focusPadding = 60;
       return {
-        top: focusPadding + 10, // markers on top consume more space
+        top: focusPadding + 20, // markers on top consume more space
         bottom: focusPadding,
         left: sidebarOverlap + focusPadding,
         right: focusPadding
