@@ -37,9 +37,9 @@ body, html, #root {
 /* PC specific toggle and sidebar styles */
 @media (min-width: 769px) {
   .sidebar {
-    top: 8px;
-    left: 8px;
-    bottom: 8px;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    left: calc(8px + env(safe-area-inset-left, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     border-radius: 8px;
     border-right: 1px solid #ddd;
     overflow: hidden;
@@ -95,19 +95,19 @@ body, html, #root {
   }
 
   .pc-sidebar-toggle:not(.collapsed) {
-    left: 396px;
+    left: calc(396px + env(safe-area-inset-left, 0px));
   }
 
   .pc-sidebar-toggle.collapsed {
-    left: 8px;
+    left: calc(8px + env(safe-area-inset-left, 0px));
   }
 
   .layout .top-left-controls {
-    left: 396px;
+    left: calc(396px + env(safe-area-inset-left, 0px));
   }
 
   .layout:has(.sidebar.collapsed) .top-left-controls {
-    left: 8px;
+    left: calc(8px + env(safe-area-inset-left, 0px));
   }
 }
 

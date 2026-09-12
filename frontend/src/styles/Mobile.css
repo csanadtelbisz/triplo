@@ -20,19 +20,20 @@
 
   /* Keep the attribution visible above the mobile bottom sheet. */
   .mapy-logo-overlay {
-    bottom: calc(70dvh + 10px);
+    bottom: calc(70dvh + 10px + env(safe-area-inset-bottom, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
   }
 
   .sidebar.poi-info-smaller + .map-panel .mapy-logo-overlay {
-    bottom: calc(50dvh + 10px);
+    bottom: calc(50dvh + 10px + env(safe-area-inset-bottom, 0px));
   }
 
   .sidebar.collapsed + .map-panel .mapy-logo-overlay {
-    bottom: 74px;
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
   }
 
   .sidebar {
-    width: 100vw;
+    width: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
     height: 70vh;
     border-right: none;
     border-top: 1px solid #ddd;
@@ -40,14 +41,14 @@
     position: absolute;
     top: auto;
     bottom: 0;
-    left: 0;
+    left: env(safe-area-inset-left, 0px);
     background: #fcfcfc;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
   }
 
   .sidebar.search-maximized {
-    height: 100% !important;
-    top: 0;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+    top: env(safe-area-inset-top, 0px);
     bottom: 0;
     border-radius: 0;
     z-index: 9999;
@@ -60,6 +61,7 @@
 
   .sidebar.collapsed {
     transform: translateY(calc(100% - 64px));
+    bottom: env(safe-area-inset-bottom, 0px);
   }
   
   /* Ensure the content inside sidebar properly handles scroll when expanded and hides when collapsed */

@@ -264,18 +264,27 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
     }, [isReadOnly, selectedTrip, updateTripState, handleCoordinateChange, setSelectedPOI, trips, onSelectTrip, selectedPOI, onEmptyClick, onDragStart]);
 // Require drag targeting cleanly. E.g. touch only timeline-col or drag-handle.
   const getPadding = (targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {
+    const mapElement = mapRef.current?.getContainer();
+    const mapStyles = mapElement ? getComputedStyle(mapElement.parentElement || mapElement) : null;
+    const readInset = (name: string) => Number.parseFloat(mapStyles?.getPropertyValue(name) || '0') || 0;
+    const safeAreaTop = readInset('--safe-area-inset-top');
+    const safeAreaRight = readInset('--safe-area-inset-right');
+    const safeAreaBottom = readInset('--safe-area-inset-bottom');
+    const safeAreaLeft = readInset('--safe-area-inset-left');
+
     if (window.innerWidth > 768) {
-      const mapRect = mapRef.current?.getContainer().getBoundingClientRect();
+      const mapRect = mapElement?.getBoundingClientRect();
       const sidebarRect = document.querySelector<HTMLElement>('.sidebar')?.getBoundingClientRect();
-      const sidebarOverlap = !isSidebarCollapsed && mapRect && sidebarRect
+      const sidebarIsOpen = !isSidebarCollapsed;
+      const sidebarOverlap = sidebarIsOpen && mapRect && sidebarRect
         ? Math.max(0, Math.min(mapRect.right, sidebarRect.right) - mapRect.left)
         : 0;
       const focusPadding = 60;
       return {
-        top: focusPadding + 20, // markers on top consume more space
-        bottom: focusPadding,
-        left: sidebarOverlap + focusPadding,
-        right: focusPadding
+        top: focusPadding + 20 + safeAreaTop, // markers on top consume more space
+        bottom: focusPadding + safeAreaBottom,
+        left: sidebarOverlap + focusPadding + (sidebarIsOpen ? 0 : safeAreaLeft),
+        right: focusPadding + safeAreaRight
       };
     }
     // Mobile height offset calculation.
@@ -305,7 +314,12 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
             }
         }
     }
-    return { top: 25, bottom: heightOffset, left: 25, right: 25 };
+    return {
+      top: 25 + safeAreaTop,
+      bottom: heightOffset + safeAreaBottom,
+      left: 25 + safeAreaLeft,
+      right: 25 + safeAreaRight
+    };
   };
 
   const zoomToTrip = (trip: Trip, targetSidebarState: 'open' | 'collapsed' | 'current' = 'current', targetView?: 'trip' | 'poi' | 'manager') => {

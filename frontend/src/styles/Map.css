@@ -1,8 +1,15 @@
+.map-panel {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
 .mapy-logo-overlay {
   cursor: pointer;
   position: absolute;
-  bottom: 10px;
-  left: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  left: calc(10px + env(safe-area-inset-left, 0px));
   z-index: 1000;
   background-color: rgba(255, 255, 255, 0.8);
   padding: 4px 8px;
@@ -19,8 +26,8 @@
 
 .top-left-controls {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -81,6 +88,8 @@
   background: white;
   border: 1px solid #ccc;
   padding: 8px 12px;
+  margin-top: env(safe-area-inset-top, 0px);
+  margin-right: env(safe-area-inset-right, 0px);
   z-index: 1000;
   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   cursor: pointer;
@@ -96,4 +105,24 @@
 
 .faded-marker {
   opacity: 0.4 !important;
+}
+
+.maplibregl-ctrl-top-left {
+  top: env(safe-area-inset-top, 0px);
+  left: env(safe-area-inset-left, 0px);
+}
+
+.maplibregl-ctrl-top-right {
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+}
+
+.maplibregl-ctrl-bottom-left {
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+}
+
+.maplibregl-ctrl-bottom-right {
+  bottom: env(safe-area-inset-bottom, 0px);
+  right: env(safe-area-inset-right, 0px);
 }
