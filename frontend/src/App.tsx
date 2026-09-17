@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import './styles/App.css';
 import './styles/Shared.css';
