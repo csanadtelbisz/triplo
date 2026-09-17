@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { flushSync } from 'react-dom';
 import './styles/App.css';
 import './styles/Shared.css';
@@ -22,7 +22,7 @@ import { POIInfo } from './components/POIInfo';
 import { SearchPanel } from './components/SearchPanel';
 import { Dialog } from './components/Dialog';
 import { StatusPanel } from './components/StatusPanel';
-import { AnalyticsPanel } from './components/AnalyticsPanel';
+import { AnalyticsPanel, TimeSliderToolbox } from './components/AnalyticsPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import { Icon } from './components/Icon';
 import { persistingManager } from './persisting/PersistingManager';
@@ -134,6 +134,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [analyticsTimeSliderVisible, setAnalyticsTimeSliderVisible] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [editingStyleConfigId, setEditingStyleConfigId] = useState<string | null>(null);
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
@@ -1230,24 +1231,42 @@ export default function App() {
   const isSidebarCollapsed = isMobileViewport ? isMobileSidebarCollapsed : isPcSidebarCollapsed;
   const isMobileSearchOpen = isSearchOpen;
   const isMobilePoiSmaller = !!selectedPOI;
-  const sidebarClasses = `sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isMobileSearchOpen ? 'search-maximized' : ''} ${isMobilePoiSmaller && !isSearchOpen ? 'poi-info-smaller' : ''}`;
+  const isAnalyticsTimeSliderActive = isAnalyticsOpen && analyticsTimeSliderVisible;
+  const sidebarClasses = `sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isMobileSearchOpen ? 'search-maximized' : ''} ${isMobilePoiSmaller && !isSearchOpen ? 'poi-info-smaller' : ''} ${isAnalyticsTimeSliderActive ? 'time-slider-active' : ''}`;
+
+  const handlePanelTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.time-slider-track input[type="range"]')) return;
+    const target = e.target as HTMLElement;
+    const contentScrollContainer = target.closest('.content') || target.closest('.trip-editor');
+    const isToolbar = target.closest('.toolbar') || target.closest('.mobile-drag-handle') || target.closest('.time-slider-toolbox');
+    const isScrollTop = contentScrollContainer && contentScrollContainer.scrollTop === 0;
+
+    if (isToolbar || isScrollTop) {
+      touchStartRef.current = {
+        y: e.touches[0].clientY,
+        isContentEdge: !isToolbar && !!isScrollTop
+      };
+    }
+  };
+
+  const handlePanelTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartRef.current === null) return;
+    const { y, isContentEdge } = touchStartRef.current;
+    const deltaY = e.changedTouches[0].clientY - y;
+
+    if (deltaY > 50) {
+      setMobileSidebarCollapsed(true);
+    } else if (deltaY < -50 && (!isContentEdge || isSidebarCollapsed)) {
+      setMobileSidebarCollapsed(false);
+    } else if (Math.abs(deltaY) < 10 && isSidebarCollapsed && (e.target as HTMLElement).closest('.mobile-drag-handle')) {
+      setMobileSidebarCollapsed(false);
+    }
+    touchStartRef.current = null;
+  };
 
   const sidebarProps = {
     className: sidebarClasses,
-    onTouchStart: (e: React.TouchEvent) => {
-      const target = e.target as HTMLElement;
-      const contentScrollContainer = target.closest('.content') || target.closest('.trip-editor');
-      
-      const isToolbar = target.closest('.toolbar') || target.closest('.mobile-drag-handle');
-      const isScrollTop = contentScrollContainer && contentScrollContainer.scrollTop === 0;
-
-      if (isToolbar || isScrollTop) {
-        touchStartRef.current = {
-          y: e.touches[0].clientY,
-          isContentEdge: !isToolbar && !!isScrollTop
-        };
-      }
-    },
+    onTouchStart: handlePanelTouchStart,
     onTouchMove: (e: React.TouchEvent) => {
       if (touchStartRef.current === null) return;
       const currentY = e.touches[0].clientY;
@@ -1257,24 +1276,7 @@ export default function App() {
         // We do not call preventDefault here directly because React's touchMove is passive by default
       }
     },
-    onTouchEnd: (e: React.TouchEvent) => {
-      if (touchStartRef.current === null) return;
-      const { y, isContentEdge } = touchStartRef.current;
-      const touchEndY = e.changedTouches[0].clientY;
-      const deltaY = touchEndY - y;
-      
-      if (deltaY > 50) {
-        setMobileSidebarCollapsed(true);
-      } else if (deltaY < -50 && (!isContentEdge || isSidebarCollapsed)) {
-        setMobileSidebarCollapsed(false);
-      } else if (Math.abs(deltaY) < 10) {
-        // It was a tap, toggle if it was on the handle itself
-        if (isSidebarCollapsed && (e.target as HTMLElement).closest('.mobile-drag-handle')) {
-          setMobileSidebarCollapsed(false);
-        }
-      }
-      touchStartRef.current = null;
-    }
+    onTouchEnd: handlePanelTouchEnd
   };
 
   return (
@@ -1307,6 +1309,8 @@ export default function App() {
                 onOpenSegmentInfo={(tripId, segmentId) => {
                   setAnalyticsSegmentInfo({ tripId, segmentId });
                 }}
+                timeSliderVisible={analyticsTimeSliderVisible}
+                onToggleTimeSlider={() => setAnalyticsTimeSliderVisible(value => !value)}
                 onFocusSegment={(tripId, segmentId) => {
                   const trip = trips.find(t => t.id === tripId);
                   const segment = trip?.segments.find(s => s.id === segmentId);
@@ -1603,6 +1607,15 @@ export default function App() {
         }}
         onSelectTrip={handleSelectTrip}
       />
+      {isAnalyticsOpen && (
+        <div
+          className={`time-slider-toolbox ${analyticsTimeSliderVisible ? 'visible' : ''}`}
+          onTouchStart={handlePanelTouchStart}
+          onTouchEnd={handlePanelTouchEnd}
+        >
+          <TimeSliderToolbox trips={trips} isActive={analyticsTimeSliderVisible} onClose={() => setAnalyticsTimeSliderVisible(false)} />
+        </div>
+      )}
       <div className={`pc-sidebar-toggle-trigger ${isSidebarCollapsed ? 'collapsed' : ''}`}
         onMouseEnter={(e) => {
           const btn = e.currentTarget.nextElementSibling as HTMLElement;

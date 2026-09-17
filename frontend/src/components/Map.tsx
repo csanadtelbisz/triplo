@@ -25,6 +25,19 @@ import {
 import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
 import { Icon, createIconElement } from './Icon';
 
+const tripDateBoundsCache = new WeakMap<Trip, { start: number | null; end: number | null }>();
+
+function getTripDateBounds(trip: Trip) {
+  const cached = tripDateBoundsCache.get(trip);
+  if (cached) return cached;
+
+  const start = trip.startDate ? new Date(trip.startDate).getTime() : null;
+  const end = trip.endDate ? new Date(trip.endDate).getTime() : start;
+  const bounds = { start, end };
+  tripDateBoundsCache.set(trip, bounds);
+  return bounds;
+}
+
 
 function getRenderGeometry(seg: any) {
     if (seg.transportMode === 'flight' && seg.waypoints && seg.waypoints.length >= 2) {
@@ -111,7 +124,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markersRef = useRef<{ marker: Marker, wp: any, pref: number }[]>([]);
+  const markersRef = useRef<{ marker: Marker, wp: any, pref: number, tripId: string }[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
   const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
@@ -144,6 +157,13 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const hoverTooltipRef = useRef<HTMLDivElement>(null);
   const [hoverTooltipSize, setHoverTooltipSize] = useState({ width: 0, height: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
+  const [localTimeRange, setLocalTimeRange] = useState<{ start: string; end: string } | null>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => setLocalTimeRange(e.detail);
+    window.addEventListener('triplo-time-filter-change', handler);
+    return () => window.removeEventListener('triplo-time-filter-change', handler);
+  }, []);
 
   useLayoutEffect(() => {
     if (!hoverInfo || !hoverTooltipRef.current) return;
@@ -531,7 +551,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       container: mapContainer.current,
       style: 'https://tiles.openfreemap.org/styles/liberty', // Free basemap
       center: initCenter,
-      zoom: initZoom
+      zoom: initZoom,
+      attributionControl: false,
     });
     mapRef.current.addControl(new NavigationControl({}), 'top-right');
 
@@ -933,10 +954,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const isAnalyticsFilterActive = !!getTransientStyleConfig()?.id.startsWith('analytics-filter:');
 
       const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
+      const visibleTrips = targetTrips;
       
       const features: GeoJSON.Feature[] = [];
 
-      targetTrips.forEach(trip => {
+      visibleTrips.forEach(trip => {
         trip.segments.forEach(seg => {
           const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
           if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive && userStyle?.hidden !== false) || userStyle?.hidden) return;
@@ -952,7 +974,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
           features.push({
             type: 'Feature',
             properties: { 
-              segmentId: seg.id, 
+              tripId: trip.id,
+              segmentId: seg.id,
               mode: seg.transportMode, 
               color: userStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff',
               width: userStyle?.width || 4,
@@ -969,7 +992,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       });
 
       // Add markers
-      targetTrips.forEach(trip => {
+      visibleTrips.forEach(trip => {
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
@@ -1218,7 +1241,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               }
             });
             
-            markersRef.current.push({ marker, wp, pref });
+            markersRef.current.push({ marker, wp, pref, tripId: trip.id });
           });
         });
       });
@@ -1231,6 +1254,36 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, styleContextSelectedSegment, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides]);
+
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
+
+    const map = mapRef.current;
+    const targetTrips = (!selectedTrip || (isStyleConfigEditorOpen && testContextOverrides.isNoTripSelected))
+      ? trips
+      : [selectedTrip];
+    const analyticsStart = localTimeRange ? new Date(localTimeRange.start).getTime() : null;
+    const analyticsEnd = localTimeRange ? new Date(localTimeRange.end).getTime() : null;
+    const visibleTripIds = analyticsStart === null || analyticsEnd === null
+      ? null
+      : targetTrips.filter(trip => {
+          const bounds = getTripDateBounds(trip);
+          if (bounds.start === null && bounds.end === null) return true;
+          return (bounds.end ?? bounds.start!) >= analyticsStart && (bounds.start ?? bounds.end!) <= analyticsEnd;
+        }).map(trip => trip.id);
+
+    if (map.getLayer('route-layer')) {
+      map.setFilter('route-layer', visibleTripIds === null
+        ? null
+        : ['in', ['get', 'tripId'], ['literal', visibleTripIds]] as any);
+    }
+
+    const visibleTripIdSet = visibleTripIds && new Set(visibleTripIds);
+    markersRef.current.forEach(({ marker, tripId }) => {
+      const visible = visibleTripIdSet === null || visibleTripIdSet.has(tripId);
+      marker.getElement().style.display = visible ? '' : 'none';
+    });
+  }, [localTimeRange, mapLoaded, selectedTrip, trips, isStyleConfigEditorOpen, testContextOverrides.isNoTripSelected]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getCustomOtherModes, getModeAndIconColor } from '../utils/customModesPreferences';
@@ -17,6 +17,8 @@ interface AnalyticsPanelProps {
   trips: Trip[];
   onOpenSegmentInfo: (tripId: string, segmentId: string) => void;
   onFocusSegment: (tripId: string, segmentId: string) => void;
+  timeSliderVisible: boolean;
+  onToggleTimeSlider: () => void;
 }
 
 type SegmentEntry = {
@@ -39,6 +41,116 @@ function getModeLabel(modeKey: string, customModes: CustomOtherMode[]) {
 
 function getSegmentLabel(segment: Segment) {
   return segment.name || `Untitled segment`;
+}
+
+function getTripDateRange(trips: Trip[]) {
+  const dates = trips.flatMap(trip => [trip.startDate, trip.endDate].filter(Boolean).map(date => new Date(date as string).getTime()));
+  if (dates.length === 0) return null;
+  const day = 24 * 60 * 60 * 1000;
+  return {
+    min: Math.floor(Math.min(...dates) / day) * day,
+    max: Math.floor(Math.max(...dates) / day) * day
+  };
+}
+
+function formatFilterDate(timestamp: number, yearOnly: boolean) {
+  return new Intl.DateTimeFormat(undefined, yearOnly ? { year: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(timestamp));
+}
+
+export function TimeSliderToolbox({ trips, isActive, onClose }: { trips: Trip[]; isActive: boolean; onClose: () => void }) {
+  const dateRange = useMemo(() => getTripDateRange(trips), [trips]);
+  const day = 24 * 60 * 60 * 1000;
+  const [yearOnly, setYearOnly] = useState(false);
+  const [range, setRange] = useState<[number, number] | null>(null);
+
+  const effectiveRange = dateRange
+    ? range
+      ? [Math.max(dateRange.min, range[0]), Math.min(dateRange.max, range[1])] as [number, number]
+      : [dateRange.min, dateRange.max] as [number, number]
+    : null;
+  const effectiveStart = effectiveRange?.[0];
+  const effectiveEnd = effectiveRange?.[1];
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) {
+      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
+      return;
+    }
+    if (effectiveStart === undefined || effectiveEnd === undefined) return;
+    
+    const start = new Date(effectiveStart);
+    const end = new Date(effectiveEnd);
+    window.dispatchEvent(new CustomEvent('triplo-time-filter-change', {
+      detail: { start: start.toISOString(), end: end.toISOString() }
+    }));
+  }, [effectiveStart, effectiveEnd, isActive]);
+
+  if (!dateRange || !effectiveRange) {
+    return <div className="time-slider-empty">No trip dates available</div>;
+  }
+
+  const minYear = new Date(dateRange.min).getFullYear();
+  const maxYear = new Date(dateRange.max).getFullYear();
+  const yearCount = Math.max(0, maxYear - minYear);
+
+  const maxValue = yearOnly ? yearCount : Math.ceil((dateRange.max - dateRange.min) / day);
+
+  const toTimestamp = (value: number, endOfYear = false) => {
+    if (yearOnly) {
+      const year = minYear + value;
+      return new Date(year, endOfYear ? 11 : 0, endOfYear ? 31 : 1).getTime();
+    }
+    return dateRange.min + value * day;
+  };
+
+  const toSliderValue = (timestamp: number) => {
+    if (yearOnly) {
+      return new Date(timestamp).getFullYear() - minYear;
+    }
+    return Math.round((timestamp - dateRange.min) / day);
+  };
+
+  const updateStart = (value: number) => setRange([Math.min(toTimestamp(value), effectiveRange[1]), effectiveRange[1]]);
+  const updateEnd = (value: number) => setRange([effectiveRange[0], Math.max(toTimestamp(value, true), effectiveRange[0])]);
+
+  const values = [toSliderValue(effectiveRange[0]), toSliderValue(effectiveRange[1])];
+
+  return (
+    <div className="time-slider-content">
+      <div className="time-slider-labels">
+        <span>{formatFilterDate(effectiveRange[0], yearOnly)}</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`iconButton time-slider-granularity ${yearOnly ? 'active' : ''}`}
+            title={yearOnly ? 'Yearly granularity' : 'Daily granularity'}
+            onClick={() => setYearOnly(value => !value)}
+          >
+            <MaterialIcon name={yearOnly ? 'calendar_lock' : 'calendar_month'} size={18} />
+          </button>
+          <button
+            type="button"
+            className="iconButton time-slider-close"
+            title="Close slider"
+            onClick={onClose}
+          >
+            <MaterialIcon name="close" size={18} />
+          </button>
+        </div>
+        <span>{formatFilterDate(effectiveRange[1], yearOnly)}</span>
+      </div>
+      <div className="time-slider-track">
+        <input aria-label="Analytics start date" type="range" min={0} max={maxValue} step={1} value={values[0]} onChange={event => updateStart(Number(event.target.value))} />
+        <input aria-label="Analytics end date" type="range" min={0} max={maxValue} step={1} value={values[1]} onChange={event => updateEnd(Number(event.target.value))} />
+      </div>
+    </div>
+  );
 }
 
 interface YearDistance {
@@ -176,7 +288,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
     const tooltipPos = svgRect.left - containerRect.left + barCenterPixelX;
     
     setTooltipXPosition(tooltipPos);
-  }, [hoveredIndex, calculatedBarWidth, yearDistances.length]);
+  }, [hoveredIndex, calculatedBarWidth, yearDistances.length, viewBoxWidth]);
 
   return (
     <div style={{ marginTop: '20px' }}>
@@ -332,7 +444,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
   );
 }
 
-export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider }: AnalyticsPanelProps) {
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [selectedModeKey, setSelectedModeKey] = useState<string | null>(null);
   const [yearlyDistances, setYearlyDistances] = useState<YearDistance[]>([]);
@@ -490,7 +602,9 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Analytics</h2>
-        <div style={{ width: 28 }}></div>
+        <button className={`iconButton ${timeSliderVisible ? 'active' : ''}`} onClick={onToggleTimeSlider} title="Toggle time filter">
+          <MaterialIcon name="line_end_circle" size={20} />
+        </button>
       </div>
 
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
