@@ -76,9 +76,10 @@
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .sidebar.collapsed + .pc-sidebar-toggle-trigger + .pc-sidebar-toggle + .map-panel + .time-slider-toolbox.visible,
-  .layout:has(.sidebar.time-slider-active.collapsed) .time-slider-toolbox.visible {
-    transform: translateY(calc(70vh - 4px));
+  .sidebar.collapsed + .pc-sidebar-toggle-trigger + .pc-sidebar-toggle + .map-panel + .time-slider-toolbox,
+  .layout:has(.sidebar.collapsed) .time-slider-toolbox {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(0);
   }
   
   /* Ensure the content inside sidebar properly handles scroll when expanded and hides when collapsed */
@@ -116,7 +117,8 @@
   }
 
   /* Also prevent pull-to-refresh when touching the empty spaces of the toolbar to drag */
-  .sidebar > .toolbar {
+  .sidebar > .toolbar,
+  .sidebar > div > .toolbar {
     touch-action: none;
   }
 }

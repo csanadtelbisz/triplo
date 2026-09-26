@@ -596,7 +596,7 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
   }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#fdfdfd' }}>
+    <>
       <div className="toolbar">
         <button className="iconButton" onClick={onGoBack} title="Close Analytics">
           <MaterialIcon name="arrow_back" size={20} />
@@ -734,6 +734,6 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
           <p style={{ color: '#777', textAlign: 'center' }}>No trips to analyze.</p>
         )}
       </div>
-    </div>
+    </>
   );
 }

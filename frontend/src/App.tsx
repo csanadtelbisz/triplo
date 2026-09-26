@@ -1300,7 +1300,7 @@ export default function App() {
           />
         ) : isAnalyticsOpen ? (
           <>
-            <div style={{ display: analyticsSegmentInfo ? 'none' : 'block', height: '100%' }}>
+            <div style={{ display: analyticsSegmentInfo ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <AnalyticsPanel
                 onGoBack={() => {
                   goBackPanel();
