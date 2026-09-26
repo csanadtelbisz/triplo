@@ -19,6 +19,8 @@ interface AnalyticsPanelProps {
   onFocusSegment: (tripId: string, segmentId: string) => void;
   timeSliderVisible: boolean;
   onToggleTimeSlider: () => void;
+  selectedModeKey: string | null;
+  onSelectedModeKeyChange: (modeKey: string | null) => void;
 }
 
 type SegmentEntry = {
@@ -444,9 +446,8 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
   );
 }
 
-export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selectedModeKey, onSelectedModeKeyChange }: AnalyticsPanelProps) {
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const [selectedModeKey, setSelectedModeKey] = useState<string | null>(null);
   const [yearlyDistances, setYearlyDistances] = useState<YearDistance[]>([]);
   const [maxYearlyDistance, setMaxYearlyDistance] = useState<number>(1);
 
@@ -549,8 +550,7 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
   }, [selectedModeKey, segmentsByMode]);
 
   const clearModeFilter = () => {
-    setSelectedModeKey(null);
-    clearTransientStyleConfig();
+    onSelectedModeKeyChange(null);
   };
 
   const getSelectedModeColor = () => {
@@ -578,22 +578,26 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
 
   const handleModeClick = (modeKey: string) => {
     if (selectedModeKey === modeKey) {
-      clearModeFilter();
+      onSelectedModeKeyChange(null);
       return;
     }
-
-    const baseConfigId = getActiveStyleConfigId();
-    const baseConfig = getStyleConfigs().find(config => config.id === baseConfigId) || getResolvedActiveStyleConfig();
-    const filteredConfig = buildTransportModeFilterStyleConfig(baseConfig, modeKey);
-    setTransientStyleConfig(filteredConfig);
-    setSelectedModeKey(modeKey);
+    onSelectedModeKeyChange(modeKey);
   };
 
   useEffect(() => {
+    if (selectedModeKey) {
+      const baseConfigId = getActiveStyleConfigId();
+      const baseConfig = getStyleConfigs().find(config => config.id === baseConfigId) || getResolvedActiveStyleConfig();
+      const filteredConfig = buildTransportModeFilterStyleConfig(baseConfig, selectedModeKey);
+      setTransientStyleConfig(filteredConfig);
+    } else {
+      clearTransientStyleConfig();
+    }
+    
     return () => {
       clearTransientStyleConfig();
     };
-  }, []);
+  }, [selectedModeKey, setTransientStyleConfig, clearTransientStyleConfig]);
 
   return (
     <>

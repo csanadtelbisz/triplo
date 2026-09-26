@@ -57,6 +57,7 @@ type PanelHistoryState = {
   waypointId?: string;
   poi?: any;
   analyticsSegmentInfo?: { tripId: string; segmentId: string };
+  analyticsModeFilter?: string | null;
   styleConfigId?: string;
 };
 
@@ -138,6 +139,7 @@ export default function App() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [editingStyleConfigId, setEditingStyleConfigId] = useState<string | null>(null);
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
+  const [analyticsModeFilter, setAnalyticsModeFilter] = useState<string | null>(null);
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
@@ -173,15 +175,15 @@ export default function App() {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
-    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo };
-    if (isAnalyticsOpen) return { panel: 'analytics' };
+    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter };
+    if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter };
     if (isSearchOpen) return { panel: 'search' };
     if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
     if (selectedSegmentId && selectedTrip) return { panel: 'segment', tripId: selectedTrip.id, segmentId: selectedSegmentId };
     if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
     if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
     return { panel: 'manager' };
-  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId]);
+  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter]);
 
   const isSamePanelHistoryState = (a: PanelHistoryState | null, b: PanelHistoryState) =>
     a?.panel === b.panel &&
@@ -191,6 +193,7 @@ export default function App() {
     a?.poi?.id === b.poi?.id &&
     a?.analyticsSegmentInfo?.tripId === b.analyticsSegmentInfo?.tripId &&
     a?.analyticsSegmentInfo?.segmentId === b.analyticsSegmentInfo?.segmentId &&
+    a?.analyticsModeFilter === b.analyticsModeFilter &&
     a?.styleConfigId === b.styleConfigId;
 
   useEffect(() => {
@@ -236,11 +239,15 @@ export default function App() {
       setSelectedWaypointId(null);
       setAttachingPoiToWaypointId(null);
     } else if (isPreferencesOpen || isStatusOpen || isAnalyticsOpen) {
-      setIsPreferencesOpen(false);
-      setIsStatusOpen(false);
-      setIsAnalyticsOpen(false);
-      setAnalyticsSegmentInfo(null);
-      setEditingStyleConfigId(null);
+      if (analyticsSegmentInfo) {
+        setAnalyticsSegmentInfo(null);
+      } else {
+        setIsPreferencesOpen(false);
+        setIsStatusOpen(false);
+        setIsAnalyticsOpen(false);
+        setEditingStyleConfigId(null);
+        setAnalyticsModeFilter(null);
+      }
     }
   };
 
@@ -263,6 +270,7 @@ export default function App() {
         setEditingStyleConfigId(panelState.panel === 'style-config' ? panelState.styleConfigId || null : null);
         setIsAnalyticsOpen(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment');
         setAnalyticsSegmentInfo(panelState.panel === 'analytics-segment' ? panelState.analyticsSegmentInfo || null : null);
+        setAnalyticsModeFilter(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment' ? panelState.analyticsModeFilter || null : null);
         setAttachingPoiToWaypointId(null);
         setHighlightedWaypointId(null);
       });
@@ -1311,6 +1319,8 @@ export default function App() {
                 }}
                 timeSliderVisible={analyticsTimeSliderVisible}
                 onToggleTimeSlider={() => setAnalyticsTimeSliderVisible(value => !value)}
+                selectedModeKey={analyticsModeFilter}
+                onSelectedModeKeyChange={setAnalyticsModeFilter}
                 onFocusSegment={(tripId, segmentId) => {
                   const trip = trips.find(t => t.id === tripId);
                   const segment = trip?.segments.find(s => s.id === segmentId);
