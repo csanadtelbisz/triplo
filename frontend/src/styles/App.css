@@ -235,6 +235,12 @@ body, html, #root {
   }
 }
 
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
 #map {
   position: absolute;
   top: 0;

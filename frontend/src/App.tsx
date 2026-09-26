@@ -144,9 +144,11 @@ export default function App() {
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
   const [attachingPoiToWaypointId, setAttachingPoiToWaypointId] = useState<string | null>(null);
-  const [isMobileSidebarCollapsed, setMobileSidebarCollapsed] = useState(() =>
-    window.innerWidth <= 768 && !!getSharedTripTokenFromPath()
-  );
+  const [isMobileSidebarCollapsed, setMobileSidebarCollapsed] = useState(() => {
+    const startMinimizedPref = localStorage.getItem('startMinimized');
+    const startMinimized = startMinimizedPref === null ? true : startMinimizedPref === 'true';
+    return window.innerWidth <= 768 && (!!getSharedTripTokenFromPath() || startMinimized);
+  });
   const [isPcSidebarCollapsed, setPcSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);

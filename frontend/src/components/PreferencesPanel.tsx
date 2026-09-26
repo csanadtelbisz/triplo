@@ -29,6 +29,10 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const [addingLang, setAddingLang] = useState(false);
   const [selectedNewLang, setSelectedNewLang] = useState('');
   const [defaultReadOnly, setDefaultReadOnly] = useState(() => localStorage.getItem('defaultReadOnly') === 'true');
+  const [startMinimized, setStartMinimized] = useState(() => {
+    const val = localStorage.getItem('startMinimized');
+    return val === null ? true : val === 'true';
+  });
   const [preferencesSyncStatus, setPreferencesSyncStatus] = useState(getPreferencesSyncStatus);
 
   // Initialize all state directly via lazy initialization to avoid setting state synchronously in useEffect
@@ -113,6 +117,12 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const isChecked = e.target.checked;
     setDefaultReadOnly(isChecked);
     localStorage.setItem('defaultReadOnly', isChecked ? 'true' : 'false');
+  };
+
+  const handleToggleStartMinimized = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setStartMinimized(isChecked);
+    localStorage.setItem('startMinimized', isChecked ? 'true' : 'false');
   };
 
   const handleUpdateCustomModes = (newModes: CustomOtherMode[]) => {
@@ -266,7 +276,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
       </div>
 
       <div className="content status-panel-content">
-        <h3 className="status-panel-section-title first">Default Read-Only Mode
+        <h3 className="status-panel-section-title first">Startup Behavior
           <span title="Not synced preference">
             <MaterialIcon name="cloud_off" size={16} style={{ marginLeft: '6px', verticalAlign: 'baseline' }} />
           </span>
@@ -280,6 +290,17 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
               style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }}
             />
             Stay in read-only mode after loading trips
+          </label>
+        </div>
+        <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 8px 12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+            <input 
+              type="checkbox" 
+              checked={startMinimized} 
+              onChange={handleToggleStartMinimized} 
+              style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }}
+            />
+            Start with minimized panel
           </label>
         </div>
 
