@@ -518,7 +518,7 @@ export function GitHubConfig({ service, trips, onUpdateTrips }: { service: GitHu
   };
 
   return (
-    <div style={{ marginTop: '12px', background: '#f8f9fa', padding: '12px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+    <div className="github-config-section" style={{ marginTop: '12px', background: '#f8f9fa', padding: '12px', borderRadius: '8px', border: '1px solid #dee2e6' }}>
       <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem' }}>GitHub Configuration</h4>
 
       <div style={{ fontSize: '0.85rem', marginBottom: '12px', color: '#555' }}>

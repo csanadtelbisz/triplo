@@ -30,6 +30,15 @@
   color: #000;
 }
 
+body.dark-mode .iconButton {
+  color: #c8cdd3;
+}
+
+body.dark-mode .iconButton:hover:not(:disabled) {
+  background: #383d44;
+  color: #fff;
+}
+
 .iconButton:disabled {
   opacity: 0.3;
   cursor: default;

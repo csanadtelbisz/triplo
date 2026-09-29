@@ -15,6 +15,8 @@ import { getStyleConfigs, saveStyleConfigs, DEFAULT_STYLE_SCRIPT, setActiveStyle
 import type { RenderStyleConfig } from '../utils/mapStylesPreferences';
 import StyleConfigPanel from './StyleConfigPanel';
 import { IconPickerDialog } from './IconPickerDialog';
+import { getAppearancePreferences, saveAppearancePreferences } from '../utils/appearancePreferences';
+import type { AppearanceTheme } from '../utils/appearancePreferences';
 
 interface PreferencesPanelProps {
   onGoBack: () => void;
@@ -33,6 +35,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const val = localStorage.getItem('startMinimized');
     return val === null ? true : val === 'true';
   });
+  const [appearance, setAppearance] = useState(() => getAppearancePreferences());
   const [preferencesSyncStatus, setPreferencesSyncStatus] = useState(getPreferencesSyncStatus);
 
   // Initialize all state directly via lazy initialization to avoid setting state synchronously in useEffect
@@ -61,6 +64,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
       setCustomModes(getCustomOtherModes());
       setBuiltInOverrides(getBuiltInModeOverrides());
       setStyleConfigs(getStyleConfigs());
+      setAppearance(getAppearancePreferences());
     };
     
     window.addEventListener('preferences-updated', handlePreferencesUpdated);
@@ -123,6 +127,13 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
     const isChecked = e.target.checked;
     setStartMinimized(isChecked);
     localStorage.setItem('startMinimized', isChecked ? 'true' : 'false');
+  };
+
+  const updateAppearance = (updates: Partial<typeof appearance>) => {
+    const next = { ...appearance, ...updates };
+    setAppearance(next);
+    saveAppearancePreferences(next);
+    syncPreferencesToCloud();
   };
 
   const handleUpdateCustomModes = (newModes: CustomOtherMode[]) => {
@@ -301,6 +312,32 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
               style={{ width: '16px', height: '16px', margin: 0, cursor: 'pointer' }}
             />
             Start with minimized panel
+          </label>
+        </div>
+
+        <h3 className="status-panel-section-title">Appearance</h3>
+        <div className="appearance-preferences">
+          <div className="appearance-theme-options" role="radiogroup" aria-label="Theme">
+            {(['system', 'dark', 'light'] as AppearanceTheme[]).map(theme => (
+              <label key={theme}>
+                <input
+                  type="radio"
+                  name="appearance-theme"
+                  value={theme}
+                  checked={appearance.theme === theme}
+                  onChange={() => updateAppearance({ theme })}
+                />
+                {theme === 'system' ? 'System default' : theme[0].toUpperCase() + theme.slice(1)}
+              </label>
+            ))}
+          </div>
+          <label>
+            <input
+              type="checkbox"
+              checked={appearance.forceLightMaps}
+              onChange={e => updateAppearance({ forceLightMaps: e.target.checked })}
+            />
+            Force light mode for maps
           </label>
         </div>
 

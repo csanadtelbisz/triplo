@@ -35,6 +35,7 @@ import { ApiKeyDialog } from './components/ApiKeyDialog';
 import { routingManager } from './routing/RoutingService';
 import type { ApiKeyServiceConfiguration } from './utils/apiKeyPreferences';
 import { API_KEY_CONFIGURATION_WARNING_EVENT } from './utils/apiKeyConfigurationWarning';
+import { applyAppearanceTheme } from './utils/appearancePreferences';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -110,6 +111,18 @@ const getTripCache = async (): Promise<Trip[]> => {
 };
 
 export default function App() {
+  useEffect(() => {
+    applyAppearanceTheme();
+    const handlePreferencesUpdated = () => applyAppearanceTheme();
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', applyAppearanceTheme);
+    window.addEventListener('preferences-updated', handlePreferencesUpdated);
+    return () => {
+      mediaQuery.removeEventListener('change', applyAppearanceTheme);
+      window.removeEventListener('preferences-updated', handlePreferencesUpdated);
+    };
+  }, []);
+
   const [isReadOnly, setIsReadOnly] = useState<boolean>(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [histories, setHistories] = useState<Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }>>({});

@@ -24,6 +24,7 @@ import {
 } from '../utils/mapStylesPreferences';
 import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
 import { Icon, createIconElement } from './Icon';
+import { getMapTheme } from '../utils/appearancePreferences';
 
 const tripDateBoundsCache = new WeakMap<Trip, { start: number | null; end: number | null }>();
 
@@ -148,6 +149,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [activeMapStyle, setActiveMapStyle] = useState<string>(() => {
     return localStorage.getItem('activeMapStyle') || 'openfreemap';
   });
+  const [mapTheme, setMapTheme] = useState<'dark' | 'light'>(() => getMapTheme());
   const [showLayerSelector, setShowLayerSelector] = useState(false);
   const [showHiddenSegments, setShowHiddenSegments] = useState<boolean>(() => {
     return localStorage.getItem('showHiddenSegments') === 'true';
@@ -213,6 +215,12 @@ export const Map = forwardRef<MapRef, MapProps>(({
     };
     window.addEventListener('preferences-updated', handler);
     return () => window.removeEventListener('preferences-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const refreshMapTheme = () => setMapTheme(getMapTheme());
+    window.addEventListener('preferences-updated', refreshMapTheme);
+    return () => window.removeEventListener('preferences-updated', refreshMapTheme);
   }, []);
 
   useEffect(() => {
@@ -549,7 +557,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
     mapRef.current = new MapLibreMap({
       container: mapContainer.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty', // Free basemap
+      style: getMapStyleUrl('openfreemap', mapTheme),
       center: initCenter,
       zoom: initZoom,
       attributionControl: false,
@@ -1377,20 +1385,20 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
   useEffect(() => {
     if (mapRef.current && mapLoaded) {
-      const styleConfig = getMapStyleUrl(activeMapStyle);
+      const styleConfig = getMapStyleUrl(activeMapStyle, mapTheme);
       mapRef.current.setStyle(styleConfig);
     }
-  }, [activeMapStyle, mapLoaded]);
+  }, [activeMapStyle, mapLoaded, mapTheme]);
 
   useEffect(() => {
     const refreshMapyStyle = () => {
       if (activeMapStyle === 'mapy_outdoor' && mapRef.current && mapLoaded) {
-        mapRef.current.setStyle(getMapStyleUrl(activeMapStyle));
+        mapRef.current.setStyle(getMapStyleUrl(activeMapStyle, mapTheme));
       }
     };
     window.addEventListener('preferences-updated', refreshMapyStyle);
     return () => window.removeEventListener('preferences-updated', refreshMapyStyle);
-  }, [activeMapStyle, mapLoaded]);
+  }, [activeMapStyle, mapLoaded, mapTheme]);
 
   const tooltipMargin = 8;
   const tooltipOffset = 15;
@@ -1448,7 +1456,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 {styleConfigs.map((config) => (
                   <div
                     key={config.id}
-                    className="layer-option"
+                    className={`layer-option${activeStyleConfigIdState === config.id ? ' selected' : ''}`}
                     style={{
                       backgroundColor: activeStyleConfigIdState === config.id ? '#f0f0f0' : 'transparent',
                       fontWeight: activeStyleConfigIdState === config.id ? 'bold' : 'normal'
@@ -1521,7 +1529,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 {Object.entries(MAP_STYLES).map(([key, style]) => (
                   <div
                     key={key}
-                    className="layer-option"
+                    className={`layer-option${activeMapStyle === key ? ' selected' : ''}`}
                     style={{
                       backgroundColor: activeMapStyle === key ? '#f0f0f0' : 'transparent',
                       fontWeight: activeMapStyle === key ? 'bold' : 'normal'

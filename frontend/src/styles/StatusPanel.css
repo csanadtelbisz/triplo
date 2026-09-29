@@ -25,6 +25,31 @@
   color: #333;
 }
 
+body.dark-mode .status-panel-section-title {
+  color: #f1f3f5;
+}
+
+.appearance-preferences {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 8px 12px;
+  font-size: 0.9rem;
+}
+
+.appearance-preferences label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.appearance-theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .status-panel-section-title.first {
   margin-top: 0;
   margin-bottom: 16px;
@@ -141,4 +166,46 @@
 .status-panel-attribution a {
   color: #007bff;
   text-decoration: none;
+}
+
+body.dark-mode .status-panel-card {
+  background: #252a30;
+  border-color: #424951;
+}
+
+body.dark-mode .status-panel-card.configurable:hover {
+  background: #30363d;
+}
+
+body.dark-mode .status-panel-card-title,
+body.dark-mode .status-panel-attribution {
+  color: #c8cdd3;
+}
+
+body.dark-mode .status-panel-badge.success {
+  background: #173d2a;
+  color: #7ee2a8;
+}
+
+body.dark-mode .status-panel-badge.unavailable {
+  background: #4a252b;
+  color: #ff9da8;
+}
+
+body.dark-mode .status-panel-badge.pending {
+  background: #4a3b18;
+  color: #f6d365;
+}
+
+body.dark-mode .status-panel-icon.success {
+  color: #048638 !important;
+}
+
+body.dark-mode .status-panel-icon.unavailable,
+body.dark-mode .status-panel-icon.error {
+  color: #bd2632 !important;
+}
+
+body.dark-mode .status-panel-icon.pending {
+  color: #f6c453 !important;
 }

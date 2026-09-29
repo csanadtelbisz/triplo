@@ -5,6 +5,7 @@ import { getBuiltInModeOverrides, saveBuiltInModeOverrides } from './builtInMode
 import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './mapStylesPreferences';
 import { getTripListPreferences, saveTripListPreferences } from './tripListPreferences';
 import { getApiKeyPreferences, saveApiKeyPreferences } from './apiKeyPreferences';
+import { getAppearancePreferences, saveAppearancePreferences } from './appearancePreferences';
 import type { RenderStyleConfig } from './mapStylesPreferences';
 
 let syncTimeout: any;
@@ -166,6 +167,7 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
         homePosition: localStorage.getItem('homeMapPosition') ? JSON.parse(localStorage.getItem('homeMapPosition')!) : null,
         tripList: getTripListPreferences(),
         apiKeys: getApiKeyPreferences(),
+        appearance: getAppearancePreferences(),
         styleConfigurations
       };
       const previousComparable = previousPrefs ? { ...previousPrefs } : null;
@@ -247,6 +249,15 @@ export const loadPreferencesFromCloud = async (preferences?: any, source?: strin
         const nextApiKeys = JSON.stringify(prefs.apiKeys);
         if (nextApiKeys !== previousApiKeys) {
           saveApiKeyPreferences(prefs.apiKeys);
+          changed = true;
+        }
+      }
+
+      if (prefs.appearance) {
+        const previousAppearance = JSON.stringify(getAppearancePreferences());
+        const nextAppearance = JSON.stringify(prefs.appearance);
+        if (nextAppearance !== previousAppearance) {
+          saveAppearancePreferences(prefs.appearance);
           changed = true;
         }
       }

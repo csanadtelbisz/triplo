@@ -15,6 +15,7 @@ import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { TransportMode } from '../../../shared/types';
 import { slugify } from '../utils/slugify';
 import { persistingManager } from '../persisting/PersistingManager';
+import { ThemedServiceIcon } from './ThemedServiceIcon';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -1634,7 +1635,7 @@ export function TripEditor({
               disabled={isSharing}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}
             >
-              {service.icon && <img src={service.icon} alt={service.name} width={18} height={18} style={{ display: 'block', objectFit: 'contain' }} />}
+              {service.icon && <ThemedServiceIcon serviceName={service.name} lightIcon={service.icon} alt={service.name} width={18} height={18} style={{ display: 'block', objectFit: 'contain' }} />}
               <span>{service.name}</span>
             </button>
           ))}

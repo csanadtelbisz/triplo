@@ -140,6 +140,17 @@ body.is-dragging * {
   color: #666;
   font-size: 14px;
 }
+
+body.dark-mode .timeline-plus {
+  background: #2a2e33;
+  border: 1px solid #66717d;
+  color: #e6e8eb;
+}
+
+body.dark-mode .timeline-plus .material-symbols-rounded,
+body.dark-mode .timeline-plus .triplo-icon {
+  color: #e6e8eb !important;
+}
 .timeline-dot {
   position: absolute;
   left: 15px;
@@ -281,4 +292,45 @@ body.is-dragging * {
   display: inline-block;
   margin: 0 0 8px;
   font-size: 1rem;
+}
+
+body.dark-mode .waypoint-card,
+body.dark-mode .trip-summary {
+  background: #252a30;
+  border-color: #424951;
+  color: #e6e8eb;
+}
+
+body.dark-mode .segment-title-textarea:hover,
+body.dark-mode .waypoint-title-input:hover {
+  background: #30363d !important;
+}
+
+body.dark-mode .segment-title-textarea:focus,
+body.dark-mode .waypoint-title-input:focus {
+  background: #2a2e33 !important;
+}
+
+body.dark-mode .distance-content,
+body.dark-mode .trip-summary-total,
+body.dark-mode .trip-summary th,
+body.dark-mode .trip-summary td {
+  color: #c8cdd3;
+}
+
+body.dark-mode .trip-summary-th {
+  border-color: #424951;
+}
+
+body.dark-mode .trip-summary-row {
+  border-color: #343a40;
+}
+
+body.dark-mode .elevation-profile-chart {
+  background: #252a30 !important;
+  border: 1px solid #424951;
+}
+
+body.dark-mode .elevation-profile-title {
+  color: #f1f3f5 !important;
 }

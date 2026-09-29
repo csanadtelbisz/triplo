@@ -1,6 +1,7 @@
 ﻿import { useState, useRef, useEffect } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
+import { ThemedServiceIcon } from './ThemedServiceIcon';
 import { ConfirmDialog } from './Dialog';
 import { persistingManager } from '../persisting/PersistingManager';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
@@ -178,11 +179,11 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
         ref={contentRef}
         onScroll={(e) => { tripManagerScrollPos = e.currentTarget.scrollTop; }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
+        <div className="connection-status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ fontSize: '0.9rem', color: '#495057', display: 'flex', alignItems: 'center', gap: '6px' }}>
               {availablePersistingServices.length > 0 ? (
-                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>Connected: {availablePersistingServices.map(s => s.icon ? <img key={s.name} src={s.icon} alt={s.name} title={s.name} width={16} height={16} style={{ display: "block", objectFit: "contain" }} /> : <strong key={s.name}>{s.name}</strong>)}</div>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>Connected: {availablePersistingServices.map(s => s.icon ? <ThemedServiceIcon key={s.name} serviceName={s.name} lightIcon={s.icon} alt={s.name} title={s.name} width={16} height={16} style={{ display: "block", objectFit: "contain" }} /> : <strong key={s.name}>{s.name}</strong>)}</div>
               ) : (
                 "Not connected to any service"
               )}
@@ -274,9 +275,10 @@ export function TripManager({ isReadOnly = false, onToggleReadOnly, trips, onSel
                       <MaterialIcon name="cached" size={16} style={{ color: '#6c757d' }} />
                     ) : matchedServices.length > 0 ? (
                       matchedServices.map(s => (
-                        <img
+                        <ThemedServiceIcon
                           key={s.name}
-                          src={s.icon}
+                          serviceName={s.name}
+                          lightIcon={s.icon}
                           alt={s.name}
                           title={`Synced to ${s.name}`}
                           width={16}

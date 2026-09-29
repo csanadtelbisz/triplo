@@ -12,6 +12,7 @@ import { PersistingConfigDialog } from './PersistingConfigDialog';
 import { ApiKeyDialog } from './ApiKeyDialog';
 import { ConfirmDialog } from './Dialog';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
+import { ThemedServiceIcon } from './ThemedServiceIcon';
 
 interface StatusPanelProps {
   onGoBack: () => void;
@@ -155,8 +156,9 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
               <div key={idx} className={`status-panel-card ${available ? 'configurable' : ''}`} onClick={available ? () => configurePersistingService(service) : undefined}>
                 <div className={`status-panel-card-header ${!available ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
-                    <img
-                      src={service.icon} 
+                    <ThemedServiceIcon
+                      serviceName={service.name}
+                      lightIcon={service.icon}
                       alt={`${service.name} icon`}
                       width={20}
                       height={20}
@@ -201,8 +203,9 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
                 <div className={`status-panel-card-header ${attr ? 'with-margin' : 'no-margin'}`}>
                   <div className="status-panel-card-title-container">
                     {service.icon ? (
-                      <img
-                        src={service.icon}
+                      <ThemedServiceIcon
+                        serviceName={service.name}
+                        lightIcon={service.icon}
                         alt={`${service.name} icon`}
                         width={20}
                         height={20}

@@ -102,7 +102,7 @@ export const SearchPanel = ({ onGoBack, onResultClick }: SearchPanelProps) => {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
           {results.map(result => (
-            <div
+            <div className="search-result-card"
               key={result.place_id}
               onClick={() => onResultClick(result)}
               style={{

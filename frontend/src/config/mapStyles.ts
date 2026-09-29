@@ -4,6 +4,7 @@ import openstreetmapIcon from '../assets/icons/openstreetmap.png';
 import opentopomapIcon from '../assets/icons/opentopomap.png';
 import { getApiKey, MAPY_API_CONFIGURATION } from '../utils/apiKeyPreferences';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
+import type { AppearanceTheme } from '../utils/appearancePreferences';
 
 
 export const MARKER_HIDE_THRESHOLD = 30;
@@ -184,8 +185,11 @@ export const MAP_STYLES: Record<string, { name: string, url: any, attribution?: 
   }
 };
 
-export function getMapStyleUrl(styleId: string) {
+export function getMapStyleUrl(styleId: string, theme: AppearanceTheme | 'dark' | 'light' = 'light') {
   const style = MAP_STYLES[styleId];
+  if (styleId === 'openfreemap' && theme === 'dark') {
+    return 'https://tiles.openfreemap.org/styles/dark';
+  }
   if (styleId !== 'mapy_outdoor' || typeof style?.url === 'string') return style?.url;
   return {
     ...style.url,

@@ -129,7 +129,7 @@ export function PersistingConfigDialog({ service, trips, onClose, onUpdateTrips 
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
             {unsavedTrips.map(trip => (
-              <div key={trip.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f5', padding: '8px 12px', borderRadius: '6px' }}>
+              <div className="persisting-unsynced-trip" key={trip.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f5', padding: '8px 12px', borderRadius: '6px' }}>
                 <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>{trip.name || 'Untitled Trip'}</span>
                 <button
                   className="iconButton"

@@ -76,3 +76,31 @@
   color: #888;
   text-align: center;
 }
+
+body.dark-mode .trip-card,
+body.dark-mode .trip-sort-menu,
+body.dark-mode .connection-status {
+  background: #252a30 !important;
+  border-color: #424951 !important;
+  color: #e6e8eb;
+}
+
+body.dark-mode .trip-sort-menu-option.selected {
+  background-color: #3a424c !important;
+  color: #f1f3f5;
+}
+
+body.dark-mode .trip-sort-menu-option:hover {
+  background: #30363d;
+}
+
+body.dark-mode .trip-sort-menu-divider {
+  border-color: #424951;
+}
+
+body.dark-mode .trip-card-desc,
+body.dark-mode .trip-card-date,
+body.dark-mode .trip-year-heading,
+body.dark-mode .connection-status div {
+  color: #aeb7c2 !important;
+}

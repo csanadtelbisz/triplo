@@ -7,6 +7,7 @@ import { loadPreferencesFromCloud } from '../utils/preferencesSync';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
 import { persistingManager } from '../persisting/PersistingManager';
 import { routingManager } from '../routing/RoutingService';
+import { ThemedServiceIcon } from './ThemedServiceIcon';
 
 type SetupMode = 'new' | 'restore';
 type Step = 'welcome' | 'fetching' | 'google-folder' | 'github' | 'api-keys';
@@ -99,15 +100,15 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
         <strong>Set up Triplo for the first time</strong>
         <span>Choose a storage service:</span>
         <div>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); chooseGoogle('new'); }}><img src={googleDriveService.icon} alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); setStep('github'); }}><img src={githubService.icon} alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); chooseGoogle('new'); }}><ThemedServiceIcon serviceName={googleDriveService.name} lightIcon={googleDriveService.icon} alt="Google Drive" width={18} height={18} /> <span>Google Drive</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('new'); setStep('github'); }}><ThemedServiceIcon serviceName={githubService.name} lightIcon={githubService.icon} alt="GitHub" width={18} height={18} /> <span>GitHub</span></button>
         </div>
       </div>
       <div className="setup-option-group">
         <strong>Fetch existing Triplo setup</strong>
         <div>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); chooseGoogle('restore'); }}><img src={googleDriveService.icon} alt="Google Drive" width="18" height="18" /> <span>Google Drive</span></button>
-          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); setStep('github'); }}><img src={githubService.icon} alt="GitHub" width="18" height="18" /> <span>GitHub</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); chooseGoogle('restore'); }}><ThemedServiceIcon serviceName={googleDriveService.name} lightIcon={googleDriveService.icon} alt="Google Drive" width={18} height={18} /> <span>Google Drive</span></button>
+          <button className="dialog-btn dialog-btn-cancel" onClick={() => { setMode('restore'); setStep('github'); }}><ThemedServiceIcon serviceName={githubService.name} lightIcon={githubService.icon} alt="GitHub" width={18} height={18} /> <span>GitHub</span></button>
         </div>
       </div>
       <div className="setup-option-group">

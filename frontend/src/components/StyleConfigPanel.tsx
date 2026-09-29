@@ -84,7 +84,7 @@ const StyleConfigPanel: React.FC<StyleConfigPanelProps> = ({ config, onSave, onG
       </div>
 
       <Dialog isOpen={showInfo} title="Style Configuration Types" onClose={() => setShowInfo(false)} actions={<button className="dialog-btn dialog-btn-primary" onClick={() => setShowInfo(false)}>Close</button>}>
-        <pre style={{ fontSize: '11px', whiteSpace: 'pre-wrap', background: '#f5f5f5', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', maxHeight: '60vh', overflowY: 'auto' }}>
+        <pre className="style-config-types" style={{ fontSize: '11px', whiteSpace: 'pre-wrap', background: '#f5f5f5', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', maxHeight: '60vh', overflowY: 'auto' }}>
 {`export interface Waypoint {
   id: string; // UUID
   coordinates: [number, number]; // [lon, lat]

@@ -312,7 +312,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
           Loading chart data...
         </div>
       ) : (
-      <div 
+      <div className="analytics-chart" 
         ref={containerRef}
         style={{ 
           position: 'relative', 

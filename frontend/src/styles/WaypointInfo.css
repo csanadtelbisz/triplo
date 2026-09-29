@@ -26,3 +26,21 @@
 }
 .visibility-knob.normal { left: 22px; }
 .visibility-knob.hidden { left: 2px; }
+
+body.dark-mode .visibility-knob {
+  background: #e6e8eb;
+}
+
+body.dark-mode .visibility-switch.hidden {
+  background: #505760;
+}
+
+body.dark-mode .content .iconButton {
+  background: #2a2e33 !important;
+  border-color: #505760 !important;
+  color: #e6e8eb;
+}
+
+body.dark-mode .content .iconButton:hover:not(:disabled) {
+  background: #383d44 !important;
+}

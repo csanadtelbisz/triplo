@@ -197,6 +197,50 @@
   background: #0056b3;
 }
 
+body.dark-mode .dialog-content {
+  background: #202327;
+  color: #e6e8eb;
+  border: 1px solid #424951;
+}
+
+body.dark-mode .dialog-title,
+body.dark-mode .dialog-message {
+  color: #e6e8eb;
+}
+
+body.dark-mode .setup-option-group,
+body.dark-mode .setup-divider {
+  border-color: #424951;
+}
+
+body.dark-mode .setup-option-group small,
+body.dark-mode .api-key-test-status.pending {
+  color: #aeb7c2;
+}
+
+body.dark-mode .dialog-btn-cancel {
+  background: #2a2e33;
+  border-color: #505760;
+  color: #e6e8eb;
+}
+
+body.dark-mode .dialog-btn-cancel:hover {
+  background: #383d44;
+}
+
+body.dark-mode .persisting-unsynced-trip,
+body.dark-mode .style-config-types {
+  background: #2a2e33 !important;
+  border-color: #505760 !important;
+  color: #e6e8eb;
+}
+
+body.dark-mode .github-config-section {
+  background: #252a30 !important;
+  border-color: #424951 !important;
+  color: #e6e8eb;
+}
+
 @keyframes dialogFadeIn {
   from {
     opacity: 0;

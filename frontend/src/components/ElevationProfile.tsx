@@ -137,7 +137,7 @@ export function ElevationProfile({ geometry, onHoverCoordinate }: ElevationProfi
 
   return (
     <div style={{ marginTop: 16 }}>
-      <h4 style={{ fontSize: '0.9rem', marginBottom: 8, color: '#333' }}>Elevation Profile</h4>
+      <h4 className="elevation-profile-title" style={{ fontSize: '0.9rem', marginBottom: 8, color: '#333' }}>Elevation Profile</h4>
       <div 
         ref={containerRef}
         onPointerDown={handlePointerDown}
@@ -149,6 +149,7 @@ export function ElevationProfile({ geometry, onHoverCoordinate }: ElevationProfi
         onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         onTouchCancel={(e) => e.stopPropagation()}
+        className="elevation-profile-chart"
         style={{ position: 'relative', width: '100%', height: '150px', background: '#f9f9f9', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', touchAction: 'none' }}
       >
         <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
