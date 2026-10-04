@@ -138,13 +138,8 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                    }));
                    onUpdateTrip({ ...trip, segments: newSegments });
                  }}
-                 style={{ 
-                   width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                   cursor: isReadOnly ? 'default' : 'pointer', borderRadius: '4px', 
-                   border: wp?.icon === iconName ? '2px solid #007bff' : '1px solid #ccc',
-                   background: wp?.icon === iconName ? '#e6f2ff' : '#f9f9f9',
-                   opacity: isReadOnly ? 0.7 : 1
-                 }}
+                 className={`waypoint-icon-option${wp?.icon === iconName ? ' selected' : ''}`}
+                 style={{ opacity: isReadOnly ? 0.7 : 1 }}
                  title={iconName}
                >
                  <MaterialIcon name={iconName} size={20} />
@@ -178,14 +173,14 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                type="button"
                disabled={isReadOnly}
                onClick={() => setIsIconPickerOpen(true)}
-               className="iconButton" 
+               className="icon-picker-item" 
                title="Search Icons" 
-               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', cursor: isReadOnly ? 'default' : 'pointer' }}
+               style={{ opacity: isReadOnly ? 0.7 : 1, cursor: isReadOnly ? 'default' : 'pointer' }}
              >
                <MaterialIcon name="search" size={20} />
              </button>
              <button 
-               className="iconButton" 
+               className="icon-picker-item" 
                disabled={isReadOnly}
                title="Clear Icon" 
                onClick={() => {
@@ -203,7 +198,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                  }));
                  onUpdateTrip({ ...trip, segments: newSegments });
                }}
-               style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9' }}
+               style={{ opacity: isReadOnly ? 0.7 : 1, cursor: isReadOnly ? 'default' : 'pointer' }}
              >
                <MaterialIcon name="close" size={20} />
              </button>
@@ -317,7 +312,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
         ) : !isReadOnly ? (
           <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--color-border, #eee)' }}>
             {attachingPoiToWaypointId === waypointId ? (
-              <div style={{ background: '#e3f2fd', padding: '12px', borderRadius: '8px', fontSize: '0.9rem', color: '#1565c0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="waypoint-attach-notice" style={{ padding: '12px', borderRadius: '8px', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                  <span>Click any POI on the map to attach it.</span>
                  <button 
                    onClick={() => setAttachingPoiToWaypointId?.(null)}
@@ -354,3 +349,5 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
     </>
   );
 }
+
+

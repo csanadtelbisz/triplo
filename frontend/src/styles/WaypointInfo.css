@@ -36,11 +36,47 @@ body.dark-mode .visibility-switch.hidden {
 }
 
 body.dark-mode .content .iconButton {
-  background: #2a2e33 !important;
-  border-color: #505760 !important;
+  border-color: #36393d !important;
   color: #e6e8eb;
 }
 
 body.dark-mode .content .iconButton:hover:not(:disabled) {
   background: #383d44 !important;
+}
+
+.waypoint-icon-option {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+.waypoint-icon-option.selected {
+  border: 2px solid #007bff;
+  background: #e6f2ff;
+}
+
+.waypoint-attach-notice {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+body.dark-mode .waypoint-icon-option {
+  background: #2a2e33;
+  border-color: #505760;
+}
+
+body.dark-mode .waypoint-icon-option.selected {
+  background: #263b56;
+  border-color: #8ab4f8;
+}
+
+body.dark-mode .waypoint-attach-notice {
+  background: #20364d;
+  color: #a9d0ff;
 }

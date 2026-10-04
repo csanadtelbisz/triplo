@@ -411,8 +411,7 @@ export function TripEditor({
         // Add a brief highlight flash
         const highlightTargets = el.querySelectorAll('.timeline-col, .waypoint-col') as NodeListOf<HTMLElement>;
         highlightTargets.forEach(target => {
-          target.style.transition = 'background-color 0.5s';
-          target.style.backgroundColor = '#e6f2ff';
+          target.classList.add('highlighted');
         });
 
         const input = el.querySelector('.waypoint-title-input') as HTMLInputElement | null;
@@ -422,7 +421,7 @@ export function TripEditor({
 
         setTimeout(() => {
           highlightTargets.forEach(target => {
-            target.style.backgroundColor = '';
+            target.classList.remove('highlighted');
           });
           if (onClearHighlight) onClearHighlight();
         }, 1000);
@@ -1081,7 +1080,7 @@ export function TripEditor({
                        title="Add Waypoint Here"
                        onClick={() => handleInsertWaypoint(trip.segments[0].waypoints[0].id, 'before')}
                      >
-                       <MaterialIcon name="add" size={14} style={{ color: '#666' }} />
+                       <MaterialIcon name="add" size={16} style={{ color: '#666' }} />
                      </div>
                    )}
                  </td>
@@ -1256,7 +1255,7 @@ export function TripEditor({
                                          height: '34px',
                                          padding: 0,
                                          borderRadius: '6px',
-                                         border: mode === seg.transportMode ? `2px solid ${getModeColor(mode) || '#007bff'}` : '1px solid #ddd',
+                                         border: mode === seg.transportMode ? `2px solid ${getModeColor(mode) || '#007bff'}` : '1px solid var(--border-color, #ddd)',
                                          background: mode === seg.transportMode ? `${getModeColor(mode) || '#007bff'}22` : 'transparent',
                                          color: getModeColor(mode),
                                          display: 'flex',
@@ -1289,7 +1288,7 @@ export function TripEditor({
                                            height: '34px',
                                            padding: 0,
                                            borderRadius: '6px',
-                                           border: isSelected ? `2px solid ${customMode.color || '#007bff'}` : '1px solid #ddd',
+                                           border: isSelected ? `2px solid ${customMode.color || '#007bff'}` : '1px solid var(--border-color, #ddd)',
                                            background: isSelected ? `${customMode.color || '#007bff'}22` : 'transparent',
                                            color: customMode.color || getModeColor('other'),
                                            display: 'flex',
@@ -1415,7 +1414,7 @@ export function TripEditor({
                                }}
                              />
                              {wpSearchState?.wpId === wp.id && (wpSearchResults.length > 0 || isWpSearching) && (
-                               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid var(--border-color, #ddd)', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
                                  {isWpSearching && <div style={{ padding: '8px', fontSize: '0.85rem', color: '#666' }}>Searching...</div>}
                                  {!isWpSearching && wpSearchResults.map(res => (
                                    <div key={res.place_id} style={{ padding: '8px', fontSize: '0.85rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
@@ -1645,3 +1644,5 @@ export function TripEditor({
     </>
   );
 }
+
+

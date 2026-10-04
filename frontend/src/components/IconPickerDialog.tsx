@@ -113,17 +113,10 @@ export function IconPickerDialog({ isOpen, onClose, onPick }: IconPickerDialogPr
         <input
           ref={searchInputRef}
           type="text"
+          className="form-input"
           placeholder="Search icons (e.g., 'water', 'trolley', 'arrow')..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            fontSize: '16px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            width: '100%',
-            boxSizing: 'border-box'
-          }}
         />
 
         {!searchQuery && (
@@ -151,37 +144,12 @@ export function IconPickerDialog({ isOpen, onClose, onPick }: IconPickerDialogPr
           >
             {filteredIcons.map((icon) => {
               const isSelected = selectedIcon === icon.name;
-              
-              const baseStyle: React.CSSProperties = {
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                borderRadius: '4px',
-                opacity: 1,
-                color: 'black',
-              };
-              
-              const activeStyle: React.CSSProperties = {
-                ...baseStyle,
-                border: '2px solid rgb(0, 123, 255)',
-                background: 'rgb(230, 242, 255)'
-              };
-              
-              const inactiveStyle: React.CSSProperties = {
-                ...baseStyle,
-                border: '1px solid rgb(204, 204, 204)',
-                background: 'rgb(249, 249, 249)'
-              };
-
               return (
                 <div
                   key={icon.name}
                   title={icon.name}
                   onClick={() => setSelectedIcon(icon.name)}
-                  style={isSelected ? activeStyle : inactiveStyle}
+                  className={`icon-picker-item ${isSelected ? 'selected' : ''}`}
                 >
                   <Icon name={icon.name} size={20} />
                 </div>

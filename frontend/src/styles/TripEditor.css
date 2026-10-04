@@ -20,6 +20,15 @@
 .waypoint-col {
   padding: 8px 0;
 }
+.timeline-col, .waypoint-col {
+  transition: background-color 0.5s;
+}
+.timeline-col.highlighted, .waypoint-col.highlighted {
+  background-color: #e6f2ff !important;
+}
+body.dark-mode .timeline-col.highlighted, body.dark-mode .waypoint-col.highlighted {
+  background-color: #424951 !important;
+}
 .gap-col {
   padding: 4px 0;
   height: 28px;
@@ -126,8 +135,8 @@ body.is-dragging * {
   z-index: 3;
   background: white;
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -143,7 +152,7 @@ body.is-dragging * {
 
 body.dark-mode .timeline-plus {
   background: #2a2e33;
-  border: 1px solid #66717d;
+  border: 1px solid #424951;
   color: #e6e8eb;
 }
 
@@ -297,7 +306,7 @@ body.dark-mode .timeline-plus .triplo-icon {
 body.dark-mode .waypoint-card,
 body.dark-mode .trip-summary {
   background: #252a30;
-  border-color: #424951;
+  border-color: #36393d;
   color: #e6e8eb;
 }
 
@@ -319,7 +328,7 @@ body.dark-mode .trip-summary td {
 }
 
 body.dark-mode .trip-summary-th {
-  border-color: #424951;
+  border-color: #36393d;
 }
 
 body.dark-mode .trip-summary-row {
@@ -333,4 +342,24 @@ body.dark-mode .elevation-profile-chart {
 
 body.dark-mode .elevation-profile-title {
   color: #f1f3f5 !important;
+}
+
+body.dark-mode .segment-mode-menu {
+  background: #252a30 !important;
+  border-color: #424951 !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+}
+
+body.dark-mode .segment-mode-menu .iconButton {
+  border-color: #505760 !important;
+}
+
+.segment-mode-menu {
+  background: #fff;
+  border: 1px solid #e3e7eb;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+body.dark-mode .segment-mode-menu {
+  --border-color: #505760;
 }

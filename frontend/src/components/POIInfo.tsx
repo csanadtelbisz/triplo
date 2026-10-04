@@ -235,7 +235,7 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
                 <label className="form-label" style={{ marginBottom: '8px' }}>Alternative Names</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {preferredOptions.map(opt => (
-                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isReadOnly ? 'default' : 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease', opacity: isReadOnly ? 0.7 : 1 }}>
+                        <label key={opt.id} className={`poi-alt-name-label ${selectedName === opt.value ? 'selected' : ''}`} style={{ cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }}>
                             <input 
                                 type="radio" 
                                 name="poiSelectedName" 
@@ -246,8 +246,8 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
                                 style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
                             />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span style={{ fontSize: '1rem', fontWeight: selectedName === opt.value ? '600' : '400', color: '#333' }}>{opt.value}</span>
-                                <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{opt.label}</span>
+                                <span className={`poi-alt-name-value ${selectedName === opt.value ? 'selected' : ''}`}>{opt.value}</span>
+                                <span className="poi-alt-name-desc">{opt.label}</span>
                             </div>
                         </label>
                     ))}
@@ -259,7 +259,7 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
                     )}
 
                     {showOtherLangs && otherOptions.map(opt => (
-                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: isReadOnly ? 'default' : 'pointer', padding: '12px', borderRadius: '6px', border: selectedName === opt.value ? '2px solid #1976d2' : '1px solid var(--border-color, #ddd)', background: selectedName === opt.value ? '#e3f2fd' : 'white', transition: 'all 0.2s ease', opacity: isReadOnly ? 0.7 : 1 }}>
+                        <label key={opt.id} className={`poi-alt-name-label ${selectedName === opt.value ? 'selected' : ''}`} style={{ cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }}>
                             <input 
                                 type="radio" 
                                 name="poiSelectedName" 
@@ -270,8 +270,8 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
                                 style={{ margin: 0, width: '16px', height: '16px', accentColor: '#1976d2' }}
                             />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span style={{ fontSize: '1rem', fontWeight: selectedName === opt.value ? '600' : '400', color: '#333' }}>{opt.value}</span>
-                                <span style={{ fontSize: '0.75rem', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{opt.label}</span>
+                                <span className={`poi-alt-name-value ${selectedName === opt.value ? 'selected' : ''}`}>{opt.value}</span>
+                                <span className="poi-alt-name-desc">{opt.label}</span>
                             </div>
                         </label>
                     ))}
@@ -289,3 +289,4 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
     </div>
   );
 };
+

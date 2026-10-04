@@ -78,16 +78,21 @@
 }
 
 body.dark-mode .trip-card,
-body.dark-mode .trip-sort-menu,
 body.dark-mode .connection-status {
   background: #252a30 !important;
-  border-color: #424951 !important;
+  border-color: #36393d !important;
+  color: #e6e8eb;
+}
+
+body.dark-mode .trip-sort-menu {
+  background: #202327 !important;
+  border-color: #505760 !important;
   color: #e6e8eb;
 }
 
 body.dark-mode .trip-sort-menu-option.selected {
   background-color: #3a424c !important;
-  color: #f1f3f5;
+  color: #f1f3f5 !important;
 }
 
 body.dark-mode .trip-sort-menu-option:hover {

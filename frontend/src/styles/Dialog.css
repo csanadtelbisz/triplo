@@ -200,7 +200,7 @@
 body.dark-mode .dialog-content {
   background: #202327;
   color: #e6e8eb;
-  border: 1px solid #424951;
+  border: 1px solid #36393d;
 }
 
 body.dark-mode .dialog-title,
@@ -210,7 +210,7 @@ body.dark-mode .dialog-message {
 
 body.dark-mode .setup-option-group,
 body.dark-mode .setup-divider {
-  border-color: #424951;
+  border-color: #36393d;
 }
 
 body.dark-mode .setup-option-group small,
@@ -237,7 +237,7 @@ body.dark-mode .style-config-types {
 
 body.dark-mode .github-config-section {
   background: #252a30 !important;
-  border-color: #424951 !important;
+  border-color: #36393d !important;
   color: #e6e8eb;
 }
 
@@ -250,4 +250,35 @@ body.dark-mode .github-config-section {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.icon-picker-item {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 1;
+  color: #333;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+  transition: all 0.15s ease;
+}
+
+.icon-picker-item.selected {
+  border: 2px solid #007bff;
+  background: #e6f2ff;
+}
+
+body.dark-mode .icon-picker-item {
+  background: #252a30;
+  border-color: #36393d;
+  color: #e6e8eb;
+}
+
+body.dark-mode .icon-picker-item.selected {
+  border-color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.15);
 }

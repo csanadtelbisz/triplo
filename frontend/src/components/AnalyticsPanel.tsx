@@ -294,7 +294,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#222' }}>Distance per Year</h3>
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'inherit' }}>Distance per Year</h3>
       {yearDistances.length === 0 ? (
         <div 
           style={{ 
@@ -662,7 +662,7 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
             {selectedModeKey && (
               <div style={{ marginTop: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', color: '#222', textTransform: 'capitalize' }}>{modeRows.find(row => row.modeKey === selectedModeKey)?.displayName} Segments</h3>
+                  <h3 style={{ margin: 0, fontSize: '1rem', color: 'inherit', textTransform: 'capitalize' }}>{modeRows.find(row => row.modeKey === selectedModeKey)?.displayName} Segments</h3>
                   <button
                     type="button"
                     onClick={clearModeFilter}
@@ -697,7 +697,7 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
                                 {isOther && targetIcon ? <MaterialIcon name={targetIcon} size={18} /> : getModeIcon(segment.transportMode as any, 18)}
                               </span>
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <div style={{ fontWeight: 600, color: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {getSegmentLabel(segment)}
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
