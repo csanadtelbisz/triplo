@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import materialIconsData from '../assets/material-icons/google-material-icons-metadata.json';
