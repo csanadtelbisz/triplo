@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog } from './Dialog';
 import { MaterialIcon } from './MaterialIcon';
 import { ApiKeyConfigurationSection } from './ApiKeyDialog';
-import { GRAPHHOPPER_API_CONFIGURATION, MAPY_API_CONFIGURATION, getApiKeyPreferences, saveApiKeyPreferences } from '../utils/apiKeyPreferences';
+import { GRAPHHOPPER_API_CONFIGURATION, GOOGLE_MAPS_API_CONFIGURATION, MAPY_API_CONFIGURATION, getApiKeyPreferences, saveApiKeyPreferences } from '../utils/apiKeyPreferences';
 import { loadPreferencesFromCloud } from '../utils/preferencesSync';
 import { syncPreferencesToCloud } from '../utils/preferencesSync';
 import { persistingManager } from '../persisting/PersistingManager';
@@ -26,7 +26,7 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
 
   const continueAfterStorage = (currentMode = mode) => {
     const keys = getApiKeyPreferences();
-    if (currentMode === 'new' || (!keys.mapyApiKey && !keys.graphHopperApiKey)) setStep('api-keys');
+    if (currentMode === 'new' || (!keys.mapyApiKey && !keys.graphHopperApiKey && !keys.googleMapsApiKey)) setStep('api-keys');
     else void finish();
   };
 
@@ -142,11 +142,14 @@ export function SetupWizard({ onComplete, onStartBackgroundSync }: { onComplete:
 
   const mapyTester = routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === 'mapyApiKey')?.testApiKey;
   const graphHopperTester = routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === 'graphHopperApiKey')?.testApiKey;
+  const googleMapsService = routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === 'googleMapsApiKey');
   return <Dialog isOpen title="API Keys" onClose={onComplete} className="setup-dialog api-key-dialog" actions={<button className="dialog-btn dialog-btn-primary" onClick={saveApiKeys}>Finish</button>}>
     <p>Triplo applies a bring-your-own-key policy for routing and map tile services that need an API key: you need to create and set your own key to use these services. We strongly suggest setting these keys, otherwise, most routing services will not be available. The free tiers of these services should provide you ample credits to use Triplo assuming average usage.</p>
     <ApiKeyConfigurationSection configuration={MAPY_API_CONFIGURATION} apiKey={apiKeys.mapyApiKey} onApiKeyChange={mapyApiKey => setApiKeys(previous => ({ ...previous, mapyApiKey }))} testApiKey={mapyTester?.bind(routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === 'mapyApiKey'))} />
     <hr className="setup-divider" />
     <ApiKeyConfigurationSection configuration={GRAPHHOPPER_API_CONFIGURATION} apiKey={apiKeys.graphHopperApiKey} onApiKeyChange={graphHopperApiKey => setApiKeys(previous => ({ ...previous, graphHopperApiKey }))} testApiKey={graphHopperTester?.bind(routingManager.getServices().find(service => service.getApiKeyConfiguration?.()?.preferenceKey === 'graphHopperApiKey'))} />
+    <hr className="setup-divider" />
+    <ApiKeyConfigurationSection configuration={GOOGLE_MAPS_API_CONFIGURATION} apiKey={apiKeys.googleMapsApiKey} onApiKeyChange={googleMapsApiKey => setApiKeys(previous => ({ ...previous, googleMapsApiKey }))} testApiKey={googleMapsService?.testApiKey?.bind(googleMapsService)} />
     <p style={{ color: 'rgb(122, 82, 0)' }}><strong>Info:</strong> your API key is saved to your selected cloud storage as plain text. Only use trusted cloud storage.</p>
   </Dialog>;
 }

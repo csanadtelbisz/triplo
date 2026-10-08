@@ -1,10 +1,11 @@
 export interface ApiKeyPreferences {
   mapyApiKey: string;
   graphHopperApiKey: string;
+  googleMapsApiKey: string;
 }
 
 export interface ApiKeyServiceConfiguration {
-  serviceName: 'Mapy' | 'Graphhopper';
+  serviceName: 'Mapy' | 'Graphhopper' | 'Google Maps';
   preferenceKey: keyof ApiKeyPreferences;
   inputLabel: string;
   instructions: string[];
@@ -35,9 +36,23 @@ export const GRAPHHOPPER_API_CONFIGURATION: ApiKeyServiceConfiguration = {
   ],
 };
 
+export const GOOGLE_MAPS_API_CONFIGURATION: ApiKeyServiceConfiguration = {
+  serviceName: 'Google Maps',
+  preferenceKey: 'googleMapsApiKey',
+  inputLabel: 'Google Maps API key',
+  instructions: [
+    'Go to https://console.cloud.google.com/google/maps-apis/credentials',
+    'Select or create a Google Cloud project and enable billing for it.',
+    'Enable the Routes API in the project.',
+    'Create an API key, then restrict it to the Routes API and to your website HTTP referrers.',
+    'Copy the API key here. Google may charge for Routes API usage according to your project pricing and quotas.',
+  ],
+};
+
 const defaults = (): ApiKeyPreferences => ({
   mapyApiKey: import.meta.env.VITE_MAPY_API_KEY || '',
   graphHopperApiKey: import.meta.env.VITE_GRAPHHOPPER_API_KEY || '',
+  googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
 });
 
 export function getApiKeyPreferences(): ApiKeyPreferences {
@@ -48,6 +63,7 @@ export function getApiKeyPreferences(): ApiKeyPreferences {
     return {
       mapyApiKey: typeof values.mapyApiKey === 'string' ? values.mapyApiKey : defaults().mapyApiKey,
       graphHopperApiKey: typeof values.graphHopperApiKey === 'string' ? values.graphHopperApiKey : defaults().graphHopperApiKey,
+      googleMapsApiKey: typeof values.googleMapsApiKey === 'string' ? values.googleMapsApiKey : defaults().googleMapsApiKey,
     };
   } catch {
     return defaults();

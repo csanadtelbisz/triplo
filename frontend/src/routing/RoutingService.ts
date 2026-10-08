@@ -4,6 +4,7 @@ import { StraightLineRouter } from './StraightLineRouter';
 import { GraphHopperRouter } from './GraphHopperRouter';
 import { RailRouter } from './RailRouter';
 import { MapyRouter } from './MapyRouter';
+import { GoogleMapsRouter } from './GoogleMapsRouter';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 import { showApiKeyConfigurationWarning } from '../utils/apiKeyConfigurationWarning';
 
@@ -32,6 +33,7 @@ export interface DefaultRouter {
 class RoutingServiceManager {
   private graphHopper = new GraphHopperRouter();
   private mapy = new MapyRouter();
+  private googleMaps = new GoogleMapsRouter();
   private flight = new FlightRouter();
   private straightLine = new StraightLineRouter();
   private rail = new RailRouter();
@@ -39,6 +41,7 @@ class RoutingServiceManager {
   private services: IRoutingService[] = [
     this.graphHopper,
     this.mapy,
+    this.googleMaps,
     this.flight,
     this.rail,
     this.straightLine
