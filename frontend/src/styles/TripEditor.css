@@ -93,7 +93,7 @@ body.is-dragging * {
   background: #f5f5f5 !important;
 }
 
-.segment-title-textarea:focus {
+.segment-title-textarea:focus, .analytics-segment-title:focus {
   background: white !important;
   box-shadow: 0 0 0 2px #007bff !important;
   outline: none;
@@ -316,7 +316,8 @@ body.dark-mode .waypoint-title-input:hover {
 }
 
 body.dark-mode .segment-title-textarea:focus,
-body.dark-mode .waypoint-title-input:focus {
+body.dark-mode .waypoint-title-input:focus,
+body.dark-mode .analytics-segment-title:focus {
   background: #2a2e33 !important;
 }
 

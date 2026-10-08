@@ -15,6 +15,8 @@ import {
 interface AnalyticsPanelProps {
   onGoBack: () => void;
   trips: Trip[];
+  isReadOnly: boolean;
+  onUpdateTrip: (trip: Trip) => void;
   onOpenSegmentInfo: (tripId: string, segmentId: string) => void;
   onFocusSegment: (tripId: string, segmentId: string) => void;
   timeSliderVisible: boolean;
@@ -41,12 +43,8 @@ function getModeLabel(modeKey: string, customModes: CustomOtherMode[]) {
   return modeKey.replace('_', ' ');
 }
 
-function getSegmentLabel(segment: Segment) {
-  return segment.name || `Untitled segment`;
-}
-
 function getTripDateRange(trips: Trip[]) {
-  const dates = trips.flatMap(trip => [trip.startDate, trip.endDate].filter(Boolean).map(date => new Date(date as string).getTime()));
+  const dates = trips.flatMap(trip => [trip.startDate, trip.endDate || trip.startDate].filter(Boolean).map(date => new Date(date as string).getTime()));
   if (dates.length === 0) return null;
   const day = 24 * 60 * 60 * 1000;
   return {
@@ -59,11 +57,17 @@ function formatFilterDate(timestamp: number, yearOnly: boolean) {
   return new Intl.DateTimeFormat(undefined, yearOnly ? { year: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(timestamp));
 }
 
-export function TimeSliderToolbox({ trips, isActive, onClose }: { trips: Trip[]; isActive: boolean; onClose: () => void }) {
+export function TimeSliderToolbox({ trips, onClose }: { trips: Trip[]; onClose: () => void }) {
   const dateRange = useMemo(() => getTripDateRange(trips), [trips]);
   const day = 24 * 60 * 60 * 1000;
   const [yearOnly, setYearOnly] = useState(false);
   const [range, setRange] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => setRange((event as CustomEvent<[number, number] | null>).detail);
+    window.addEventListener('triplo-analytics-range-sync', handler);
+    return () => window.removeEventListener('triplo-analytics-range-sync', handler);
+  }, []);
 
   const effectiveRange = dateRange
     ? range
@@ -72,26 +76,6 @@ export function TimeSliderToolbox({ trips, isActive, onClose }: { trips: Trip[];
     : null;
   const effectiveStart = effectiveRange?.[0];
   const effectiveEnd = effectiveRange?.[1];
-
-  useEffect(() => {
-    return () => {
-      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isActive) {
-      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
-      return;
-    }
-    if (effectiveStart === undefined || effectiveEnd === undefined) return;
-    
-    const start = new Date(effectiveStart);
-    const end = new Date(effectiveEnd);
-    window.dispatchEvent(new CustomEvent('triplo-time-filter-change', {
-      detail: { start: start.toISOString(), end: end.toISOString() }
-    }));
-  }, [effectiveStart, effectiveEnd, isActive]);
 
   if (!dateRange || !effectiveRange) {
     return <div className="time-slider-empty">No trip dates available</div>;
@@ -118,8 +102,12 @@ export function TimeSliderToolbox({ trips, isActive, onClose }: { trips: Trip[];
     return Math.round((timestamp - dateRange.min) / day);
   };
 
-  const updateStart = (value: number) => setRange([Math.min(toTimestamp(value), effectiveRange[1]), effectiveRange[1]]);
-  const updateEnd = (value: number) => setRange([effectiveRange[0], Math.max(toTimestamp(value, true), effectiveRange[0])]);
+  const updateRange = (nextRange: [number, number]) => {
+    setRange(nextRange);
+    window.dispatchEvent(new CustomEvent('triplo-analytics-range-change', { detail: nextRange }));
+  };
+  const updateStart = (value: number) => updateRange([Math.min(toTimestamp(value), effectiveRange[1]), effectiveRange[1]]);
+  const updateEnd = (value: number) => updateRange([effectiveRange[0], Math.max(toTimestamp(value, true), effectiveRange[0])]);
 
   const values = [toSliderValue(effectiveRange[0]), toSliderValue(effectiveRange[1])];
 
@@ -178,14 +166,14 @@ function getDistancePerYear(trips: Trip[], selectedModeKey: string | null): Year
 
   trips.forEach(trip => {
     const startDate = trip.startDate ? new Date(trip.startDate) : null;
-    const endDate = trip.endDate ? new Date(trip.endDate) : null;
+    const endDate = trip.endDate ? new Date(trip.endDate) : startDate;
 
     if (!startDate || !endDate) return;
 
     // Determine which years this trip spans
     const startYear = startDate.getFullYear();
     const endYear = endDate.getFullYear();
-    const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
 
     for (let year = startYear; year <= endYear; year++) {
       yearSet.add(year);
@@ -220,7 +208,7 @@ function getDistancePerYear(trips: Trip[], selectedModeKey: string | null): Year
     .map(year => ({ year, distance: distanceByYear[year] || 0 }));
 }
 
-function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDistances: YearDistance[]; maxDistance: number; modeColor?: string }) {
+function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYear, onSelectedYearChange, interactive }: { yearDistances: YearDistance[]; maxDistance: number; modeColor?: string; selectedYear: number | null; onSelectedYearChange: (year: number | null) => void; interactive: boolean }) {
   const [hoveredYear, setHoveredYear] = useState<number | null>(null);
   const [tooltipXPosition, setTooltipXPosition] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -242,8 +230,9 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
   const spacingPerBar = calculatedBarWidth;
   const labelInterval = Math.max(1, Math.ceil(estimatedLabelWidth / spacingPerBar));
 
-  const hoveredIndex = hoveredYear !== null ? yearDistances.findIndex(d => d.year === hoveredYear) : -1;
-  const hoveredData = hoveredYear !== null ? yearDistances[hoveredIndex] : null;
+  const activeYear = hoveredYear ?? selectedYear;
+  const hoveredIndex = activeYear !== null ? yearDistances.findIndex(d => d.year === activeYear) : -1;
+  const hoveredData = hoveredYear !== null ? yearDistances.find(d => d.year === hoveredYear) : null;
   const viewBoxWidth = Math.max(300, yearDistances.length * calculatedBarWidth + padding * 2);
 
   const updateHoveredYearFromPointer = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -268,6 +257,23 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
   const handleChartPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     updateHoveredYearFromPointer(e);
+  };
+
+  const handleChartClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!interactive) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const screenMatrix = svg.getScreenCTM();
+    if (!screenMatrix) return;
+    const svgPoint = point.matrixTransform(screenMatrix.inverse());
+    const index = Math.floor((svgPoint.x - padding) / calculatedBarWidth);
+    if (index >= 0 && index < yearDistances.length) {
+      const year = yearDistances[index].year;
+      onSelectedYearChange(selectedYear === year ? null : year);
+    }
   };
   
   // Update tooltip position when hoveredIndex changes
@@ -359,6 +365,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
           height={chartHeight}
           viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`}
           onPointerDown={handleChartPointerDown}
+          onClick={handleChartClick}
           onPointerMove={updateHoveredYearFromPointer}
           onPointerUp={() => setHoveredYear(null)}
           onPointerCancel={() => setHoveredYear(null)}
@@ -374,7 +381,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
             const barHeight = (item.distance / maxDistance) * innerHeight;
             const x = padding + index * calculatedBarWidth + calculatedBarWidth * 0.1;
             const y = chartHeight - padding - barHeight;
-            const otherHovered = hoveredYear !== null && hoveredYear !== item.year;
+            const otherHovered = activeYear !== null && activeYear !== item.year;
 
             return (
               <g key={item.year}>
@@ -385,7 +392,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
                   width={calculatedBarWidth}
                   height={innerHeight}
                   fill="transparent"
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: interactive ? 'pointer' : 'default' }}
                 />
                 {/* Actual bar */}
                 <rect
@@ -446,10 +453,31 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor }: { yearDi
   );
 }
 
-export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selectedModeKey, onSelectedModeKeyChange }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selectedModeKey, onSelectedModeKeyChange }: AnalyticsPanelProps) {
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
   const [yearlyDistances, setYearlyDistances] = useState<YearDistance[]>([]);
   const [maxYearlyDistance, setMaxYearlyDistance] = useState<number>(1);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [timeRange, setTimeRange] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      setTimeRange((event as CustomEvent<[number, number] | null>).detail);
+      setSelectedYear(null);
+    };
+    window.addEventListener('triplo-analytics-range-change', handler);
+    return () => window.removeEventListener('triplo-analytics-range-change', handler);
+  }, []);
+  useEffect(() => {
+    const detail = timeRange ? { start: new Date(timeRange[0]).toISOString(), end: new Date(timeRange[1]).toISOString() } : null;
+    window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail }));
+  }, [timeRange]);
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
+    };
+  }, []);
 
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
     const distanceByMode: Record<string, number> = {};
@@ -533,7 +561,14 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
       return date ? new Date(date).getTime() : Number.NEGATIVE_INFINITY;
     };
 
-    selected.sort((left, right) => {
+    const yearFiltered = !timeRange ? selected : selected.filter(({ trip }) => {
+      const start = trip.startDate ? new Date(trip.startDate).getTime() : null;
+      const end = trip.endDate ? new Date(trip.endDate).getTime() : start;
+      if (start === null && end === null) return true;
+      return (end ?? start!) >= timeRange[0] && (start ?? end!) <= timeRange[1];
+    });
+
+    yearFiltered.sort((left, right) => {
       const tripTimeDelta = getTripSortTime(right.trip) - getTripSortTime(left.trip);
       if (tripTimeDelta !== 0) return tripTimeDelta;
 
@@ -546,8 +581,8 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
       return rightIndex - leftIndex;
     });
 
-    return selected;
-  }, [selectedModeKey, segmentsByMode]);
+    return yearFiltered;
+  }, [selectedModeKey, timeRange, segmentsByMode]);
 
   const clearModeFilter = () => {
     onSelectedModeKeyChange(null);
@@ -657,7 +692,19 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
               </div>
             </div>
 
-            <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} />
+            <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
+              setSelectedYear(year);
+              if (year === null) {
+                setTimeRange(null);
+                window.dispatchEvent(new CustomEvent('triplo-analytics-range-sync', { detail: null }));
+                window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
+              } else {
+                const range: [number, number] = [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
+                setTimeRange(range);
+                window.dispatchEvent(new CustomEvent('triplo-analytics-range-sync', { detail: range }));
+                window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: { start: new Date(range[0]).toISOString(), end: new Date(range[1]).toISOString() } }));
+              }
+            }} interactive />
 
             {selectedModeKey && (
               <div style={{ marginTop: '20px' }}>
@@ -696,10 +743,49 @@ export function AnalyticsPanel({ onGoBack, trips, onOpenSegmentInfo, onFocusSegm
                               <span style={{ color: labelColor, display: 'inline-flex', flexShrink: 0 }}>
                                 {isOther && targetIcon ? <MaterialIcon name={targetIcon} size={18} /> : getModeIcon(segment.transportMode as any, 18)}
                               </span>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, color: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {getSegmentLabel(segment)}
-                                </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <textarea
+                                  key={`${segment.id}:${segment.name || ''}`}
+                                  aria-label="Segment title"
+                                  className="analytics-segment-title"
+                                  defaultValue={segment.name || ''}
+                                  placeholder="Untitled segment"
+                                  disabled={isReadOnly}
+                                  rows={1}
+                                  onKeyDown={event => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      event.currentTarget.blur();
+                                    }
+                                  }}
+                                  onBlur={event => {
+                                    const name = event.currentTarget.value.trim();
+                                    if (name !== (segment.name || '')) {
+                                      onUpdateTrip({
+                                        ...trip,
+                                        segments: trip.segments.map(item => item.id === segment.id ? { ...item, name } : item)
+                                      });
+                                    }
+                                  }}
+                                  style={{
+                                    display: 'block',
+                                    width: '100%',
+                                    minWidth: 0,
+                                    boxSizing: 'border-box',
+                                    padding: 0,
+                                    border: 'none',
+                                    outline: 'none',
+                                    resize: 'none',
+                                    overflow: 'hidden',
+                                    background: 'transparent',
+                                    color: 'inherit',
+                                    font: 'inherit',
+                                    fontWeight: 600,
+                                    lineHeight: 1.3,
+                                    cursor: isReadOnly ? 'default' : 'text',
+                                    borderRadius: '4px',
+                                  }}
+                                />
                                 <div style={{ fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {trip.name || 'Untitled trip'}
                                 </div>

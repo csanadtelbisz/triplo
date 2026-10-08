@@ -34,8 +34,8 @@ body.dark-mode .sidebar {
 body.dark-mode input:not([type='color']):not([type="range"]),
 body.dark-mode select,
 body.dark-mode textarea {
-  background: #2a2e33 !important;
-  border-color: #36393d !important;
+  background: #2a2e33;
+  border-color: #36393d;
   color: #e6e8eb !important;
 }
 

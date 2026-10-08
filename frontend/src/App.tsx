@@ -190,10 +190,10 @@ export default function App() {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
+    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
     if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter };
     if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter };
     if (isSearchOpen) return { panel: 'search' };
-    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
     if (selectedSegmentId && selectedTrip) return { panel: 'segment', tripId: selectedTrip.id, segmentId: selectedSegmentId };
     if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
     if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
@@ -228,6 +228,27 @@ export default function App() {
     // the browser's forward stack.
     if (updateMode === 'restore') {
       historyUpdateModeRef.current = null;
+      currentPanelHistoryRef.current = panelState;
+      return;
+    }
+
+    if (
+      currentPanelHistoryRef.current?.panel === panelState.panel &&
+      currentPanelHistoryRef.current?.analyticsModeFilter &&
+      !panelState.analyticsModeFilter
+    ) {
+      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
+      currentPanelHistoryRef.current = panelState;
+      return;
+    }
+
+    if (
+      currentPanelHistoryRef.current?.panel === panelState.panel &&
+      currentPanelHistoryRef.current?.analyticsModeFilter &&
+      panelState.analyticsModeFilter &&
+      currentPanelHistoryRef.current.analyticsModeFilter !== panelState.analyticsModeFilter
+    ) {
+      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
       currentPanelHistoryRef.current = panelState;
       return;
     }
@@ -1302,6 +1323,49 @@ export default function App() {
     onTouchEnd: handlePanelTouchEnd
   };
 
+  const poiInfoPanel = selectedPOI ? (
+    <POIInfo isReadOnly={isReadOnly}
+      poi={selectedPOI}
+      trip={selectedTrip}
+      onGoBack={handleGoBackPOI}
+      onUpdateTrip={(newTrip) => updateTripState(newTrip.id, newTrip)}
+      onStartNewTrip={(poi, details) => {
+        handleCreateTrip(poi, details);
+        setSelectedPOI(null);
+      }}
+      onAddedToTrip={(wpId) => {
+        handleGoBackPOI();
+        setHighlightedWaypointId(wpId);
+      }}
+      selectedWaypointId={selectedWaypointId}
+      onAttachToWaypoint={(poi, details) => {
+        if (!selectedTrip || !selectedWaypointId) return;
+        const newSegments = selectedTrip.segments.map(seg => ({
+          ...seg,
+          waypoints: seg.waypoints.map(wp => {
+            if (wp.id === selectedWaypointId) {
+              const newName = wp.name || poi.name || details?.name || details?.display_name || '';
+              return {
+                ...wp,
+                name: newName,
+                poi: {
+                  id: poi.id || poi.properties?.id || details?.osm_id || `poi_${Date.now()}`,
+                  name: poi.name || details?.name || details?.display_name,
+                  type: poi.class,
+                  subtype: poi.subclass,
+                  details: details || {}
+                }
+              };
+            }
+            return wp;
+          })
+        }));
+        updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
+        setSelectedPOI(null);
+      }}
+    />
+  ) : null;
+
   return (
     <>
       <div className="layout">
@@ -1323,12 +1387,14 @@ export default function App() {
           />
         ) : isAnalyticsOpen ? (
           <>
-            <div style={{ display: analyticsSegmentInfo ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <div style={{ display: analyticsSegmentInfo || selectedPOI ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <AnalyticsPanel
                 onGoBack={() => {
                   goBackPanel();
                 }}
                 trips={trips}
+                isReadOnly={isReadOnly}
+                onUpdateTrip={newTrip => updateTripState(newTrip.id, newTrip)}
                 onOpenSegmentInfo={(tripId, segmentId) => {
                   setAnalyticsSegmentInfo({ tripId, segmentId });
                 }}
@@ -1349,7 +1415,7 @@ export default function App() {
                 }}
               />
             </div>
-            {analyticsSegmentInfo ? (() => {
+            {selectedPOI ? poiInfoPanel : analyticsSegmentInfo ? (() => {
               const targetTrip = trips.find(trip => trip.id === analyticsSegmentInfo.tripId);
               if (!targetTrip) return null;
               return (
@@ -1396,46 +1462,7 @@ export default function App() {
             }}
           />
         ) : selectedPOI ? (
-          <POIInfo isReadOnly={isReadOnly}
-            poi={selectedPOI}
-            trip={selectedTrip}
-            onGoBack={handleGoBackPOI}
-            onUpdateTrip={(newTrip) => updateTripState(newTrip.id, newTrip)}
-            onStartNewTrip={(poi, details) => {
-              handleCreateTrip(poi, details);
-              setSelectedPOI(null);
-            }}
-            onAddedToTrip={(wpId) => {
-              handleGoBackPOI();
-              setHighlightedWaypointId(wpId);
-            }}
-            selectedWaypointId={selectedWaypointId}
-            onAttachToWaypoint={(poi, details) => {
-              if (!selectedTrip || !selectedWaypointId) return;
-              const newSegments = selectedTrip.segments.map(seg => ({
-                ...seg,
-                waypoints: seg.waypoints.map(wp => {
-                  if (wp.id === selectedWaypointId) {
-                    const newName = wp.name || poi.name || details?.name || details?.display_name || '';
-                    return {
-                      ...wp,
-                      name: newName,
-                      poi: {
-                        id: poi.id || poi.properties?.id || details?.osm_id || `poi_${Date.now()}`,
-                        name: poi.name || details?.name || details?.display_name,
-                        type: poi.class,
-                        subtype: poi.subclass,
-                        details: details || {}
-                      }
-                    };
-                  }
-                  return wp;
-                })
-              }));
-              updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
-              setSelectedPOI(null); // automatically close POI info and go back to Waypoint info
-            }}
-          />
+          poiInfoPanel
         ) : selectedSegmentId && selectedTrip ? (
           <SegmentInfo isReadOnly={isReadOnly} 
             segmentId={selectedSegmentId} 
@@ -1638,7 +1665,7 @@ export default function App() {
           onTouchStart={handlePanelTouchStart}
           onTouchEnd={handlePanelTouchEnd}
         >
-          <TimeSliderToolbox trips={trips} isActive={analyticsTimeSliderVisible} onClose={() => setAnalyticsTimeSliderVisible(false)} />
+          <TimeSliderToolbox trips={trips} onClose={() => setAnalyticsTimeSliderVisible(false)} />
         </div>
       )}
       <div className={`pc-sidebar-toggle-trigger ${isSidebarCollapsed ? 'collapsed' : ''}`}
