@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.preview && 'pull-request-previews' || 'github-pages' }}
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ inputs.preview && github.event.action != 'closed' && format('{0}pr-preview/pr-{1}/', steps.deployment.outputs.page_url, github.event.pull_request.number) || steps.deployment.outputs.page_url }}
     steps:
       - name: Download built sites
         uses: actions/download-artifact@v4
