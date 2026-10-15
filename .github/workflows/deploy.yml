@@ -76,7 +76,7 @@ jobs:
         working-directory: frontend
       - name: Type-check production deployments
         if: ${{ !inputs.preview }}
-        run: npm exec tsc -b
+        run: npm exec -- tsc -b
         working-directory: frontend
       # PR validation type-checks separately. Production may predate PR tooling.
       - name: Build site
