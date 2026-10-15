@@ -3,8 +3,10 @@
 Trip logger application that supports combining multi-modal travel routes in a trip.
 
 On mobile (up to 768px wide), hold two fingers still on the map for 250ms to
-measure the straight-line distance between them. Moving either finger, pinching,
-or lifting a finger hides the measurement. Pinch zoom continues to work normally.
+measure the straight-line distance between them. The measurement remains for five
+seconds after both fingers lift, or until another map interaction starts.
+Moving either finger or pinching hides it immediately. Pinch zoom continues to
+work normally.
 
 ## Development checks
 

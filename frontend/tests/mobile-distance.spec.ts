@@ -13,10 +13,10 @@ const pinchedTouches = [{ id: 1, x: 50, y: 200 }, { id: 2, x: 340, y: 200 }];
 const overlay = (page: Page) => page.locator('.map-distance-measurement');
 const zoom = (page: Page) => page.evaluate(() => (window as unknown as TestWindow).map.getZoom());
 
-async function touch(session: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', touchPoints = initialTouches) {
+async function touch(session: CDPSession, type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', touchPoints = type === 'touchEnd' || type === 'touchCancel' ? [] : initialTouches) {
   await session.send('Input.dispatchTouchEvent', {
     type,
-    touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : touchPoints,
+    touchPoints,
   });
 }
 
@@ -32,7 +32,7 @@ test('distance units and precision match the requested examples and boundary', a
   expect(actual).toEqual(['0 m', '1 m', '94 m', '999 m', '1000 m', '1.00 km', '1.23 km', '94.2 km', '274 km', '1230 km']);
 });
 
-test('two stationary fingers show a centered measurement after 250ms, then release hides it', async ({ page, context }) => {
+test('two stationary fingers show a centered measurement after 250ms, then release keeps it for five seconds', async ({ page, context }) => {
   const session = await context.newCDPSession(page);
   await page.evaluate(() => {
     const state = window as unknown as { holdStarted: number; holdElapsed: number };
@@ -52,9 +52,34 @@ test('two stationary fingers show a centered measurement after 250ms, then relea
   await expect(overlay(page).locator('text')).toHaveAttribute('x', '195');
   await expect(overlay(page).locator('text')).toHaveAttribute('y', '200');
   await expect(overlay(page).locator('line')).toHaveCount(2);
+  await touch(session, 'touchEnd', [initialTouches[1]]);
+  await expect(overlay(page)).toBeVisible();
   await touch(session, 'touchEnd');
-  await expect(overlay(page)).toHaveCount(0);
+  await expect(overlay(page)).toBeVisible();
+  await page.waitForTimeout(4500);
+  await expect(overlay(page)).toBeVisible();
+  await expect(overlay(page)).toHaveCount(0, { timeout: 1500 });
 });
+
+for (const interaction of ['click', 'wheel', 'touch', 'two fingers'] as const) {
+  test(`a new ${interaction} interaction immediately clears a released measurement`, async ({ page, context }) => {
+    const session = await context.newCDPSession(page);
+    await touch(session, 'touchStart');
+    await expect(overlay(page)).toBeVisible();
+    await touch(session, 'touchEnd');
+    await expect(overlay(page)).toBeVisible();
+    if (interaction === 'click') {
+      await page.mouse.click(195, 300);
+    } else if (interaction === 'wheel') {
+      await page.mouse.move(195, 300);
+      await page.mouse.wheel(0, -100);
+    } else {
+      await touch(session, 'touchStart', interaction === 'touch' ? [initialTouches[0]] : initialTouches);
+    }
+    expect(await overlay(page).count()).toBe(0);
+    if (interaction === 'two fingers') await expect(overlay(page)).toBeVisible();
+  });
+}
 
 for (const afterHold of [false, true]) {
   test(`pinch ${afterHold ? 'after' : 'before'} rendering hides the line and still zooms`, async ({ page, context }) => {
@@ -116,9 +141,10 @@ test('camera movement, resizing, and cleanup remove the measurement', async ({ p
   const session = await context.newCDPSession(page);
   await touch(session, 'touchStart');
   await expect(overlay(page)).toBeVisible();
+  await touch(session, 'touchEnd');
+  await expect(overlay(page)).toBeVisible();
   await page.evaluate(() => (window as unknown as TestWindow).map.jumpTo({ zoom: 14 }));
   await expect(overlay(page)).toHaveCount(0);
-  await touch(session, 'touchEnd');
   await touch(session, 'touchStart');
   await expect(overlay(page).locator('text')).toHaveText(/^\d+ m$/);
   await page.setViewportSize({ width: 400, height: 844 });
@@ -128,6 +154,19 @@ test('camera movement, resizing, and cleanup remove the measurement', async ({ p
   await page.evaluate(() => (window as unknown as TestWindow).removeMeasurement());
   await page.waitForTimeout(350);
   await expect(overlay(page)).toHaveCount(0);
+});
+
+test('a short two-finger tap still zooms out after a completed measurement', async ({ page, context }) => {
+  const session = await context.newCDPSession(page);
+  await touch(session, 'touchStart');
+  await expect(overlay(page)).toBeVisible();
+  await touch(session, 'touchEnd');
+  await expect(overlay(page)).toBeVisible();
+  const before = await zoom(page);
+  await touch(session, 'touchStart');
+  await touch(session, 'touchEnd');
+  await expect(overlay(page)).toHaveCount(0);
+  await expect.poll(() => zoom(page)).toBeLessThan(before);
 });
 
 test('Triplo mounts the gesture and a second finger cancels the waypoint long press', async ({ page, context }) => {

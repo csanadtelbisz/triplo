@@ -2,6 +2,7 @@ import { distance } from '@turf/turf';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 const HOLD_DELAY_MS = 250;
+const RELEASE_DISPLAY_MS = 5000;
 const MOVEMENT_TOLERANCE_PX = 4;
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -11,9 +12,10 @@ export function formatMeasurementDistance(meters: number): string {
     : `${Math.round(meters)} m`;
 }
 
-/** Observe touches without consuming events or changing MapLibre's gesture handlers. */
+/** Observe touches without consuming events or disabling pinch zoom. */
 export function attachMobileDistanceMeasurement(map: MapLibreMap): () => void {
   const surface = map.getCanvasContainer();
+  const container = map.getContainer();
   const mobile = window.matchMedia('(max-width: 768px)');
   let timer: ReturnType<typeof setTimeout> | undefined;
   let points: { id: number; x: number; y: number }[] = [];
@@ -92,28 +94,52 @@ export function attachMobileDistanceMeasurement(map: MapLibreMap): () => void {
     })) cancel();
   };
 
+  const onTouchEnd = (event: TouchEvent) => {
+    if (points.length === 0) return;
+    if (!overlay) {
+      cancel();
+      return;
+    }
+    // Start the five-second reading period once both fingers have lifted.
+    if (event.touches.length === 0) {
+      // Finish the stationary gesture before MapLibre interprets this release as
+      // a two-finger tap-to-zoom-out. Moving gestures have already cancelled us.
+      map.stop();
+      points = [];
+      timer = setTimeout(cancel, RELEASE_DISPLAY_MS);
+    }
+  };
+
   surface.addEventListener('touchstart', onTouchStart, { passive: true });
+  container.addEventListener('pointerdown', cancel, true);
+  container.addEventListener('wheel', cancel, { passive: true });
+  container.addEventListener('keydown', cancel);
   document.addEventListener('touchmove', onTouchMove, { passive: true });
-  document.addEventListener('touchend', cancel, { passive: true });
+  document.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
   document.addEventListener('touchcancel', cancel, { passive: true });
   window.addEventListener('resize', cancel);
   window.addEventListener('blur', cancel);
   document.addEventListener('visibilitychange', cancel);
   mobile.addEventListener('change', cancel);
   map.on('movestart', cancel);
+  map.on('click', cancel);
   map.on('style.load', cancel);
 
   return () => {
     cancel();
     surface.removeEventListener('touchstart', onTouchStart);
+    container.removeEventListener('pointerdown', cancel, true);
+    container.removeEventListener('wheel', cancel);
+    container.removeEventListener('keydown', cancel);
     document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', cancel);
+    document.removeEventListener('touchend', onTouchEnd, true);
     document.removeEventListener('touchcancel', cancel);
     window.removeEventListener('resize', cancel);
     window.removeEventListener('blur', cancel);
     document.removeEventListener('visibilitychange', cancel);
     mobile.removeEventListener('change', cancel);
     map.off('movestart', cancel);
+    map.off('click', cancel);
     map.off('style.load', cancel);
   };
 }
