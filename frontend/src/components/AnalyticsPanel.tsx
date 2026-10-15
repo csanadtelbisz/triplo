@@ -74,8 +74,6 @@ export function TimeSliderToolbox({ trips, onClose }: { trips: Trip[]; onClose: 
       ? [Math.max(dateRange.min, range[0]), Math.min(dateRange.max, range[1])] as [number, number]
       : [dateRange.min, dateRange.max] as [number, number]
     : null;
-  const effectiveStart = effectiveRange?.[0];
-  const effectiveEnd = effectiveRange?.[1];
 
   if (!dateRange || !effectiveRange) {
     return <div className="time-slider-empty">No trip dates available</div>;
@@ -423,7 +421,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
         </svg>
         
         {/* Tooltip positioned above the chart with overflow visible */}
-        {hoveredData !== null && (
+        {hoveredData != null && (
           <div
             style={{
               position: 'absolute',

@@ -25,6 +25,7 @@ import {
 import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPreferences';
 import { Icon, createIconElement } from './Icon';
 import { getMapTheme } from '../utils/appearancePreferences';
+import { attachMobileDistanceMeasurement } from '../utils/mobileDistanceMeasurement';
 
 const tripDateBoundsCache = new WeakMap<Trip, { start: number | null; end: number | null }>();
 
@@ -563,6 +564,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       attributionControl: false,
     });
     mapRef.current.addControl(new NavigationControl({}), 'top-right');
+    const removeDistanceMeasurement = attachMobileDistanceMeasurement(mapRef.current);
 
     mapRef.current.on('styleimagemissing', (e) => {
       const id = e.id;
@@ -645,7 +647,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         let touchStartPt: { x: number; y: number } | null = null;
 
         mapRef.current.on('touchstart', (e) => {
-          if (e.originalEvent.touches.length > 1) return;
+          if (e.originalEvent.touches.length > 1) {
+            cancelLongPress();
+            return;
+          }
           if (!hotkeyRefs.current.selectedTrip) return;
           
           touchStartPt = e.point;
@@ -857,6 +862,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       });
 
       return () => {
+         removeDistanceMeasurement();
          mapRef.current?.remove();
          mapRef.current = null;
       };
