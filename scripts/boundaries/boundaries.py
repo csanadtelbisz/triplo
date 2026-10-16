@@ -55,8 +55,13 @@ def extract(release, files, cache):
         return json.loads(gzip.decompress(target.read_bytes()))
     connection = duckdb.connect()
     connection.execute("SET extension_directory=?", [str(cache / "extensions")])
-    connection.execute("SET custom_extension_repository='https://extensions.duckdb.org'")
-    connection.execute("INSTALL httpfs; LOAD httpfs")
+    platform = connection.execute("PRAGMA platform").fetchone()[0]
+    extension = cache / "extensions" / f"httpfs-{duckdb.__version__}-{platform}.duckdb_extension"
+    if not extension.exists():
+        url = f"https://extensions.duckdb.org/v{duckdb.__version__}/{platform}/httpfs.duckdb_extension.gz"
+        extension.parent.mkdir(parents=True, exist_ok=True)
+        extension.write_bytes(gzip.decompress(urllib.request.urlopen(url, timeout=120).read()))
+    connection.execute("LOAD '" + str(extension).replace("'", "''") + "'")
     if os.environ.get("HTTPS_PROXY"):
         connection.execute("SET http_proxy=?", [os.environ["HTTPS_PROXY"]])
     connection.execute("SET threads=2; SET http_timeout=120; SET http_retries=5; SET disable_parquet_prefetching=true")
