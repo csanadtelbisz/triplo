@@ -3,7 +3,6 @@ import argparse
 import gzip
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -12,7 +11,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-import duckdb
+import pyarrow.dataset as dataset
 import shapely
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
@@ -53,18 +52,6 @@ def extract(release, files, cache):
     target = cache / f"{release}-areas.json.gz"
     if target.exists():
         return json.loads(gzip.decompress(target.read_bytes()))
-    connection = duckdb.connect()
-    connection.execute("SET extension_directory=?", [str(cache / "extensions")])
-    platform = connection.execute("PRAGMA platform").fetchone()[0]
-    extension = cache / "extensions" / f"httpfs-{duckdb.__version__}-{platform}.duckdb_extension"
-    if not extension.exists():
-        url = f"https://extensions.duckdb.org/v{duckdb.__version__}/{platform}/httpfs.duckdb_extension.gz"
-        extension.parent.mkdir(parents=True, exist_ok=True)
-        extension.write_bytes(gzip.decompress(urllib.request.urlopen(url, timeout=120).read()))
-    connection.execute("LOAD '" + str(extension).replace("'", "''") + "'")
-    if os.environ.get("HTTPS_PROXY"):
-        connection.execute("SET http_proxy=?", [os.environ["HTTPS_PROXY"]])
-    connection.execute("SET threads=2; SET http_timeout=120; SET http_retries=5; SET disable_parquet_prefetching=true")
     records = []
     for source in files:
         part = cache / (source["key"].split("/")[-1] + ".json.gz")
@@ -72,13 +59,21 @@ def extract(release, files, cache):
             selected = json.loads(gzip.decompress(part.read_bytes()))
         else:
             print(f"Extracting {source['key']}", flush=True)
-            rows = connection.execute("""
-                SELECT id, division_id, country, names.primary, subtype, admin_level,
-                       is_land, is_territorial, geometry, sources
-                FROM read_parquet(?) WHERE subtype IN ('country','dependency')
-                ORDER BY id
-            """, [BUCKET + source["key"]]).fetchall()
-            selected = [{"id": r[0], "divisionId": r[1], "country": r[2], "name": r[3], "subtype": r[4], "level": r[5], "isLand": r[6], "isTerritorial": r[7], "wkb": r[8].hex(), "sources": r[9]} for r in rows]
+            with tempfile.TemporaryDirectory(dir=cache) as temporary:
+                parquet = Path(temporary) / "source.parquet"
+                source_digest = hashlib.sha256()
+                with urllib.request.urlopen(BUCKET + source["key"], timeout=120) as response, parquet.open("wb") as sink:
+                    while chunk := response.read(1024 * 1024):
+                        sink.write(chunk)
+                        source_digest.update(chunk)
+                if parquet.stat().st_size != source["size"]:
+                    raise ValueError("Source download size mismatch")
+                source["sha256"] = source_digest.hexdigest()
+                table = dataset.dataset(parquet, format="parquet").to_table(
+                    columns=["id", "division_id", "country", "names", "subtype", "admin_level", "is_land", "is_territorial", "geometry", "sources"],
+                    filter=dataset.field("subtype").isin(["country", "dependency", "region", "macroregion"]))
+                selected = [{"id": r["id"], "divisionId": r["division_id"], "country": r["country"], "name": r["names"]["primary"], "subtype": r["subtype"], "level": r["admin_level"], "isLand": r["is_land"], "isTerritorial": r["is_territorial"], "wkb": r["geometry"].hex(), "sources": r["sources"]} for r in table.to_pylist()]
+                selected.sort(key=lambda r: r["id"])
             part.write_bytes(gzip.compress(encoded(selected), mtime=0))
         records.extend(selected)
     records.sort(key=lambda r: r["id"])
@@ -195,7 +190,8 @@ def main():
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.\d+", release):
         raise ValueError("Invalid Overture release identifier")
     files = listing(release)
-    if args.command == "build" and (release != lock["release"] or files != lock["files"]):
+    locked_files = [{k: v for k, v in f.items() if k != "sha256"} for f in lock["files"]]
+    if args.command == "build" and (release != lock["release"] or files != locked_files):
         raise ValueError("Source differs from lock; use update --release instead")
     records = extract(release, files, args.cache)
     if args.command == "build" and lock.get("sourceExtractSha256") and checksum(encoded(records)) != lock["sourceExtractSha256"]:
