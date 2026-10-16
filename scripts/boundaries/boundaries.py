@@ -11,7 +11,6 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-import pyarrow.dataset as dataset
 import shapely
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
@@ -48,8 +47,16 @@ def listing(release):
 
 
 def extract(release, files, cache):
+    import pyarrow.dataset as dataset
     cache.mkdir(parents=True, exist_ok=True)
     target = cache / f"{release}-areas.json.gz"
+    checksums_file = cache / f"{release}-checksums.json"
+    checksums = json.loads(checksums_file.read_bytes()) if checksums_file.exists() else {}
+    for source in files:
+        if source["key"] in checksums:
+            if source.get("sha256") and source["sha256"] != checksums[source["key"]]:
+                raise ValueError("Cached source checksum mismatch")
+            source["sha256"] = checksums[source["key"]]
     if target.exists():
         return json.loads(gzip.decompress(target.read_bytes()))
     records = []
@@ -68,7 +75,12 @@ def extract(release, files, cache):
                         source_digest.update(chunk)
                 if parquet.stat().st_size != source["size"]:
                     raise ValueError("Source download size mismatch")
-                source["sha256"] = source_digest.hexdigest()
+                actual = source_digest.hexdigest()
+                if source.get("sha256") and source["sha256"] != actual:
+                    raise ValueError("Source Parquet checksum mismatch")
+                source["sha256"] = actual
+                checksums[source["key"]] = actual
+                checksums_file.write_bytes(encoded(checksums))
                 table = dataset.dataset(parquet, format="parquet").to_table(
                     columns=["id", "division_id", "country", "names", "subtype", "admin_level", "is_land", "is_territorial", "geometry", "sources"],
                     filter=dataset.field("subtype").isin(["country", "dependency", "region", "macroregion"]))
@@ -94,6 +106,8 @@ def components(geometry):
 
 
 def build(records, release, files, output, old_index):
+    if not records:
+        raise ValueError("Empty country source extract")
     source_hash = checksum(encoded(records))
     version = f"{release}-v{CONVERTER}-{source_hash[:12]}"
     grouped = {}
@@ -134,7 +148,7 @@ def build(records, release, files, output, old_index):
         compressed = gzip.compress(payload, mtime=0)
         name = f"{code}.json.gz"
         (output / name).write_bytes(compressed)
-        countries.append({"code": code, "name": names[0], "file": name, "sha256": checksum(compressed), "bounds": [list(p.bounds) for p in components(territorial)], "landBounds": list(land.bounds), "landParts": [list(p.bounds) for p in components(land)], "bytes": len(compressed)})
+        countries.append({"code": code, "name": names[0], "file": name, "sha256": checksum(compressed), "bounds": [list(p.bounds) for p in components(territorial)], "landBounds": list(land.bounds), "landParts": [list(p.bounds) for p in sorted(components(land), key=lambda p: p.area, reverse=True)[:32]], "bytes": len(compressed)})
     tree = STRtree(geometries)
     overlaps = []
     for i, geom in enumerate(geometries):
@@ -159,6 +173,8 @@ def build(records, release, files, output, old_index):
 def verify(directory):
     index_bytes = (directory / "index.json").read_bytes()
     index = json.loads(index_bytes)
+    if not index.get("countries") or len({c["code"] for c in index["countries"]}) != len(index["countries"]):
+        raise ValueError("Empty or duplicate country catalog")
     manifest = json.loads((directory / "manifest.json").read_bytes())
     if checksum(index_bytes) != manifest["indexSha256"]:
         raise ValueError("Country index checksum mismatch")
@@ -193,6 +209,10 @@ def main():
     locked_files = [{k: v for k, v in f.items() if k != "sha256"} for f in lock["files"]]
     if args.command == "build" and (release != lock["release"] or files != locked_files):
         raise ValueError("Source differs from lock; use update --release instead")
+    if args.command == "build":
+        for source, locked in zip(files, lock["files"]):
+            if "sha256" in locked:
+                source["sha256"] = locked["sha256"]
     records = extract(release, files, args.cache)
     if args.command == "build" and lock.get("sourceExtractSha256") and checksum(encoded(records)) != lock["sourceExtractSha256"]:
         raise ValueError("Source extract checksum differs from lock")

@@ -10,6 +10,24 @@ work normally.
 
 ## Development checks
 
+Country analytics adds a globe toggle above transport modes. Select a country
+to crop routes and waypoint markers to it; select a mode to narrow the results.
+Flights are entirely **Unassigned** and teleport segments contribute no distance.
+Yearly distances retain proportional allocation across inclusive trip days.
+Date filters use trip overlap; they do not infer the date of a border crossing.
+
+The full yearly chart remains visible as context. Browser Back/Forward restores
+country, mode, date, and segment-detail selections. Slider changes replace the
+current history entry. Calculations run in a worker and are cached separately
+from saved trips, using geometry, boundary, and algorithm versions; recalculation
+does not mark trips edited. Shared-trip geometry is not stored in this cache.
+Country files load on demand and failures show a retry action instead of being
+counted as Unassigned. Disconnected route pieces retain their segment identity.
+Country zoom uses a relevant land component when an entity spans distant islands.
+
+See [boundary preparation and updates](scripts/boundaries/README.md) for the
+reproducible Overture pipeline, checksums, validation report, and attribution.
+
 In `frontend`, run `npm ci`, `npx playwright install chromium`, `npm test`, and
 `npm run build`. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use a system Chromium.
 The browser tests use a local, real MapLibre map without external tile services.
