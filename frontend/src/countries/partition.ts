@@ -19,13 +19,20 @@ const cross = (a: number[], b: number[]) => a[0] * b[1] - a[1] * b[0];
 export class CountryPartitioner {
   private edges = new Map<string, Edge[]>();
   private polygons: { code: string; feature: GeoJSON.Feature<GeoJSON.Polygon>; bounds: Bounds }[] = [];
+  private areas = new Map<string, typeof this.polygons>();
 
   constructor(assets: CountryAsset[]) {
     for (const asset of assets) {
       const polygons = asset.territorial.type === 'Polygon' ? [asset.territorial.coordinates] : asset.territorial.coordinates;
       for (const coords of polygons) {
         const feature = polygon(coords);
-        this.polygons.push({ code: asset.code, feature, bounds: bbox(feature) as Bounds });
+        const area = { code: asset.code, feature, bounds: bbox(feature) as Bounds };
+        this.polygons.push(area);
+        for (const key of cells(area.bounds)) {
+          const bucket = this.areas.get(key) || [];
+          bucket.push(area);
+          this.areas.set(key, bucket);
+        }
         for (const ring of coords) for (let i = 1; i < ring.length; i++) {
           const edge = { a: ring[i - 1], b: ring[i], bounds: boundsFor(ring[i - 1], ring[i]) };
           for (const key of cells(edge.bounds)) {
@@ -39,7 +46,8 @@ export class CountryPartitioner {
   }
 
   countryAt(coord: GeoJSON.Position): string {
-    const matches = new Set(this.polygons.filter(p => overlaps(p.bounds, [coord[0], coord[1], coord[0], coord[1]]) && booleanPointInPolygon(point(coord), p.feature)).map(p => p.code));
+    const candidates = this.areas.get(`${Math.floor(coord[0] / 2)}:${Math.floor(coord[1] / 2)}`) || [];
+    const matches = new Set(candidates.filter(p => overlaps(p.bounds, [coord[0], coord[1], coord[0], coord[1]]) && booleanPointInPolygon(point(coord), p.feature)).map(p => p.code));
     return matches.size === 1 ? [...matches][0] : UNASSIGNED;
   }
 

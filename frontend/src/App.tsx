@@ -39,6 +39,7 @@ import { applyAppearanceTheme } from './utils/appearancePreferences';
 import { emptyAnalyticsSelection } from './countries/analytics';
 import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
+import { GEOMETRY_VERSION } from './utils/effectiveGeometry';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -251,10 +252,7 @@ export default function App() {
   };
 
   const goBackPanel = () => {
-    if (isAnalyticsOpen && !selectedPOI && !analyticsSegmentInfo) {
-      if (analyticsSelection.mode) { window.history.back(); return; }
-      if (analyticsSelection.country) { window.history.back(); return; }
-    }
+    if (isAnalyticsOpen) { window.history.back(); return; }
     replacePanelHistoryOnNextRender();
     if (isSearchOpen) {
       setIsSearchOpen(false);
@@ -467,7 +465,7 @@ export default function App() {
           const existing = oldCache.find(t => t.id === trip.id);
           const freshMetadata = { ...(trip.metadata || {}) };
           delete (freshMetadata as any)._isCached;
-          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary) {
+          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary && existing.segments.every(s => s.distanceStats?.geometryVersion === GEOMETRY_VERSION)) {
              cachedTrips.push({
                 ...existing,
                 metadata: { ...existing.metadata, ...freshMetadata, _isCached: false }
@@ -1524,6 +1522,7 @@ export default function App() {
               setMobileSidebarCollapsed(false);
             }}
             onOpenAnalytics={() => {
+              setAnalyticsSelection(emptyAnalyticsSelection);
               setIsAnalyticsOpen(true);
               setIsStatusOpen(false);
               setIsPreferencesOpen(false);
@@ -1581,6 +1580,7 @@ export default function App() {
         styleContextSelectedSegment={analyticsStyleSegment}
         analyticsSelection={isAnalyticsOpen ? analyticsSelection : null}
         countryData={countries.data}
+        onAnalyticsSegmentClick={(tripId, segmentId) => setAnalyticsSegmentInfo({ tripId, segmentId })}
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}

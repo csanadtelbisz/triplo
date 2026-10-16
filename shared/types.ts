@@ -40,6 +40,7 @@ export interface Segment {
   customIcon?: string;
   isHidden?: boolean;
   distanceStats?: {
+    geometryVersion?: number;
     totalDistance: number;
     hasElevation: boolean;
     elevationUp: number;

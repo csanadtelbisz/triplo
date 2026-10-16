@@ -12,6 +12,7 @@ export interface CountryEntry {
   sha256: string;
   bounds: Bounds[];
   landBounds: Bounds;
+  landParts?: Bounds[];
 }
 export interface CountryIndex {
   version: string;

@@ -45,7 +45,8 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     const entries = await Promise.all(trips.flatMap(trip => trip.segments.map(async segment => {
       const geometry = getEffectiveGeometry(segment);
       const hash = await textHash([index.version, COUNTRY_ALGORITHM_VERSION, GEOMETRY_VERSION, segment.transportMode, segment.routingProfile, geometry, segment.waypoints.map(w => [w.id, w.coordinates])]);
-      return { key: segmentKey(trip.id, segment.id), hash, segment, geometry, result: await cached(db, hash) };
+      const allowCache = !trip.metadata?.isSharedTripReference;
+      return { key: segmentKey(trip.id, segment.id), hash, segment, geometry, allowCache, result: allowCache ? await cached(db, hash) : undefined };
     })));
     const pending = entries.filter(e => !e.result);
     const bounds = pending.filter(e => e.segment.transportMode !== 'flight' && e.segment.routingProfile !== 'teleport')
@@ -59,7 +60,7 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     for (const entry of entries) {
       const result = entry.result || partitioner.partition(entry.segment, entry.geometry);
       results[entry.key] = result;
-      if (!entry.result && db) {
+      if (!entry.result && db && entry.allowCache) {
         try { db.transaction('results', 'readwrite').objectStore('results').put(result, entry.hash); } catch { /* Optional local cache. */ }
       }
     }

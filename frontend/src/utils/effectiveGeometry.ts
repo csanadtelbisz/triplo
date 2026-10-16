@@ -37,14 +37,24 @@ export function getEffectiveGeometry(segment: Segment): RouteGeometry {
       lines.push(...routeLines(arc));
     }
   } else if (segment.geometry?.coordinates.length >= 2) {
-    const coords = segment.geometry.coordinates;
+    let coords = segment.geometry.coordinates;
     if ((segment.routingService === 'gpx' || segment.routingProfile === 'Imported GPX') && waypoints.length >= 2) {
+      const first = nearestPointOnLine(lineString(coords), waypoints[0].coordinates);
+      const last = nearestPointOnLine(lineString(coords), waypoints.at(-1)!.coordinates);
+      if (last.properties.location < first.properties.location) {
+        const after = coords.slice(first.properties.index);
+        const forwardEnd = nearestPointOnLine(lineString(after.length >= 2 ? after : coords.slice(-2)), waypoints.at(-1)!.coordinates);
+        if (forwardEnd.properties.dist > 0.01) coords = [...coords].reverse();
+      }
       // Search forward along the track so revisiting a location retains its traversal.
       let floor = 0;
-      const positions = waypoints.map(wp => {
+      const positions = waypoints.map((wp, waypointIndex) => {
         const remaining = coords.slice(Math.min(floor, coords.length - 2));
-        const snapped = nearestPointOnLine(lineString(remaining), wp.coordinates);
-        const index = Math.min(floor, coords.length - 2) + snapped.properties.index;
+        const reverse = waypointIndex === waypoints.length - 1;
+        const search = reverse ? [...remaining].reverse() : remaining;
+        const snapped = nearestPointOnLine(lineString(search), wp.coordinates);
+        const localIndex = reverse ? Math.max(0, remaining.length - 2 - snapped.properties.index) : snapped.properties.index;
+        const index = Math.min(floor, coords.length - 2) + localIndex;
         const a = coords[index], b = coords[Math.min(index + 1, coords.length - 1)];
         const edgeLength = distance(a, b);
         const fraction = edgeLength ? Math.min(1, distance(a, snapped.geometry.coordinates) / edgeLength) : 0;

@@ -64,6 +64,7 @@ export interface MapProps {
     styleContextSelectedSegment?: Segment | null;
     analyticsSelection?: AnalyticsSelection | null;
     countryData?: CountryData;
+    onAnalyticsSegmentClick?: (tripId: string, segmentId: string) => void;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -88,7 +89,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onDragStart,
     styleContextSelectedSegment = null,
     analyticsSelection = null,
-    countryData
+    countryData,
+    onAnalyticsSegmentClick
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -97,6 +99,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
   const multiTouchRef = useRef(false);
+  const analyticsClickRef = useRef({ selection: analyticsSelection, onClick: onAnalyticsSegmentClick });
+  analyticsClickRef.current = { selection: analyticsSelection, onClick: onAnalyticsSegmentClick };
 
   // Track multi-touch for preventing weird zooming + dragging marker intersections
   useEffect(() => {
@@ -722,6 +726,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               const routeFeatures = mapRef.current?.queryRenderedFeatures(e.point, { layers: ['route-layer'] }) || [];
               if (routeFeatures.length > 0) {
                 const clickedSegId = routeFeatures[0].properties?.segmentId;
+                const clickedTripId = routeFeatures[0].properties?.tripId;
+                if (analyticsClickRef.current.selection && clickedTripId && clickedSegId) {
+                  analyticsClickRef.current.onClick?.(clickedTripId, clickedSegId);
+                  return;
+                }
                 const trip = hotkeyRefs.current.trips.find(t => t.segments.some(s => s.id === clickedSegId));
                 if (trip && hotkeyRefs.current.onSelectTrip) {
                   setHoverInfo(null);
@@ -922,7 +931,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
       const styleContext = {
          isNoTripSelected: isStyleConfigEditorOpen ? testContextOverrides.isNoTripSelected : !selectedTrip,
-         showHiddenSegments: showHiddenSegments,
+         showHiddenSegments: showHiddenSegments || !!analyticsSelection?.country,
          isReadOnly: isStyleConfigEditorOpen ? testContextOverrides.isReadOnly : isReadOnly,
          selectedSegment: (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected)
            ? { id: 'test-seg', transportMode: 'bike', routingProfile: 'bike', source: 'manual', routingService: 'none', geometry: { type: 'LineString', coordinates: [] }, waypoints: [] } as any
@@ -1250,8 +1259,11 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     if (!country || !countryData) return;
     const entry = countryData.index.countries.find(c => c.code === country);
     const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => !analyticsSelection.mode || modeKey(s) === analyticsSelection.mode).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
-    const bounds = entry && country !== UNASSIGNED && entry.landBounds[2] - entry.landBounds[0] < 180
-      ? new LngLatBounds([entry.landBounds[0], entry.landBounds[1]], [entry.landBounds[2], entry.landBounds[3]])
+    const landParts = entry?.landParts || (entry ? [entry.landBounds] : []);
+    const score = (b: number[]) => coordinates.filter(c => c[0] >= b[0] - 0.2 && c[0] <= b[2] + 0.2 && c[1] >= b[1] - 0.2 && c[1] <= b[3] + 0.2).length;
+    const focus = [...landParts].sort((a, b) => score(b) - score(a))[0];
+    const bounds = focus && country !== UNASSIGNED && focus[2] - focus[0] < 180
+      ? new LngLatBounds([focus[0], focus[1]], [focus[2], focus[3]])
       : coordinates.reduce((bounds, c) => bounds.extend([c[0], c[1]]), new LngLatBounds());
     if (!bounds.isEmpty()) {
       const camera = map.cameraForBounds(bounds, { padding: getPadding('current', 'manager'), maxZoom: 12 });

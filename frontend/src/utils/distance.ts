@@ -1,6 +1,6 @@
 import * as turf from '@turf/turf';
 import type { Waypoint, Trip } from '../../../shared/types';
-import { getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
+import { GEOMETRY_VERSION, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
 
 export interface DistanceStats {
   distanceKm: number;
@@ -314,7 +314,7 @@ function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
       elevationDown += Math.max(0, -difference);
     }
   }
-  return { totalDistance, hasElevation, elevationUp, elevationDown };
+  return { totalDistance, hasElevation, elevationUp, elevationDown, geometryVersion: GEOMETRY_VERSION };
 }
 
 export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Trip {
@@ -329,7 +329,7 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
     let wpStats = seg.waypointDistances;
     
     // Check if computation is actually needed
-    const needsComputation = !affectedSegmentIds || affectedSegmentIds.includes(seg.id) || !segDistStats || !wpStats;
+    const needsComputation = !affectedSegmentIds || affectedSegmentIds.includes(seg.id) || !segDistStats || !wpStats || segDistStats.geometryVersion !== GEOMETRY_VERSION;
 
     if (needsComputation) {
       // Computing Segment stats
