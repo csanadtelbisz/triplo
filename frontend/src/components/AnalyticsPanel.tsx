@@ -3,6 +3,11 @@ import type { Segment, Trip, TransportMode } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getCustomOtherModes, getModeAndIconColor } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
+import type { AnalyticsSelection } from '../countries/analytics';
+import { countryYearDistances, selectedDistance, tripFraction, tripIntersects } from '../countries/analytics';
+import type { CountryData } from '../countries/types';
+import { UNASSIGNED, segmentKey } from '../countries/types';
+import '../styles/Analytics.css';
 import {
   buildTransportModeFilterStyleConfig,
   clearTransientStyleConfig,
@@ -21,8 +26,12 @@ interface AnalyticsPanelProps {
   onFocusSegment: (tripId: string, segmentId: string) => void;
   timeSliderVisible: boolean;
   onToggleTimeSlider: () => void;
-  selectedModeKey: string | null;
-  onSelectedModeKeyChange: (modeKey: string | null) => void;
+  selection: AnalyticsSelection;
+  onSelectionChange: (selection: AnalyticsSelection, replace?: boolean) => void;
+  countryData?: CountryData;
+  countryLoading: boolean;
+  countryError?: string;
+  onRetryCountries: () => void;
 }
 
 type SegmentEntry = {
@@ -57,17 +66,10 @@ function formatFilterDate(timestamp: number, yearOnly: boolean) {
   return new Intl.DateTimeFormat(undefined, yearOnly ? { year: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(timestamp));
 }
 
-export function TimeSliderToolbox({ trips, onClose }: { trips: Trip[]; onClose: () => void }) {
+export function TimeSliderToolbox({ trips, onClose, range, onRangeChange }: { trips: Trip[]; onClose: () => void; range: [number, number] | null; onRangeChange: (range: [number, number]) => void }) {
   const dateRange = useMemo(() => getTripDateRange(trips), [trips]);
   const day = 24 * 60 * 60 * 1000;
   const [yearOnly, setYearOnly] = useState(false);
-  const [range, setRange] = useState<[number, number] | null>(null);
-
-  useEffect(() => {
-    const handler = (event: Event) => setRange((event as CustomEvent<[number, number] | null>).detail);
-    window.addEventListener('triplo-analytics-range-sync', handler);
-    return () => window.removeEventListener('triplo-analytics-range-sync', handler);
-  }, []);
 
   const effectiveRange = dateRange
     ? range
@@ -101,8 +103,7 @@ export function TimeSliderToolbox({ trips, onClose }: { trips: Trip[]; onClose: 
   };
 
   const updateRange = (nextRange: [number, number]) => {
-    setRange(nextRange);
-    window.dispatchEvent(new CustomEvent('triplo-analytics-range-change', { detail: nextRange }));
+    onRangeChange(nextRange);
   };
   const updateStart = (value: number) => updateRange([Math.min(toTimestamp(value), effectiveRange[1]), effectiveRange[1]]);
   const updateEnd = (value: number) => updateRange([effectiveRange[0], Math.max(toTimestamp(value, true), effectiveRange[0])]);
@@ -451,31 +452,28 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
   );
 }
 
-export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selectedModeKey, onSelectedModeKeyChange }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selection, onSelectionChange, countryData, countryLoading, countryError, onRetryCountries }: AnalyticsPanelProps) {
+  const selectedModeKey = selection.mode;
+  const onSelectedModeKeyChange = (mode: string | null) => onSelectionChange({ ...selection, mode });
+  const selectedYear = selection.year;
+  const timeRange = selection.range;
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const [yearlyDistances, setYearlyDistances] = useState<YearDistance[]>([]);
-  const [maxYearlyDistance, setMaxYearlyDistance] = useState<number>(1);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [timeRange, setTimeRange] = useState<[number, number] | null>(null);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      setTimeRange((event as CustomEvent<[number, number] | null>).detail);
-      setSelectedYear(null);
-    };
-    window.addEventListener('triplo-analytics-range-change', handler);
-    return () => window.removeEventListener('triplo-analytics-range-change', handler);
-  }, []);
-  useEffect(() => {
-    const detail = timeRange ? { start: new Date(timeRange[0]).toISOString(), end: new Date(timeRange[1]).toISOString() } : null;
-    window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail }));
-  }, [timeRange]);
-
-  useEffect(() => {
-    return () => {
-      window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
-    };
-  }, []);
+  const yearlyDistances = useMemo(() => selection.countries ? countryYearDistances(trips, selection, countryData) : getDistancePerYear(trips, selectedModeKey), [trips, selection, countryData, selectedModeKey]);
+  const maxYearlyDistance = Math.max(1, ...yearlyDistances.map(d => d.distance));
+  const countryRows = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const trip of trips) {
+      if (!tripIntersects(trip, timeRange)) continue;
+      for (const segment of trip.segments) {
+        const result = countryData?.results[segmentKey(trip.id, segment.id)];
+        for (const [code, distance] of Object.entries(result?.distanceKmByCountry || {})) {
+          if (distance > 0) totals[code] = (totals[code] || 0) + distance * tripFraction(trip, timeRange);
+        }
+      }
+    }
+    if (selection.country && !totals[selection.country]) totals[selection.country] = 0;
+    return Object.entries(totals).sort(([, a], [, b]) => b - a).map(([code, distance]) => ({ code, distance, name: code === UNASSIGNED ? 'Unassigned' : countryData?.index.countries.find(c => c.code === code)?.name || code }));
+  }, [trips, countryData, timeRange, selection.country]);
 
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
     const distanceByMode: Record<string, number> = {};
@@ -483,14 +481,17 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
 
     trips.forEach(trip => {
       const summary = trip.tripDistanceSummary;
-      if (summary?.distanceByMode) {
+      if (!selection.countries && summary?.distanceByMode) {
         for (const [mode, dist] of Object.entries(summary.distanceByMode)) {
            distanceByMode[mode] = (distanceByMode[mode] || 0) + (dist as number);
         }
       }
 
       trip.segments.forEach(segment => {
+        if (segment.routingProfile === 'teleport') return;
+        if (selection.countries && (!tripIntersects(trip, timeRange) || !selectedDistance(trip, segment, selection.country, countryData))) return;
         const key = getModeKeyForSegment(segment);
+        if (selection.countries) distanceByMode[key] = (distanceByMode[key] || 0) + selectedDistance(trip, segment, selection.country, countryData) * tripFraction(trip, timeRange);
         if (!segmentsByModeLocal[key]) {
           segmentsByModeLocal[key] = [];
         }
@@ -499,25 +500,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
     });
 
     return { globalDistanceByMode: distanceByMode, segmentsByMode: segmentsByModeLocal };
-  }, [trips]);
-
-  // Async calculation of yearly distances
-  useEffect(() => {
-    // Use two requestAnimationFrames to ensure the UI renders before calculation
-    const raf1 = requestAnimationFrame(() => {
-      const raf2 = requestAnimationFrame(async () => {
-        const yearDists = getDistancePerYear(trips, selectedModeKey);
-        const maxDist = Math.max(1, ...yearDists.map(d => d.distance));
-        setYearlyDistances(yearDists);
-        setMaxYearlyDistance(maxDist);
-      });
-      return raf2;
-    });
-
-    return () => {
-      cancelAnimationFrame(raf1);
-    };
-  }, [trips, selectedModeKey]);
+  }, [trips, selection.countries, selection.country, timeRange, countryData]);
 
   const modeRows = useMemo(() => {
     return Object.entries(globalDistanceByMode)
@@ -559,12 +542,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       return date ? new Date(date).getTime() : Number.NEGATIVE_INFINITY;
     };
 
-    const yearFiltered = !timeRange ? selected : selected.filter(({ trip }) => {
-      const start = trip.startDate ? new Date(trip.startDate).getTime() : null;
-      const end = trip.endDate ? new Date(trip.endDate).getTime() : start;
-      if (start === null && end === null) return true;
-      return (end ?? start!) >= timeRange[0] && (start ?? end!) <= timeRange[1];
-    });
+    const yearFiltered = selected.filter(({ trip }) => tripIntersects(trip, timeRange));
 
     yearFiltered.sort((left, right) => {
       const tripTimeDelta = getTripSortTime(right.trip) - getTripSortTime(left.trip);
@@ -639,14 +617,31 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Analytics</h2>
+        <button className={`iconButton ${selection.countries ? 'active' : ''}`} aria-label="Group by country" aria-pressed={selection.countries} onClick={() => onSelectionChange({ ...selection, countries: !selection.countries, country: null, mode: null })} title="Group by country">
+          <MaterialIcon name="public" size={20} />
+        </button>
         <button className={`iconButton ${timeSliderVisible ? 'active' : ''}`} onClick={onToggleTimeSlider} title="Toggle time filter">
           <MaterialIcon name="line_end_circle" size={20} />
         </button>
       </div>
 
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
-        {modeRows.length > 0 ? (
+        {selection.countries && (
+          <div className="country-list" aria-label="Countries">
+            {countryLoading && <p role="status">Calculating country distances…</p>}
+            {countryError && <p role="alert">{countryError} <button type="button" onClick={onRetryCountries}>Retry</button></p>}
+            {!countryLoading && !countryError && countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
+              <button type="button" className="country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, mode: null })}>
+                <span>{row.name}</span><span>{row.distance.toFixed(1)} km</span>
+              </button>
+            ))}
+            {!countryLoading && !countryError && countryRows.length === 0 && <p>No countries in this period.</p>}
+            {countryData && <p className="country-attribution"><a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noreferrer">{countryData.index.attribution}</a></p>}
+          </div>
+        )}
+        {(
           <>
+            {(!selection.countries || selection.country) && (
             <div className="trip-summary-table" style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', borderBottom: '1px solid #dee2e6', padding: '4px 0', fontSize: '0.85rem', fontWeight: 'bold' }}>
                 <div>Mode</div>
@@ -689,19 +684,11 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
                 })}
               </div>
             </div>
+            )}
 
             <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
-              setSelectedYear(year);
-              if (year === null) {
-                setTimeRange(null);
-                window.dispatchEvent(new CustomEvent('triplo-analytics-range-sync', { detail: null }));
-                window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: null }));
-              } else {
-                const range: [number, number] = [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
-                setTimeRange(range);
-                window.dispatchEvent(new CustomEvent('triplo-analytics-range-sync', { detail: range }));
-                window.dispatchEvent(new CustomEvent('triplo-time-filter-change', { detail: { start: new Date(range[0]).toISOString(), end: new Date(range[1]).toISOString() } }));
-              }
+              const range: [number, number] | null = year === null ? null : [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
+              onSelectionChange({ ...selection, year, range }, true);
             }} interactive />
 
             {selectedModeKey && (
@@ -818,9 +805,8 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
               </div>
             )}
           </>
-        ) : (
-          <p style={{ color: '#777', textAlign: 'center' }}>No trips to analyze.</p>
         )}
+        {trips.length === 0 && <p>No trips to analyze.</p>}
       </div>
     </>
   );

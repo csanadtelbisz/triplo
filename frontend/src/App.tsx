@@ -36,6 +36,9 @@ import { routingManager } from './routing/RoutingService';
 import type { ApiKeyServiceConfiguration } from './utils/apiKeyPreferences';
 import { API_KEY_CONFIGURATION_WARNING_EVENT } from './utils/apiKeyConfigurationWarning';
 import { applyAppearanceTheme } from './utils/appearancePreferences';
+import { emptyAnalyticsSelection } from './countries/analytics';
+import type { AnalyticsSelection } from './countries/analytics';
+import { useCountryData } from './countries/useCountryData';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -59,6 +62,7 @@ type PanelHistoryState = {
   poi?: any;
   analyticsSegmentInfo?: { tripId: string; segmentId: string };
   analyticsModeFilter?: string | null;
+  analyticsSelection?: AnalyticsSelection;
   styleConfigId?: string;
 };
 
@@ -152,7 +156,10 @@ export default function App() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [editingStyleConfigId, setEditingStyleConfigId] = useState<string | null>(null);
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
-  const [analyticsModeFilter, setAnalyticsModeFilter] = useState<string | null>(null);
+  const [analyticsSelection, setAnalyticsSelection] = useState<AnalyticsSelection>(emptyAnalyticsSelection);
+  const analyticsModeFilter = analyticsSelection.mode;
+  const setAnalyticsModeFilter = (mode: string | null) => setAnalyticsSelection(value => ({ ...value, mode }));
+  const countries = useCountryData(trips, isAnalyticsOpen && analyticsSelection.countries);
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
@@ -190,15 +197,15 @@ export default function App() {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
-    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
-    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter };
-    if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter };
+    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id, ...(isAnalyticsOpen ? { analyticsSelection, analyticsSegmentInfo: analyticsSegmentInfo || undefined } : {}) };
+    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter, analyticsSelection };
+    if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter, analyticsSelection };
     if (isSearchOpen) return { panel: 'search' };
     if (selectedSegmentId && selectedTrip) return { panel: 'segment', tripId: selectedTrip.id, segmentId: selectedSegmentId };
     if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
     if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
     return { panel: 'manager' };
-  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter]);
+  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter, analyticsSelection]);
 
   const isSamePanelHistoryState = (a: PanelHistoryState | null, b: PanelHistoryState) =>
     a?.panel === b.panel &&
@@ -209,6 +216,7 @@ export default function App() {
     a?.analyticsSegmentInfo?.tripId === b.analyticsSegmentInfo?.tripId &&
     a?.analyticsSegmentInfo?.segmentId === b.analyticsSegmentInfo?.segmentId &&
     a?.analyticsModeFilter === b.analyticsModeFilter &&
+    JSON.stringify(a?.analyticsSelection) === JSON.stringify(b.analyticsSelection) &&
     a?.styleConfigId === b.styleConfigId;
 
   useEffect(() => {
@@ -232,27 +240,6 @@ export default function App() {
       return;
     }
 
-    if (
-      currentPanelHistoryRef.current?.panel === panelState.panel &&
-      currentPanelHistoryRef.current?.analyticsModeFilter &&
-      !panelState.analyticsModeFilter
-    ) {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-      return;
-    }
-
-    if (
-      currentPanelHistoryRef.current?.panel === panelState.panel &&
-      currentPanelHistoryRef.current?.analyticsModeFilter &&
-      panelState.analyticsModeFilter &&
-      currentPanelHistoryRef.current.analyticsModeFilter !== panelState.analyticsModeFilter
-    ) {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-      return;
-    }
-
     if (!isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) {
       window.history.pushState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
       currentPanelHistoryRef.current = panelState;
@@ -264,6 +251,10 @@ export default function App() {
   };
 
   const goBackPanel = () => {
+    if (isAnalyticsOpen && !selectedPOI && !analyticsSegmentInfo) {
+      if (analyticsSelection.mode) { window.history.back(); return; }
+      if (analyticsSelection.country) { window.history.back(); return; }
+    }
     replacePanelHistoryOnNextRender();
     if (isSearchOpen) {
       setIsSearchOpen(false);
@@ -304,9 +295,10 @@ export default function App() {
         setIsStatusOpen(panelState.panel === 'status');
         setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
         setEditingStyleConfigId(panelState.panel === 'style-config' ? panelState.styleConfigId || null : null);
-        setIsAnalyticsOpen(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment');
-        setAnalyticsSegmentInfo(panelState.panel === 'analytics-segment' ? panelState.analyticsSegmentInfo || null : null);
-        setAnalyticsModeFilter(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment' ? panelState.analyticsModeFilter || null : null);
+        const analytics = panelState.panel === 'analytics' || panelState.panel === 'analytics-segment' || !!panelState.analyticsSelection;
+        setIsAnalyticsOpen(analytics);
+        setAnalyticsSegmentInfo(analytics ? panelState.analyticsSegmentInfo || null : null);
+        setAnalyticsSelection(analytics ? panelState.analyticsSelection || { ...emptyAnalyticsSelection, mode: panelState.analyticsModeFilter || null } : emptyAnalyticsSelection);
         setAttachingPoiToWaypointId(null);
         setHighlightedWaypointId(null);
       });
@@ -1400,8 +1392,15 @@ export default function App() {
                 }}
                 timeSliderVisible={analyticsTimeSliderVisible}
                 onToggleTimeSlider={() => setAnalyticsTimeSliderVisible(value => !value)}
-                selectedModeKey={analyticsModeFilter}
-                onSelectedModeKeyChange={setAnalyticsModeFilter}
+                selection={analyticsSelection}
+                onSelectionChange={(selection, replace = false) => {
+                  if (replace) replacePanelHistoryOnNextRender();
+                  setAnalyticsSelection(selection);
+                }}
+                countryData={countries.data}
+                countryLoading={countries.loading}
+                countryError={countries.error}
+                onRetryCountries={countries.retry}
                 onFocusSegment={(tripId, segmentId) => {
                   const trip = trips.find(t => t.id === tripId);
                   const segment = trip?.segments.find(s => s.id === segmentId);
@@ -1580,6 +1579,8 @@ export default function App() {
         trips={trips}
         selectedTrip={selectedTrip}
         styleContextSelectedSegment={analyticsStyleSegment}
+        analyticsSelection={isAnalyticsOpen ? analyticsSelection : null}
+        countryData={countries.data}
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}
@@ -1665,7 +1666,10 @@ export default function App() {
           onTouchStart={handlePanelTouchStart}
           onTouchEnd={handlePanelTouchEnd}
         >
-          <TimeSliderToolbox trips={trips} onClose={() => setAnalyticsTimeSliderVisible(false)} />
+          <TimeSliderToolbox trips={trips} onClose={() => setAnalyticsTimeSliderVisible(false)} range={analyticsSelection.range} onRangeChange={range => {
+            replacePanelHistoryOnNextRender();
+            setAnalyticsSelection(value => ({ ...value, range, year: null }));
+          }} />
         </div>
       )}
       <div className={`pc-sidebar-toggle-trigger ${isSidebarCollapsed ? 'collapsed' : ''}`}

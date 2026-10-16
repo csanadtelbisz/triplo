@@ -6,7 +6,6 @@ import '../styles/Map.css';
 // Removed unused route import
 import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getModeColor } from '../utils/builtInModesPreferences';
-import * as turf from '@turf/turf';
 import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD, getMapStyleUrl } from '../config/mapStyles';
 import { getApiKey } from '../utils/apiKeyPreferences';
 import { showApiKeyConfigurationWarning } from '../utils/apiKeyConfigurationWarning';
@@ -26,48 +25,11 @@ import type { EvaluatedStyles, RenderStyleConfig } from '../utils/mapStylesPrefe
 import { Icon, createIconElement } from './Icon';
 import { getMapTheme } from '../utils/appearancePreferences';
 import { attachMobileDistanceMeasurement } from '../utils/mobileDistanceMeasurement';
-
-const tripDateBoundsCache = new WeakMap<Trip, { start: number | null; end: number | null }>();
-
-function getTripDateBounds(trip: Trip) {
-  const cached = tripDateBoundsCache.get(trip);
-  if (cached) return cached;
-
-  const start = trip.startDate ? new Date(trip.startDate).getTime() : null;
-  const end = trip.endDate ? new Date(trip.endDate).getTime() : start;
-  const bounds = { start, end };
-  tripDateBoundsCache.set(trip, bounds);
-  return bounds;
-}
-
-
-function getRenderGeometry(seg: any) {
-    if (seg.transportMode === 'flight' && seg.waypoints && seg.waypoints.length >= 2) {
-        let coords: any[] = [];
-        for (let i = 0; i < seg.waypoints.length - 1; i++) {
-            const w1 = seg.waypoints[i].coordinates;
-            const w2 = seg.waypoints[i+1].coordinates;
-            if (w1 && w2 && w1.length >= 2 && w2.length >= 2) {
-                try {
-                    const arc = turf.greatCircle(turf.point(w1), turf.point(w2));
-                    const arcCoords = arc.geometry.coordinates;
-                    if (coords.length > 0 && arcCoords.length > 0) {
-                        coords.push(...arcCoords.slice(1));
-                    } else {
-                        coords.push(...arcCoords);
-                    }
-                } catch(e) {
-                    if (coords.length > 0) coords.push(w2);
-                    else coords.push(w1, w2);
-                }
-            }
-        }
-        if (coords.length > 1) {
-            return { type: 'LineString', coordinates: coords };
-        }
-    }
-    return seg.geometry;
-}
+import { getEffectiveGeometry } from '../utils/effectiveGeometry';
+import { modeKey, tripIntersects } from '../countries/analytics';
+import type { AnalyticsSelection } from '../countries/analytics';
+import { segmentKey, UNASSIGNED } from '../countries/types';
+import type { CountryData } from '../countries/types';
 
 export interface MapRef {
     zoomToTrip: (trip: Trip, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
@@ -100,6 +62,8 @@ export interface MapProps {
     isSidebarCollapsed?: boolean;
     onDragStart?: () => void;
     styleContextSelectedSegment?: Segment | null;
+    analyticsSelection?: AnalyticsSelection | null;
+    countryData?: CountryData;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -122,7 +86,9 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onEmptyClick,
     isSidebarCollapsed,
     onDragStart,
-    styleContextSelectedSegment = null
+    styleContextSelectedSegment = null,
+    analyticsSelection = null,
+    countryData
 }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -160,13 +126,11 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const hoverTooltipRef = useRef<HTMLDivElement>(null);
   const [hoverTooltipSize, setHoverTooltipSize] = useState({ width: 0, height: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
-  const [localTimeRange, setLocalTimeRange] = useState<{ start: string; end: string } | null>(null);
-
-  useEffect(() => {
-    const handler = (e: any) => setLocalTimeRange(e.detail);
-    window.addEventListener('triplo-time-filter-change', handler);
-    return () => window.removeEventListener('triplo-time-filter-change', handler);
-  }, []);
+  const croppedGeometry = (tripId: string, seg: Segment): GeoJSON.MultiLineString => {
+    const country = analyticsSelection?.country;
+    if (!country) return getEffectiveGeometry(seg);
+    return { type: 'MultiLineString', coordinates: countryData?.results[segmentKey(tripId, seg.id)]?.pieces.filter(p => p.country === country).map(p => p.coordinates) || [] };
+  };
 
   useLayoutEffect(() => {
     if (!hoverInfo || !hoverTooltipRef.current) return;
@@ -397,15 +361,16 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
     if (!mapRef.current) return;
 
     const allWps: { id: string, coordinates: [number, number] }[] = [];
-    seg.waypoints.forEach(wp => {
+    const tripId = trips.find(t => t.segments.some(s => s.id === seg.id))?.id || '';
+    if (!analyticsSelection?.country) seg.waypoints.forEach(wp => {
       if (wp.coordinates && wp.coordinates.length === 2) {
         if (allWps.length === 0 || allWps[allWps.length - 1].id !== wp.id) {
           allWps.push({ id: wp.id, coordinates: wp.coordinates as [number, number] });
         }
       }
     });
-    if (seg.geometry && seg.geometry.coordinates) {
-        seg.geometry.coordinates.forEach(coord => {
+    for (const line of croppedGeometry(tripId, seg).coordinates) {
+        line.forEach(coord => {
             allWps.push({ id: 'geom', coordinates: coord as [number, number] });
         });
     }
@@ -968,12 +933,15 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const isAnalyticsFilterActive = !!getTransientStyleConfig()?.id.startsWith('analytics-filter:');
 
       const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
-      const visibleTrips = targetTrips;
+      const visibleTrips = targetTrips.filter(trip => tripIntersects(trip, analyticsSelection?.range || null));
       
       const features: GeoJSON.Feature[] = [];
 
       visibleTrips.forEach(trip => {
         trip.segments.forEach(seg => {
+          if (analyticsSelection?.mode && modeKey(seg) !== analyticsSelection.mode) return;
+          const geometry = croppedGeometry(trip.id, seg);
+          if (!geometry.coordinates.length) return;
           const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
           if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive && userStyle?.hidden !== false) || userStyle?.hidden) return;
           
@@ -995,7 +963,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               width: userStyle?.width || 4,
               opacity
             },
-            geometry: getRenderGeometry(seg) as any
+            geometry
           });
         });
       });
@@ -1010,11 +978,16 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
+          if (analyticsSelection?.mode && modeKey(seg) !== analyticsSelection.mode) return;
+          const country = analyticsSelection?.country;
+          const countryResult = countryData?.results[segmentKey(trip.id, seg.id)];
+          if (country && !countryResult?.distanceKmByCountry[country]) return;
           const userSegStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
           if ((seg.isHidden && !showHiddenSegments && !isAnalyticsFilterActive && userSegStyle?.hidden !== false) || userSegStyle?.hidden) return;
           const currSegColor = userSegStyle?.color || seg.customColor || getModeColor(seg.transportMode) || '#007bff';
           seg.waypoints.forEach((wp, wpIndex) => {
             if (!wp.coordinates || wp.coordinates.length < 2) return;
+            if (country && countryResult?.waypointCountries[wp.id] !== country) return;
             const isLastInSeg = wpIndex === seg.waypoints.length - 1;
             const isLastSegment = segIndex === trip.segments.length - 1;
 
@@ -1267,37 +1240,25 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, styleContextSelectedSegment, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides]);
+  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, styleContextSelectedSegment, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, countryData]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
 
     const map = mapRef.current;
-    const targetTrips = (!selectedTrip || (isStyleConfigEditorOpen && testContextOverrides.isNoTripSelected))
-      ? trips
-      : [selectedTrip];
-    const analyticsStart = localTimeRange ? new Date(localTimeRange.start).getTime() : null;
-    const analyticsEnd = localTimeRange ? new Date(localTimeRange.end).getTime() : null;
-    const visibleTripIds = analyticsStart === null || analyticsEnd === null
-      ? null
-      : targetTrips.filter(trip => {
-          const bounds = getTripDateBounds(trip);
-          if (bounds.start === null && bounds.end === null) return true;
-          return (bounds.end ?? bounds.start!) >= analyticsStart && (bounds.start ?? bounds.end!) <= analyticsEnd;
-        }).map(trip => trip.id);
-
-    if (map.getLayer('route-layer')) {
-      map.setFilter('route-layer', visibleTripIds === null
-        ? null
-        : ['in', ['get', 'tripId'], ['literal', visibleTripIds]] as any);
+    const country = analyticsSelection?.country;
+    if (!country || !countryData) return;
+    const entry = countryData.index.countries.find(c => c.code === country);
+    const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => !analyticsSelection.mode || modeKey(s) === analyticsSelection.mode).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
+    const bounds = entry && country !== UNASSIGNED && entry.landBounds[2] - entry.landBounds[0] < 180
+      ? new LngLatBounds([entry.landBounds[0], entry.landBounds[1]], [entry.landBounds[2], entry.landBounds[3]])
+      : coordinates.reduce((bounds, c) => bounds.extend([c[0], c[1]]), new LngLatBounds());
+    if (!bounds.isEmpty()) {
+      const camera = map.cameraForBounds(bounds, { padding: getPadding('current', 'manager'), maxZoom: 12 });
+      if (camera) map.flyTo({ ...camera, duration: 700 });
     }
-
-    const visibleTripIdSet = visibleTripIds && new Set(visibleTripIds);
-    markersRef.current.forEach(({ marker, tripId }) => {
-      const visible = visibleTripIdSet === null || visibleTripIdSet.has(tripId);
-      marker.getElement().style.display = visible ? '' : 'none';
-    });
-  }, [localTimeRange, mapLoaded, selectedTrip, trips, isStyleConfigEditorOpen, testContextOverrides.isNoTripSelected]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyticsSelection?.country, countryData, mapLoaded]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {
