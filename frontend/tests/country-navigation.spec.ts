@@ -31,7 +31,7 @@ test.beforeEach(async ({ page, context }) => {
   await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: trip }));
   await context.route('https://tiles.openfreemap.org/**', route => route.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }] } }));
   await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'fixture-1', countries: countries.map(c => c.entry), attribution: 'Test boundaries' } }));
-  for (const country of countries) await context.route(`**/countries/${country.entry.file}`, route => route.fulfill({ contentType: 'application/gzip', body: country.body }));
+  for (const country of countries) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ contentType: 'application/gzip', body: country.body }));
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
 });
@@ -96,11 +96,11 @@ test('country cropping keeps outside waypoint markers hidden after camera moveme
 });
 
 test('failed boundary downloads show retry instead of inventing Unassigned kilometres', async ({ page, context }) => {
-  await context.route('**/countries/AA.json.gz', route => route.fulfill({ status: 503, body: 'Unavailable' }));
+  await context.route('**/countries/AA.json.gz*', route => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.getByRole('button', { name: 'Group by country' }).click();
   await expect(page.getByRole('alert')).toContainText('Cannot load boundaries');
   await expect(page.getByRole('button', { name: /Unassigned/ })).toHaveCount(0);
-  await context.route('**/countries/AA.json.gz', route => route.fulfill({ contentType: 'application/gzip', body: countries[0].body }));
+  await context.route('**/countries/AA.json.gz*', route => route.fulfill({ contentType: 'application/gzip', body: countries[0].body }));
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
 });
