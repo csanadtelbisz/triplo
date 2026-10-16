@@ -21,12 +21,6 @@ there is no application backend to run.
 - Save trips and preferences to Google Drive or GitHub, resolve sync conflicts,
   and share read-only trip links.
 
-On mobile (up to 768px wide), hold two fingers still on the map for 250 ms to
-measure their straight-line distance. The line and distance remain visible for
-five seconds after both fingers lift, or until another map interaction starts.
-Moving either finger or pinching hides the measurement; pinch zoom remains
-available.
-
 ## Using Triplo and storing trips
 
 On first launch, choose **Explore Triplo** to try the app without connecting an
@@ -140,10 +134,9 @@ npm run lint
 | [shared/types.ts](shared/types.ts) | Trip, segment, and waypoint data types |
 | [.github/workflows/](.github/workflows/) | Validation and GitHub Pages deployments |
 
-[REQUIREMENTS.md](REQUIREMENTS.md) and [UI.md](UI.md) are original design documents;
-they include proposed features and architecture that differ from the current
-implementation. This README describes the implemented application. Agent working
-instructions are in [AGENTS.md](AGENTS.md).
+See [REQUIREMENTS.md](REQUIREMENTS.md) for implemented functionality, data formats,
+and architecture, and [UI.md](UI.md) for the interface and interaction flows.
+Agent working instructions are in [AGENTS.md](AGENTS.md).
 
 ## Deployment and pull request previews
 
