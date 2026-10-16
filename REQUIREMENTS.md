@@ -1,215 +1,231 @@
-# Triplo Trip Logger — Requirements & Architecture Summary
+# Triplo functionality and architecture
 
-Triplo is a personal trip logging web app that displays multi-modal travel routes on a detailed map,
-with support for manual route planning between waypoints per transport mode.
+Triplo is a browser-based trip logger and route planner. A trip combines ordered
+segments with different transport modes, waypoints, and route geometry. It is
+used to plan journeys or record travel after the fact; it does not record live
+GPS tracks.
 
----
+This document describes the implemented application. See [README.md](README.md)
+for setup, configuration, and development commands, and [UI.md](UI.md) for the
+interface and interaction flows.
 
-## Functional Requirements
+## Functionality
 
-### Core Features
+- Create, edit, name, date, and delete trips containing multiple transport modes.
+- Add, move, reorder, and remove waypoints, adjust segment boundaries, and split
+  segments; maintain trip history with undo/redo and unsaved-change indicators.
+- Calculate routes through external providers, retain imported track geometry,
+  and display local great-circle or straight-line routes.
+- Import GPX and GeoJSON tracks into segments; export trips and segments as GPX,
+  optionally including Triplo metadata.
+- Inspect distances, elevation profiles, points of interest, and travel totals
+  by transport mode and year. Date and mode filters also affect map rendering.
+- Customize appearance, transport mode names/icons/colors, default routing
+  profiles, language preferences, and JavaScript render styles.
+- Keep local trip data, connect Google Drive and/or GitHub storage, reconcile
+  conflicting versions, and publish read-only trip shares.
 
-- Log travel trips as a sequence of **segments**, each with a **transport mode**.
-- Each segment is defined by a series of **waypoints**; the route between them is
-  automatically computed by a routing engine appropriate for that mode.
-- Support for recording trips after the fact (no live GPS tracking required).
-- View trips on an interactive map with OpenStreetMap/OpenTopoMap-quality tile detail (required for hikes and other activities needing topographic context).
+## Runtime architecture
 
-### Transport Modes & Routing Strategy
+Triplo is a static React/TypeScript application built with Vite. It calls map,
+routing, geocoding, and storage services directly from the browser. There is no
+Triplo backend server, database service, API-key proxy, or Docker infrastructure.
 
-| Display Mode | Routing Mode | Routing Engine | Notes |
-|---|---|---|---|
-| Walk | Foot | GraphHopper (`foot` profile) | |
-| Hike | Foot | GraphHopper (`hike` profile) | More detailed display label |
-| Run | Foot | GraphHopper (`foot` profile) | More detailed display label |
-| Car | Car | GraphHopper (`car` profile) | |
-| Flight | N/A — geometric | Turf.js `greatCircle` | Great-circle arc, no routing engine needed |
-| Train | Rail | OpenRailRouting (`train` profile) | Routes constrained to railway tracks |
-| Light Rail / Tram | Rail | OpenRailRouting (`light_rail`/`tram` profile) | |
-| Ferry | Ferry | GraphHopper (`ferry` profile) | Follows OSM ferry lines; falls back to water direct path |
-| Waterway (non-ferry) | Water | GraphHopper or shortest water path | Follow waterway if OSM data available |
+```mermaid
+flowchart TD
+    App[React application and trip state] --> Map[MapLibre map]
+    Map --> Tiles[External tile providers]
+    App --> Routing[Routing service manager]
+    Routing --> APIs[Mapy and GraphHopper APIs]
+    Routing --> Geometry[Local flight and straight-line geometry]
+    App --> Storage[Persisting manager]
+    Storage --> Drive[Google Drive API]
+    Storage --> GitHub[GitHub repository and Gist APIs]
+    App <--> Cache[IndexedDB and browser preferences]
+    App --> Search[Nominatim search and reverse geocoding]
+```
 
-The `transportMode` field (see Data Model below) stores the user-facing label,
-while `routingMode` determines which engine and profile to call.
+| Component | Responsibility |
+| --- | --- |
+| [App.tsx](frontend/src/App.tsx) | Trip state, selected panels, history, save/reload, conflicts, sharing navigation, and responsive layout |
+| [Map.tsx](frontend/src/components/Map.tsx) | MapLibre lifecycle, routes, markers, map selection, waypoint placement and dragging |
+| [routing/](frontend/src/routing/) | Provider abstraction, default profiles, and geometry recalculation |
+| [persisting/](frontend/src/persisting/) | Cloud storage, preference files, sharing, and connection settings |
+| [utils/distance.ts](frontend/src/utils/distance.ts) | Segment/waypoint distance caches, elevation totals, and trip summaries |
+| [utils/preferencesSync.ts](frontend/src/utils/preferencesSync.ts) | Preference and custom style synchronization |
+| [utils/exportUtils.ts](frontend/src/utils/exportUtils.ts) | GPX/GeoJSON serialization and file downloads |
+| [shared/types.ts](shared/types.ts) | Trip, segment, waypoint, and shared-reference types |
 
-### Waypoints
+[api/client.ts](frontend/src/api/client.ts) is an in-memory adapter used by the
+application, not an HTTP backend. Its sample data is disabled. Durable local
+trip caching is handled separately in `App.tsx` using IndexedDB.
 
-Each waypoint supports the following properties:
+## Data model and formats
 
-| Property | Type | Notes |
-|---|---|---|
-| `id` | UUID | Auto-generated |
-| `coordinates` | `[lon, lat]` | WGS84 |
-| `name` | string (optional) | Display name |
-| `description` | string (optional) | Free text |
-| `date` | ISO 8601 datetime (optional) | When the waypoint was visited |
-| `importance` | `"normal"` \| `"hidden"` | Hidden waypoints guide routing but are not rendered on the map (or rendered with different style scheme) |
-| `icon` | string (optional) | Icon identifier or URL |
-| `picture` | URL (optional) | Link to Google Photos or other image hosting |
-
-### Segments
-
-Each segment connects two or more waypoints and supports:
-
-| Property | Type | Notes |
-|---|---|---|
-| `id` | UUID | Auto-generated |
-| `transportMode` | string | User-facing label: `walk`, `hike`, `run`, `bike`, `car`, `flight`, `rail`, `ferry`, `waterway`, etc. Extensible. |
-| `routingMode` | string | Internal: which engine+profile was used |
-| `source` | `"router"` \| `"gpx"` \| `"manual"` | Whether geometry came from a routing engine, an imported GPX track, or was drawn manually |
-| `routerService` | string (optional) | e.g. `"graphhopper_api"`, `"graphhopper_self_hosted"`, `"openrailrouting"` |
-| `geometry` | GeoJSON LineString | The resolved route (stored after routing) |
-| `waypoints` | array of Waypoint refs | Ordered list |
-| `name` | string (optional) | |
+The native saved file is a JSON `Trip` object, not a GeoJSON FeatureCollection.
+GeoJSON is used for the geometry inside segments and as a track interchange
+format. The TypeScript definitions in [shared/types.ts](shared/types.ts) are the
+canonical field reference.
 
 ### Trips
 
-A trip is a named, ordered collection of segments. The last waypoint of a segment must be the same as the first waypoint of the next segment.
+| Fields | Meaning |
+| --- | --- |
+| `id`, `name` | String identifier and display name |
+| `description`, `startDate`, `endDate` | Optional description and travel dates |
+| `segments` | Ordered array of embedded segment objects |
+| `createdAt`, `updatedAt` | Creation and modification timestamps |
+| `sourceService`, `metadata` | Optional source, sync, and sharing information |
+| `tripDistanceSummary` | Optional cached total distance and distance by mode |
 
-| Property | Type |
-|---|---|
-| `id` | string |
-| `name` | string |
-| `description` | string (optional) |
-| `startDate` | date |
-| `endDate` | date |
-| `segments` | ordered array of Segment |
-| `createdAt` | ISO 8601 |
-| `updatedAt` | ISO 8601 |
+New trips use a temporary ID until saved. Saving assigns a name-based ID with a
+random suffix. IDs are strings; a UUID format is not required.
 
-The data model may be extended later with further properties.
+### Segments
 
----
+| Fields | Meaning |
+| --- | --- |
+| `id`, `name` | Identifier and optional label |
+| `transportMode` | Built-in mode or `other` |
+| `routingService`, `routingProfile` | Provider name and profile used for routing |
+| `source` | `router`, `gpx`, or `manual` |
+| `geometry` | GeoJSON LineString with longitude/latitude positions and optional elevation |
+| `waypoints` | Ordered array of embedded waypoint objects |
+| `customColor`, `customIcon`, `isHidden` | Optional presentation overrides |
+| `distanceStats`, `waypointDistances` | Optional distance and elevation caches |
 
-## Data Format
+Segments can share a boundary waypoint ID. Editing operations update matching
+waypoints across segments to keep the trip connected. A segment being built may
+have only one waypoint; routed geometry needs at least two valid coordinates.
+Teleport segments intentionally have empty geometry.
 
-- Primary storage: **GeoJSON FeatureCollection** per trip.
-  - Waypoints → `Feature<Point>` with properties as above.
-  - Segments → `Feature<LineString>` with properties as above.
-- GPX import/export supported as a secondary format (see below).
-- All data stored as files. The architecture of the application should allow easy integration of a lightweight database (SQLite or PostgreSQL+PostGIS) later on, if needed.
-- Each trip is stored in a separate json file (e.g., `<trip id>.json`), stored in arbitrary directories in the file system. The root directories can be specified in the application configurations: the backend storage service should scan these root directories recursively for any appropriate JSON files.
+### Waypoints
 
-### GPX Support
+Each waypoint has an `id` and WGS84 `coordinates` in **`[longitude, latitude]`**
+order. Optional fields include `name`, `description`, `date`, `icon`, `picture`,
+and an attached `poi` with its identifier, name, type, subtype, and details.
+Waypoint visibility is controlled by render styles; the shared waypoint type
+does not define an `importance` field.
 
-- **Import:** A GPX track can be imported as a new segment. The track geometry is used
-  directly (source = `"gpx"`); no routing engine is called.
-- **Export:** Any trip or segment can be exported as a `.gpx` file.
-  Track segments map to `<trkseg>` elements; waypoints map to `<wpt>` elements.
-  Elevation data (`<ele>`) is preserved if present in the GeoJSON geometry (3D coordinates).
+### Track interchange and statistics
 
----
+Track import lives in [SegmentInfo.tsx](frontend/src/components/SegmentInfo.tsx).
+It reads GPX track/route points and GeoJSON LineString/MultiLineString geometry,
+including features and feature collections. The resulting segment is marked
+`source: 'gpx'`, with `routingService: 'gpx'` and an imported-track profile. The
+user can align its endpoint waypoints with the imported track.
 
-## Architecture & Stack
+GPX serialization is implemented directly in `exportUtils.ts`; it does not use
+`@we-gold/gpxjs`. Exports include track geometry and available elevation, with
+optional Triplo extensions. GeoJSON export helpers are also available in that
+module; the trip-sharing dialog exposes GPX download.
 
-### Frontend (Web)
+Distance summaries use stored geometry and fall back to straight-line waypoint
+distances when usable geometry is missing. Elevation totals use available third
+coordinates. Teleport segments are excluded from travel-distance aggregation.
+Waypoint-to-waypoint distance calculations account for ordered positions along
+routes that revisit the same location.
 
-| Concern | Choice | Notes |
-|---|---|---|
-| Map rendering | **MapLibre GL JS** | WebGL-accelerated, support both vector and raster tiles, GPU-smooth zoom/pan/rotate, good mobile performance |
-| Base map tiles | **OpenFreeMap** (vector) | Free, no API key, OpenStreetMap data |
-| Topo overlay | **OpenTopoMap** raster tiles | Layered on top of vector base for hike detail |
-| Other map tiles | E.g., **Mapy.com** | Other map tile provider APIs should be easy to integrate later on |
-| UI framework | **React** | MapLibre has React bindings |
-| Map editing tools | **Terra Draw** | Waypoint placement, route preview editing |
-| Geometry utilities | **Turf.js** | Great-circle arcs for flights, bounding boxes, etc. |
-| GPX conversion | **@we-gold/gpxjs** | GPX import and export |
+## Routing
 
-**Style customisation:** MapLibre GL JS uses a declarative JSON style spec. Transport mode
-styles (line colour, width, dash pattern, icon) are defined in a single `style.json` (or
-equivalent JS object) and can be freely customised per mode. A dedicated
-`themes/` directory should contain one style config per visual theme.
+[RoutingService.ts](frontend/src/routing/RoutingService.ts) defines
+`IRoutingService`: a provider exposes its name, availability, attribution,
+supported profiles, and `route(waypoints, profile)` returning a LineString.
+Key-based providers also expose API-key configuration and testing hooks.
 
-### Routing Backend
+The current default assignments are:
 
-The routing layer is abstracted behind a single `RoutingService` interface so that the
-underlying provider can be swapped without touching the rest of the app.
+| Transport mode | Default provider | Default profile |
+| --- | --- | --- |
+| `walk`, `run` | Mapy Router | `foot_fast` |
+| `hike` | Mapy Router | `foot_hiking` |
+| `bike` | GraphHopper Router | `bike` |
+| `car`, `taxi`, `bus`, `ferry` | GraphHopper Router | `car` |
+| `rail`, `subway` | Rail Router | `rail` (unavailable placeholder) |
+| `flight` | Flight Router | `flight` |
+| `other` | Straight Router | `straight` |
 
-```
-interface RoutingService {
-  route(waypoints: LatLon[], profile: RoutingProfile): Promise<GeoJSON.LineString>
-}
-```
+Preferences can override defaults, and segments can select a different provider
+and profile. Custom modes use `transportMode: 'other'` with custom icon, color,
+name, and routing preferences; the built-in mode type is a finite union.
 
-Concrete implementations:
+Mapy and GraphHopper use hosted APIs with user-supplied keys. GraphHopper also
+offers a ferry profile implemented through a car profile with a ferry-biased
+custom model; it is distinct from the default `ferry` mode assignment above.
+Flights use Turf great-circle geometry. Straight Router supports direct lines
+and a `teleport` profile with no displayed route or distance.
 
-| Implementation | Used for | Notes |
-|---|---|---|
-| `GraphHopperApiRouter` | Car, foot, ferry | Calls `https://graphhopper.com/api/1/route` with API key |
-| `GraphHopperSelfHostedRouter` | Car, foot, ferry | Same interface, points to `http://localhost:8989` |
-| `OpenRailRoutingRouter` | Train, tram, light rail | Self-hosted; same GraphHopper HTTP API format |
-| `TurfGreatCircleRouter` | Flights | Pure client-side, no network call |
+Rail Router reports itself unavailable. There is no integrated OpenRailRouting
+service or self-hosted GraphHopper backend. The routing manager falls back to
+straight lines for unavailable services and prompts for a missing API key when
+applicable. Request-error handling is provider-specific.
 
-Switching from hosted to self-hosted GraphHopper requires only changing the base URL and
-removing the API key — both use the identical HTTP REST API.
+[routeOptimizer.ts](frontend/src/routing/routeOptimizer.ts) preserves imported
+geometry and reuses unchanged routes. For edits to routed waypoints, it can
+recalculate and splice the affected section; provider/profile changes and other
+cases requiring a complete route trigger full recalculation.
 
-#### Self-Hosted Routing Notes
+## Persistence, synchronization, and sharing
 
-- **GraphHopper:** Java service; input is an OSM `.pbf` extract from Geofabrik.
-  Docker image from Docker Hub.
-  RAM for import scales with region size (~4 GB for a small country, ~16 GB for Germany).
-  After one-time import, server RAM is much lower. Use MMAP mode to reduce runtime RAM.
-  *Future plan, first version should use the GraphHopper API not self-hosted.*
-- **OpenRailRouting:** GraphHopper fork; same setup procedure, uses same OSM data but routes only on railway infrastructure. As no public API available, must be self-hosted from the start.
-- **Recommended approach:** Download per-country `.pbf` extracts from Geofabrik and merge with `osmium merge` for only the countries traveled in.
-- **Docker Compose:** A `docker-compose.yml` in `/infra/` should define both services with shared volume mounts for OSM data and pre-built graph directories.
+[PersistingService.ts](frontend/src/persisting/PersistingService.ts) defines the
+storage interface: load, save, delete, preference files, connection management,
+and share operations. `PersistingManager` coordinates available providers.
 
-### Backend / API
+| Store | Data and access |
+| --- | --- |
+| IndexedDB | Local trip cache in `TriploDB`; browser storage can be cleared independently of cloud files |
+| Browser preferences | Appearance, API keys, connection state/tokens, and local UI settings in localStorage |
+| Google Drive | `<id>.triplo.json` files in the selected folder, plus preferences and style scripts; OAuth `drive.file` access |
+| GitHub repository | `trips/<id>.triplo.json`, `preferences.json`, and custom style files; authenticated Contents API access |
 
-A lightweight backend is needed to:
-1. Serve and persist trip data (read/write GeoJSON files).
-2. Proxy routing API calls (to keep the GraphHopper API key server-side).
-3. (Optional) Serve the PWA static files.
+Loading combines local and connected-provider data by trip ID. Distinct remote
+versions become conflicts; the newest version is displayed provisionally while
+the user chooses which version to retain. The app also detects trips missing
+from connected services and differing preference versions. The conflict dialog
+supports version selection and uploads to missing services.
 
-Suggested: **Node.js + Fastify** or **Python + FastAPI**. Stateless, single binary, easily (but not necessarily) Dockerised.
+Editing updates React state and per-trip undo/redo history. Local trip state is
+cached; explicit Save or Save All writes to connected providers and updates the
+saved-state baseline. Preference changes use a separate synchronization path.
+Startup read-only and mobile-panel preferences remain local, while language,
+appearance, map home, mode overrides, list settings, API keys, and custom styles
+are synchronized. Custom style scripts are saved as separate files.
 
-### Mobile
+Public shares use an encoded provider reference in the app's `/share/<token>`
+route. Google Drive shares grant read access to the owner's trip file; GitHub
+shares use an unlisted Gist. These links provide read-only viewing to anyone
+who has the link. Saving a shared trip to a user's collection stores a
+`SharedTripReference`, not a permanent geometry snapshot. The source is fetched
+again when loaded; revoked or deleted shares are marked unavailable and their
+content is not retained in the local trip cache. Making a copy creates an
+independent trip.
 
-- PWA — the web app served with a web manifest. Works in mobile browsers. MapLibre GL JS performs well on mobile. Editing is possible but less ergonomic.
-- For mobile, viewing existing trips in an ergonomic way is important.
-- Editing on PC is the primary UX target; mobile editing is a nice-to-have.
+API keys and tokens are used client-side. Synced preferences include routing
+keys in plain text. Google Drive sign-in and anonymous shared-trip loading also
+depend on the build-time client configuration documented in the README.
 
----
+## Maps, styles, and application delivery
 
-## Non-Functional Requirements
+[mapStyles.ts](frontend/src/config/mapStyles.ts) defines OpenFreeMap vector,
+OpenStreetMap/OpenTopoMap raster, and Mapy outdoor base maps and POI layers.
+These are alternative base maps, not a mandatory topographic overlay stack.
+Nominatim provides place search and reverse-geocoded location details.
 
-- **Open source preferred** throughout the stack.
-- **Extensible data model:** `transportMode` and properties on waypoints/segments are open strings/objects to allow adding new modes and metadata fields without schema changes.
-- **Style customisability:** All visual styling of routes, waypoints, and icons is driven by a config file, not hardcoded.
+MapLibre renders route layers and markers. JavaScript style configurations in
+[mapStylesPreferences.ts](frontend/src/utils/mapStylesPreferences.ts) are
+evaluated in the browser and can supply `getWaypointStyle`, `getSegmentStyle`,
+and map-style overrides. They receive selection/read-only context and control
+visibility, colors, opacity, marker type, and line width. The built-in script is
+[themes/default.js](frontend/src/themes/default.js). Analytics uses temporary
+style configurations to filter displayed transport modes.
 
----
+GitHub Actions validates PRs and deploys a static Pages site, including
+same-repository PR previews. Build and deployment details are in the
+[README](README.md#deployment-and-pull-request-previews) and
+[workflows](.github/workflows/).
 
-## Suggested Repository Structure
-
-```
-/
-├── src/
-│   ├── api/           # Backend API client
-│   ├── routing/       # RoutingService interface + implementations
-│   ├── data/          # GeoJSON & GPX import/export, data model types
-│   ├── map/           # MapLibre GL JS setup, layer management
-│   ├── editor/        # Waypoint/segment editing UI
-│   └── themes/        # MapLibre style configs per visual theme
-├── server/            # Thin backend (Fastify or FastAPI)
-├── infra/
-│   └── docker-compose.yml   # self-hosted future routing services
-├── public/            # PWA manifest, icons
-└── README.md          # General README
-└── REQUIREMENTS.md    # This file
-└── UI.md              # UI specification
-```
-
----
-
-## Key External Dependencies
-
-| Package | Purpose |
-|---|---|
-| `maplibre-gl` | Map rendering |
-| `turf` | Geometric utilities, great-circle arcs |
-| `@we-gold/gpxjs` | GPX import/export |
-| `terra-draw` | Map editing / waypoint placement |
-| GraphHopper API | Car, foot, ferry routing (hosted, free tier available) |
-| OpenRailRouting | Train routing (self-hosted) |
-| OpenFreeMap | Vector base tiles (free, no key) |
-| OpenTopoMap | Raster topo tiles (free, tile usage policy applies) |
+The manifest supports app installation, but the current service worker does not
+cache the application or map tiles for offline use. Browser trip caching does
+not make the complete app available offline. The existing Playwright suite uses
+a real MapLibre map with local fixtures to verify mobile measurement and gesture
+behavior; it is not coverage of every storage or editor workflow.
