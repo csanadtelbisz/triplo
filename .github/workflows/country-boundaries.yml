@@ -1,17 +1,37 @@
-name: Prepare country boundaries
+name: Country boundaries
 
 on:
-  push:
-    branches: [feat/country-analytics]
-    paths: ['scripts/boundaries/**', '.github/workflows/country-boundaries.yml']
+  pull_request:
+    paths: ['scripts/boundaries/**', 'frontend/public/countries/**', '.github/workflows/country-boundaries.yml']
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Overture release to prepare (blank rebuilds the source lock)'
+        required: false
+        type: string
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/boundaries/requirements.txt
+      - run: pip install -r scripts/boundaries/requirements.txt
+      - run: python -m unittest discover -s scripts/boundaries
+      - run: python scripts/boundaries/boundaries.py verify
+
   prepare:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -24,50 +44,22 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/boundaries/requirements.txt
       - run: pip install -r scripts/boundaries/requirements.txt
-      - run: python -m unittest discover -s scripts/boundaries
-      - uses: actions/download-artifact@v4
+      - name: Prepare and validate boundaries
+        env:
+          OVERTURE_RELEASE: ${{ inputs.release }}
+        run: |
+          if [ -n "$OVERTURE_RELEASE" ]; then
+            python scripts/boundaries/boundaries.py update --release "$OVERTURE_RELEASE" --promote
+          else
+            python scripts/boundaries/boundaries.py build
+          fi
+      - uses: actions/upload-artifact@v4
         with:
           name: country-boundaries
-          run-id: 38922185592
-          github-token: ${{ github.token }}
-          path: .
-      - run: python scripts/boundaries/boundaries.py verify
-      - name: Split validated assets for transfer
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import io, zipfile
-          buffer = io.BytesIO()
-          with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_STORED) as archive:
-              for path in sorted(Path('frontend/public/countries').glob('*')):
-                  archive.write(path, str(path))
-              archive.write('scripts/boundaries/source.lock.json')
-          payload = buffer.getvalue()
-          size = 20 * 1024 * 1024
-          Path('.country-transfer').mkdir()
-          for i, offset in enumerate(range(0, len(payload), size)):
-              Path(f'.country-transfer/part-{i}.bin').write_bytes(payload[offset:offset+size])
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-part-0
-          path: .country-transfer/part-0.bin
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-part-1
-          path: .country-transfer/part-1.bin
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-part-2
-          path: .country-transfer/part-2.bin
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-part-3
-          path: .country-transfer/part-3.bin
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-part-4
-          path: .country-transfer/part-4.bin
+          path: |
+            frontend/public/countries
+            scripts/boundaries/source.lock.json
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: country-catalog
@@ -75,12 +67,5 @@ jobs:
             frontend/public/countries/index.json
             frontend/public/countries/manifest.json
             frontend/public/countries/validation.json
-            scripts/boundaries/source.lock.json
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        with:
-          name: country-boundaries
-          path: |
-            frontend/public/countries
             scripts/boundaries/source.lock.json
           retention-days: 7

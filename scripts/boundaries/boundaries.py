@@ -200,6 +200,10 @@ def main():
     args = parser.parse_args()
     if args.command == "verify":
         verify(args.output)
+        lock = json.loads(LOCK.read_bytes())
+        manifest = json.loads((args.output / "manifest.json").read_bytes())
+        if manifest["release"] != lock["release"] or manifest["sourceExtractSha256"] != lock["sourceExtractSha256"] or manifest["sourceFiles"] != lock["files"]:
+            raise ValueError("Installed boundaries differ from the source lock")
         return
     lock = json.loads(LOCK.read_bytes())
     release = args.release or lock["release"]

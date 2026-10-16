@@ -70,11 +70,29 @@ test('Unassigned exposes flights and slider changes replace history entries', as
   await page.getByRole('slider', { name: 'Analytics start date' }).press('ArrowRight');
   await page.getByRole('slider', { name: 'Analytics start date' }).press('ArrowRight');
   expect(await page.evaluate(() => history.length)).toBe(length);
+  await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('74.1 km');
   await expect(page.locator('.analytics-chart')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await page.goForward();
   await expect(page.getByRole('slider', { name: 'Analytics start date' })).toHaveValue('2');
+});
+
+test('country cropping keeps outside waypoint markers hidden after camera movement', async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem('renderStyleConfigs', JSON.stringify([{ id: 'all-markers', name: 'All markers', script: 'return { getSegmentStyle: () => ({hidden:false}), getWaypointStyle: () => ({hidden:false, type:"dot"}) };' }]));
+    localStorage.setItem('activeRenderStyleConfigId', 'all-markers');
+    window.dispatchEvent(new Event('preferences-updated'));
+  });
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(1);
+  await page.evaluate(() => {
+    const map = (window as unknown as { testMap: { jumpTo(options: { center: number[]; zoom: number }): void } }).testMap;
+    map.jumpTo({ center: [0, 0], zoom: 5 });
+  });
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(1);
+  for (const feature of await routes(page)) expect(feature.properties?.segmentId).toBe('drive');
 });
 
 test('failed boundary downloads show retry instead of inventing Unassigned kilometres', async ({ page, context }) => {

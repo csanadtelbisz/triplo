@@ -314,7 +314,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
             fontSize: '0.9rem'
           }}
         >
-          Loading chart data...
+          No dated distance data.
         </div>
       ) : (
       <div className="analytics-chart" 
@@ -503,7 +503,9 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
   }, [trips, selection.countries, selection.country, timeRange, countryData]);
 
   const modeRows = useMemo(() => {
-    return Object.entries(globalDistanceByMode)
+    const entries = Object.entries(globalDistanceByMode);
+    if (selectedModeKey && !entries.some(([key]) => key === selectedModeKey)) entries.push([selectedModeKey, 0]);
+    return entries
       .sort(([, a], [, b]) => b - a)
       .map(([modeKey, distance]) => {
         const isOther = modeKey.startsWith('other:');
@@ -531,7 +533,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           segmentEntries
         };
       });
-  }, [customModes, globalDistanceByMode, segmentsByMode]);
+  }, [customModes, globalDistanceByMode, segmentsByMode, selectedModeKey]);
 
   const selectedSegments = useMemo(() => {
     if (!selectedModeKey) return [] as SegmentEntry[];

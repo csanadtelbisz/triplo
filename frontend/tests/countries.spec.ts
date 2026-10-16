@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { booleanPointInPolygon, point } from '@turf/turf';
 import { CountryPartitioner } from '../src/countries/partition';
 import { getEffectiveGeometry, geometryDistance } from '../src/utils/effectiveGeometry';
 import { computeTripCaches } from '../src/utils/distance';
@@ -89,4 +92,18 @@ test('country/mode yearly totals retain inclusive trip-day allocation and date o
   expect(tripIntersects(t, [new Date(2025, 0, 2).getTime(), new Date(2025, 0, 2).getTime()])).toBe(true);
   expect(tripIntersects(t, [new Date(2025, 0, 3).getTime(), new Date(2025, 0, 4).getTime()])).toBe(false);
   expect(tripIntersects({ ...t, startDate: undefined, endDate: undefined }, [0, 1])).toBe(true);
+});
+
+test('installed Overture boundaries attribute an Austria–Germany crossing and preserve territories', () => {
+  const asset = (code: string): CountryAsset => JSON.parse(gunzipSync(readFileSync(new URL(`../public/countries/${code}.json.gz`, import.meta.url))).toString());
+  const crossing = partition(segment([[11.4, 47.26], [11.58, 48.14]]), [asset('AT'), asset('DE')]);
+  expect(crossing.distanceKmByCountry.AT).toBeGreaterThan(0);
+  expect(crossing.distanceKmByCountry.DE).toBeGreaterThan(0);
+  expect(crossing.distanceKmByCountry[UNASSIGNED] || 0).toBeLessThan(0.01);
+  expect(Object.values(crossing.distanceKmByCountry).reduce((sum, km) => sum + km, 0)).toBeCloseTo(crossing.totalDistanceKm, 9);
+  for (const [code, coordinate] of [['GL', [-51.7216, 64.1835]], ['RE', [55.4481, -20.8789]], ['FK', [-57.8517, -51.6977]], ['GE', [44.8, 41.7]]] as const) {
+    const country = asset(code);
+    expect(country.code).toBe(code);
+    expect(booleanPointInPolygon(point([...coordinate]), country.territorial)).toBe(true);
+  }
 });
