@@ -14,6 +14,7 @@ export function validCountryCache(cache: SegmentCountryCache | undefined, bounda
 }
 
 export function attachCountryCaches(trips: Trip[], caches: Record<string, SegmentCountryCache>): Trip[] {
+  if (!Object.keys(caches).length) return trips;
   let changed = false;
   const next = trips.map(trip => {
     if (!canPersistCountryCache(trip)) return trip;
@@ -36,6 +37,7 @@ export function countryCacheFor(index: CountryIndex, inputHash: string, result: 
 }
 
 export function sameCountryInputs(a: Segment, b: Segment): boolean {
+  if (a === b) return true;
   const sameGeometry = a.geometry === b.geometry || (a.geometry?.type === b.geometry?.type &&
     !!a.geometry?.coordinates && !!b.geometry?.coordinates && a.geometry.coordinates.length === b.geometry.coordinates.length &&
     a.geometry.coordinates.every((coordinate, i) => coordinate.length === b.geometry.coordinates[i].length && coordinate.every((value, axis) => value === b.geometry.coordinates[i][axis])));
@@ -45,10 +47,12 @@ export function sameCountryInputs(a: Segment, b: Segment): boolean {
 }
 
 export function sameCountryTripInputs(a: Trip[], b: Trip[]): boolean {
+  if (a === b) return true;
   if (a.length !== b.length) return false;
   const byId = new Map(b.map(trip => [trip.id, trip]));
   return a.every(trip => {
     const other = byId.get(trip.id);
+    if (trip === other) return true;
     if (!other || canPersistCountryCache(trip) !== canPersistCountryCache(other) || trip.segments.length !== other.segments.length) return false;
     const segments = new Map(other.segments.map(segment => [segment.id, segment]));
     return trip.segments.every(segment => {

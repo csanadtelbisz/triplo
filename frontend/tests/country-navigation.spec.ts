@@ -443,6 +443,82 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
   } finally { release(); }
 });
 
+test('background country work does not rebuild the map or repeatedly serialize unchanged trips', async ({ page, context }) => {
+  const ready: Trip = { ...trip, id: 'performance-ready', name: 'Ready route', segments: [segment('ready', 'car', [[-1, 0], [-0.5, 0]])] };
+  const pending: Trip = { ...trip, id: 'performance-pending', name: 'Pending route', segments: [segment('pending', 'car', [[0.5, 0], [1, 0]])] };
+  await context.route('https://api.github.com/repos/test/trips/contents/trips', route => route.fulfill({ json: [
+    { name: 'ready.triplo.json', download_url: 'https://fixtures.test/ready.json' },
+    { name: 'pending.triplo.json', download_url: 'https://fixtures.test/pending.json' },
+  ] }));
+  await context.route('https://fixtures.test/ready.json', route => route.fulfill({ json: ready }));
+  await context.route('https://fixtures.test/pending.json', route => route.fulfill({ json: pending }));
+  const release: (() => void)[] = [];
+  for (const country of countries) {
+    const gate = new Promise<void>(resolve => release.push(resolve));
+    await context.route(`**/countries/${country.entry.file}*`, async route => {
+      await gate;
+      await route.fulfill({ contentType: 'application/gzip', body: country.body });
+    });
+  }
+  await page.addInitScript(() => {
+    localStorage.setItem('renderStyleConfigs', JSON.stringify([{ id: 'performance', name: 'Performance', script: 'return { getSegmentStyle: () => ({hidden:false}), getWaypointStyle: () => ({hidden:false, type:"dot"}) };' }]));
+    localStorage.setItem('activeRenderStyleConfigId', 'performance');
+    const state = window as unknown as { countryProgress: number };
+    state.countryProgress = 0;
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (String(url).includes('country.worker')) this.addEventListener('message', () => state.countryProgress++);
+      }
+    };
+  });
+  try {
+    await page.goto('/tests/country-app.html');
+    await expect.poll(async () => (await routes(page)).length).toBe(2);
+    await expect(page.locator('.maplibregl-marker')).toHaveCount(4);
+    await expect.poll(() => page.evaluate(() => (window as any).countryProgress)).toBeGreaterThanOrEqual(2);
+    const start = await page.evaluate(() => {
+      const state = window as any;
+      state.mapWork = { uploads: 0, markerRemovals: 0, serializations: 0 };
+      const source = state.testMap.getSource('route-source');
+      const setData = source.setData.bind(source);
+      source.setData = (...args: unknown[]) => { state.mapWork.uploads++; return setData(...args); };
+      new MutationObserver(records => {
+        for (const record of records) for (const node of record.removedNodes) {
+          if (node instanceof HTMLElement && node.matches('.maplibregl-marker')) state.mapWork.markerRemovals++;
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+      const stringify = JSON.stringify;
+      JSON.stringify = (value, replacer, space) => {
+        if (value?.id?.startsWith('performance-') && value.segments) state.mapWork.serializations++;
+        return stringify(value, replacer, space);
+      };
+      return state.countryProgress;
+    });
+    await expect.poll(() => page.evaluate(() => (window as any).countryProgress)).toBeGreaterThanOrEqual(start + 3);
+    const idle = await page.evaluate(() => {
+      const state = window as any;
+      state.testMap.jumpTo({ center: [0, 0], zoom: 4 });
+      const work = { ...state.mapWork };
+      state.mapWork = { uploads: 0, markerRemovals: 0, serializations: 0 };
+      return work;
+    });
+    release[0]();
+    await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === ready.id)?.segments[0].countryCache?.result.totalDistanceKm).toBeGreaterThan(0);
+    const cacheArrival = await page.evaluate(() => ({ ...(window as any).mapWork }));
+    await test.info().attach('background-map-work', { body: JSON.stringify({ idle, cacheArrival }), contentType: 'application/json' });
+    expect(idle).toEqual({ uploads: 0, markerRemovals: 0, serializations: 0 });
+    expect(cacheArrival.uploads).toBe(0);
+    expect(cacheArrival.markerRemovals).toBe(0);
+    expect(cacheArrival.serializations).toBeLessThanOrEqual(1);
+    await page.locator('.trip-card').filter({ hasText: ready.name }).click();
+    await page.getByTitle('Segment Info', { exact: true }).click();
+    await page.getByTitle('Flight', { exact: true }).click();
+    await expect.poll(async () => (await routes(page))[0]?.properties?.mode).toBe('flight');
+  } finally { release.forEach(resolve => resolve()); }
+});
+
 test('country rows stay visible across new trips and identical geometry reloads', async ({ page, context }) => {
   await expect.poll(async () => (await cachedTrips(page))[0]?.segments.every(segment => !!segment.countryCache)).toBe(true);
   let release!: () => void;

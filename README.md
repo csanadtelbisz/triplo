@@ -51,6 +51,10 @@ does not restart calculations. Countries use Overture's English names and the
 same table layout as transport modes, with Unassigned last. The country header
 counts countries with positive distance in the current period, excluding Unassigned.
 Overture's logo and attribution are listed in **System Status → Other providers**.
+Background progress without new results does not refresh the interface.
+Background cache updates preserve existing map routes and markers; new country results
+update the map only when a country is selected. Unsaved-change checks reuse trip
+snapshots, and distance calculations preserve effective geometry for map reuse.
 Results are attached to `segment.countryCache`, including kilometres, derived
 shares, clipped route pieces, waypoint countries, version identifiers, and an
 input hash. Save or Save All writes them into trip JSON through the configured

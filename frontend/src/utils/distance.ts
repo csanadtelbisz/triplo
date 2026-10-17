@@ -1,6 +1,6 @@
 import * as turf from '@turf/turf';
 import type { Waypoint, Trip } from '../../../shared/types';
-import { GEOMETRY_VERSION, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
+import { copyEffectiveGeometryCache, GEOMETRY_VERSION, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
 
 export interface DistanceStats {
   distanceKm: number;
@@ -345,11 +345,14 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
       distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDistStats.totalDistance;
     }
 
-    return {
+    if (seg.distanceStats === segDistStats && seg.waypointDistances === wpStats) return seg;
+    const updated = {
       ...seg,
       distanceStats: segDistStats,
       waypointDistances: wpStats
     };
+    copyEffectiveGeometryCache(seg, updated);
+    return updated;
   });
 
   newTrip.segments = newSegments;

@@ -65,8 +65,12 @@ test('GPX effective geometry trims endpoints and retains a closed-loop traversal
   const effective = getEffectiveGeometry(s);
   expect(effective.coordinates[0][0][0]).toBeCloseTo(-0.5, 5);
   expect(effective.coordinates[0].at(-1)![0]).toBeCloseTo(0.5, 5);
-  expect(trip([s]).segments[0].distanceStats!.totalDistance).toBeCloseTo(partition(s).totalDistanceKm, 9);
+  const cached = trip([s]);
+  expect(cached.segments[0].distanceStats!.totalDistance).toBeCloseTo(partition(s).totalDistanceKm, 9);
+  expect(getEffectiveGeometry(cached.segments[0])).toBe(effective);
+  expect(computeTripCaches(cached, []).segments[0]).toBe(cached.segments[0]);
   const loop = segment([[-1, 0], [1, 0], [-1, 0]], { routingService: 'gpx', waypoints: [{ id: 'start', coordinates: [-1, 0] }, { id: 'end', coordinates: [-1, 0] }] });
+  expect(getEffectiveGeometry(loop).coordinates).toEqual([loop.geometry.coordinates]);
   expect(geometryDistance(getEffectiveGeometry(loop))).toBeGreaterThan(400);
 });
 

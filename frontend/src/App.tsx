@@ -55,6 +55,20 @@ const getSharedTripTokenFromPath = () => {
 };
 
 const unavailableSharedTripMessage = 'This trip was deleted or made private by the owner.';
+const serializedTrips = new WeakMap<Trip, string>();
+
+function stripMeta(trip: Trip, includeCaches = true): string {
+  const cached = includeCaches ? serializedTrips.get(trip) : undefined;
+  if (cached !== undefined) return cached;
+  const { metadata: _metadata, ...copy } = trip;
+  if (!includeCaches) {
+    const { updatedAt: _updatedAt, tripDistanceSummary: _summary, ...content } = copy;
+    return JSON.stringify({ ...content, segments: trip.segments.map(({ countryCache: _country, distanceStats: _distance, waypointDistances: _waypoints, ...segment }) => segment) });
+  }
+  const serialized = JSON.stringify(copy);
+  serializedTrips.set(trip, serialized);
+  return serialized;
+}
 
 type PanelHistoryState = {
   panel: 'manager' | 'editor' | 'segment' | 'waypoint' | 'poi' | 'search' | 'status' | 'analytics' | 'analytics-segment' | 'preferences' | 'style-config';
@@ -200,6 +214,7 @@ export default function App() {
   const [apiKeyWarningConfiguration, setApiKeyWarningConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const tripsRef = useRef(trips);
+  const serializedTripVersionsRef = useRef<Trip[]>([]);
   const historyInitializedRef = useRef(false);
   const historyUpdateModeRef = useRef<'replace' | null>(null);
   const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
@@ -210,6 +225,12 @@ export default function App() {
   useEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
+
+  useEffect(() => {
+    const live = new Set(selectedTrip ? [...trips, selectedTrip] : trips);
+    for (const previous of serializedTripVersionsRef.current) if (!live.has(previous)) serializedTrips.delete(previous);
+    serializedTripVersionsRef.current = [...live];
+  }, [trips, selectedTrip]);
 
   const countryTrips = useMemo(() => selectedTrip && !trips.some(trip => trip.id === selectedTrip.id) ? [...trips, selectedTrip] : trips, [trips, selectedTrip]);
   const countryTripsRef = useRef(countryTrips);
@@ -391,17 +412,6 @@ export default function App() {
       setSetupWizardCallback(null);
       await callback();
     }
-  };
-
-  const stripMeta = (t: Trip, includeCaches = true) => {
-    const copy: any = { ...t };
-    delete copy.metadata;
-    if (!includeCaches) {
-      delete copy.updatedAt;
-      delete copy.tripDistanceSummary;
-      copy.segments = t.segments.map(({ countryCache: _country, distanceStats: _distance, waypointDistances: _waypoints, ...segment }) => segment);
-    }
-    return JSON.stringify(copy);
   };
 
   const loadTrips = async () => {
@@ -900,9 +910,9 @@ export default function App() {
   };
 
   // Uses stripMeta to ignore metadata differences (like syncedServices lists) for local unsaved status
-  const unsavedTripIds = new Set(
+  const unsavedTripIds = useMemo(() => new Set(
     trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t)).map(t => t.id)
-  );
+  ), [trips, histories]);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {

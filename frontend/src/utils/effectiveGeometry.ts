@@ -43,7 +43,9 @@ export function getEffectiveGeometry(segment: Segment): RouteGeometry {
     }
   } else if (segment.geometry?.coordinates.length >= 2) {
     let coords = segment.geometry.coordinates;
-    if ((segment.routingService === 'gpx' || segment.routingProfile === 'Imported GPX') && waypoints.length >= 2) {
+    const atEndpoint = (point: GeoJSON.Position, endpoint: GeoJSON.Position) => point[0] === endpoint[0] && point[1] === endpoint[1];
+    const wholeTrack = waypoints.length === 2 && atEndpoint(waypoints[0].coordinates, coords[0]) && atEndpoint(waypoints[1].coordinates, coords.at(-1)!);
+    if ((segment.routingService === 'gpx' || segment.routingProfile === 'Imported GPX') && waypoints.length >= 2 && !wholeTrack) {
       const first = nearestPointOnLine(lineString(coords), waypoints[0].coordinates);
       const last = nearestPointOnLine(lineString(coords), waypoints.at(-1)!.coordinates);
       if (last.properties.location < first.properties.location) {

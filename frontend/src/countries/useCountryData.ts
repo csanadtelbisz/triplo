@@ -26,11 +26,13 @@ export function useCountryData(trips: Trip[], enabled: boolean, onUpdateTrips: (
       const updated = onUpdateTrips(job.trips, message.caches || {});
       if (!updated) return;
       job.trips = updated;
-      setState(previous => ({
-        ...message, trips: updated,
-        data: message.data && (!previous?.data || previous.data.index.version !== message.data.index.version || Object.keys(message.data.results).length)
-          ? { index: message.data.index, results: { ...(previous?.data?.index.version === message.data.index.version ? previous.data.results : {}), ...message.data.results } } : previous?.data,
-      }));
+      setState(previous => {
+        const data = message.data && (!previous?.data || previous.data.index.version !== message.data.index.version || Object.keys(message.data.results).length)
+          ? { index: message.data.index, results: { ...(previous?.data?.index.version === message.data.index.version ? previous.data.results : {}), ...message.data.results } } : previous?.data;
+        if (previous?.trips === updated && previous.data === data && previous.complete === message.complete && previous.error === message.error &&
+          previous.currentTrip?.id === message.currentTrip?.id && previous.currentTrip?.name === message.currentTrip?.name) return previous;
+        return { trips: updated, data, complete: message.complete, error: message.error, currentTrip: message.currentTrip };
+      });
     };
     worker.onerror = event => {
       if (active.current === job) setState(value => ({ ...value, trips: job.trips, complete: true, error: event.message || 'Country calculations failed' }));

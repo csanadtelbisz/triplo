@@ -26,6 +26,7 @@ import { Icon, createIconElement } from './Icon';
 import { getMapTheme } from '../utils/appearancePreferences';
 import { attachMobileDistanceMeasurement } from '../utils/mobileDistanceMeasurement';
 import { getEffectiveGeometry } from '../utils/effectiveGeometry';
+import { useMapRenderInputs } from '../utils/useMapRenderInputs';
 import { modeKey, tripIntersects } from '../countries/analytics';
 import type { AnalyticsSelection } from '../countries/analytics';
 import { segmentKey, UNASSIGNED } from '../countries/types';
@@ -92,6 +93,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     countryData,
     onAnalyticsSegmentClick
 }, ref) => {
+  const renderInputs = useMapRenderInputs(trips, selectedTrip, styleContextSelectedSegment);
+  const activeCountryData = analyticsSelection?.country ? countryData : undefined;
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<{ marker: Marker, wp: any, pref: number, tripId: string }[]>([]);
@@ -1250,7 +1253,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTrip, trips, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, styleContextSelectedSegment, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, countryData]);
+  }, [renderInputs, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, activeCountryData]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
