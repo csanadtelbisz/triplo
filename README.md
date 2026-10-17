@@ -169,7 +169,9 @@ the `/triplo/` base path. For an equivalent local build, run
 [pr-preview.yml](.github/workflows/pr-preview.yml) builds and tests pull requests.
 Branches in this repository also get a preview at
 `https://csanadtelbisz.github.io/triplo/pr-preview/pr-<number>/`; fork PRs run
-validation only. Preview links appear on the deployment and in the job summary.
+validation only. After a successful preview deployment, a PR comment links to
+the deployed preview and identifies its commit. Subsequent deployments update
+that comment. Links also appear on the deployment and in the job summary.
 
 GitHub Pages hosts one site per repository, so each deployment includes the
 default-branch production build and all open same-repository PR previews.
