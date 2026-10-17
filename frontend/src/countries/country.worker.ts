@@ -4,6 +4,8 @@ import { GEOMETRY_VERSION, getEffectiveGeometry } from '../utils/effectiveGeomet
 import { CountryPartitioner, overlaps } from './partition';
 import { COUNTRY_ALGORITHM_VERSION, segmentKey } from './types';
 import type { Bounds, CountryAsset, CountryIndex, CountryResult } from './types';
+import type { SegmentCountryCache } from './types';
+import { canPersistCountryCache, countryCacheFor, validCountryCache } from './cache';
 
 const digest = async (bytes: BufferSource) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
 const textHash = (value: unknown) => digest(new TextEncoder().encode(JSON.stringify(value)));
@@ -60,8 +62,10 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     const entries = await Promise.all(trips.flatMap(trip => trip.segments.map(async segment => {
       const geometry = getEffectiveGeometry(segment);
       const hash = await textHash([index.version, COUNTRY_ALGORITHM_VERSION, GEOMETRY_VERSION, segment.transportMode, segment.routingProfile, geometry, segment.waypoints.map(w => [w.id, w.coordinates])]);
-      const allowCache = !trip.metadata?.isSharedTripReference && !trip.metadata?.sharedService;
-      return { key: segmentKey(trip.id, segment.id), hash, segment, geometry, allowCache, result: allowCache ? await cached(db, hash) : undefined };
+      const allowCache = canPersistCountryCache(trip);
+      const result = validCountryCache(segment.countryCache, index.version, hash) ? segment.countryCache.result
+        : allowCache ? await cached(db, hash) : undefined;
+      return { key: segmentKey(trip.id, segment.id), hash, segment, geometry, allowCache, result };
     })));
     const results: Record<string, CountryResult> = {};
     const groups = new Map<string, { candidates: CountryIndex['countries']; entries: typeof entries }>();
@@ -88,7 +92,9 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
       }
       await cacheResults(db, toCache);
     }
-    self.postMessage({ data: { index, results } });
+    const caches: Record<string, SegmentCountryCache> = {};
+    for (const entry of entries) if (entry.allowCache) caches[entry.key] = countryCacheFor(index, entry.hash, results[entry.key]);
+    self.postMessage({ data: { index, results }, caches });
   } catch (error) {
     self.postMessage({ error: error instanceof Error ? error.message : String(error) });
   } finally { db?.close(); }

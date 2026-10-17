@@ -1,5 +1,7 @@
 import type { Segment } from '../../../shared/types';
 import type { RouteGeometry } from '../utils/effectiveGeometry';
+import type { CountryResult } from '../../../shared/types';
+export type { CountryPiece, CountryResult, SegmentCountryCache } from '../../../shared/types';
 
 export const UNASSIGNED = '__unassigned__';
 export const COUNTRY_ALGORITHM_VERSION = 1;
@@ -23,18 +25,6 @@ export interface CountryAsset {
   code: string;
   territorial: CountryGeometry;
   land: CountryGeometry;
-}
-export interface CountryPiece {
-  country: string;
-  coordinates: GeoJSON.Position[];
-  distanceKm: number;
-}
-export interface CountryResult {
-  distanceKmByCountry: Record<string, number>;
-  shares: Record<string, number>;
-  totalDistanceKm: number;
-  pieces: CountryPiece[];
-  waypointCountries: Record<string, string>;
 }
 export interface CountryData {
   index: CountryIndex;

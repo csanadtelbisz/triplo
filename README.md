@@ -31,9 +31,9 @@ Date filters use trip overlap; they do not infer the date of a border crossing.
 
 The full yearly chart remains visible as context. Browser Back/Forward restores
 country, mode, date, and segment-detail selections. Slider changes replace the
-current history entry. Calculations run in a worker and are cached separately
-from saved trips, using geometry, boundary, and algorithm versions; recalculation
-does not mark trips edited. Shared-trip geometry is not stored in this cache.
+current history entry. Calculations run in a worker and use per-segment caches
+with geometry, boundary, and algorithm versions. Shared-trip references remain
+metadata-only and never acquire cached geometry.
 Country files load on demand and failures show a retry action instead of being
 counted as Unassigned. Disconnected route pieces retain their segment identity.
 Country zoom uses a relevant land component when an entity spans distant islands.
@@ -41,12 +41,20 @@ Country zoom uses a relevant land component when an entity spans distant islands
 Existing trips need no reimport or cloud-data migration. Enabling the globe in
 Analytics starts country calculations for all loaded trips, including trips
 outside the current date filter. Results appear once calculation finishes.
-Reopening country analytics reuses per-segment IndexedDB results; route/mode or
-boundary/algorithm changes invalidate the relevant results. Dates are applied
-after attribution. A new browser/device or cleared site data requires fresh
-calculations. Country results are not synced back to account storage. First-use
-time depends on boundary downloads, route vertex counts, and device speed;
-detailed tracks can take substantially longer than sparse routes.
+Results are attached to `segment.countryCache`, including kilometres, derived
+shares, clipped route pieces, waypoint countries, version identifiers, and an
+input hash. Save or Save All writes them into trip JSON through the configured
+storage providers. Computing new caches makes these save actions available
+without adding an undo step or editing route data. Cache-only differences do
+not create sync conflicts.
+
+Reopening country analytics first reuses valid caches from trip JSON, then
+IndexedDB. Another browser/device can reuse saved results without downloading
+boundaries or repeating route splitting. Missing or stale caches are rebuilt;
+route/mode, waypoint, or boundary/algorithm changes invalidate the relevant
+results. Dates are applied after attribution. First-use time depends on boundary
+downloads, route vertex counts, and device speed; detailed tracks can take
+substantially longer than sparse routes.
 
 See [boundary preparation and updates](scripts/boundaries/README.md) for the
 reproducible Overture pipeline, checksums, validation report, and attribution.

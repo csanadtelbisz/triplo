@@ -93,6 +93,7 @@ random suffix. IDs are strings; a UUID format is not required.
 | `waypoints` | Ordered array of embedded waypoint objects |
 | `customColor`, `customIcon`, `isHidden` | Optional presentation overrides |
 | `distanceStats`, `waypointDistances` | Optional distance and elevation caches |
+| `countryCache` | Optional versioned country distances, shares, clipped route pieces, and waypoint assignments; validated against route inputs before reuse |
 
 Segments can share a boundary waypoint ID. Editing operations update matching
 waypoints across segments to keep the trip connected. A segment being built may
@@ -187,6 +188,9 @@ supports version selection and uploads to missing services.
 Editing updates React state and per-trip undo/redo history. Local trip state is
 cached; explicit Save or Save All writes to connected providers and updates the
 saved-state baseline. Preference changes use a separate synchronization path.
+Country calculations attach derived per-segment caches without creating an
+undo step. Save and Save All persist these caches in trip JSON, allowing reuse
+on other devices; cache-only differences are ignored for sync conflicts.
 Startup read-only and mobile-panel preferences remain local, while language,
 appearance, map home, mode overrides, list settings, API keys, and custom styles
 are synchronized. Custom style scripts are saved as separate files.

@@ -39,6 +39,7 @@ import { applyAppearanceTheme } from './utils/appearancePreferences';
 import { emptyAnalyticsSelection } from './countries/analytics';
 import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
+import { sameCountryInputs } from './countries/cache';
 import { GEOMETRY_VERSION } from './utils/effectiveGeometry';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
@@ -160,7 +161,6 @@ export default function App() {
   const [analyticsSelection, setAnalyticsSelection] = useState<AnalyticsSelection>(emptyAnalyticsSelection);
   const analyticsModeFilter = analyticsSelection.mode;
   const setAnalyticsModeFilter = (mode: string | null) => setAnalyticsSelection(value => ({ ...value, mode }));
-  const countries = useCountryData(trips, isAnalyticsOpen && analyticsSelection.countries);
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
@@ -193,6 +193,18 @@ export default function App() {
   useEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
+
+  const applyCountryCaches = useCallback((source: Trip[], updated: Trip[]) => {
+    if (tripsRef.current !== source) return false;
+    tripsRef.current = updated;
+    setTrips(updated);
+    setSelectedTrip(selected => {
+      const index = selected ? source.indexOf(selected) : -1;
+      return index < 0 ? selected : updated[index];
+    });
+    return true;
+  }, []);
+  const countries = useCountryData(trips, isAnalyticsOpen && analyticsSelection.countries, applyCountryCaches);
 
   const getPanelHistoryState = useCallback((): PanelHistoryState => {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
@@ -328,9 +340,13 @@ export default function App() {
     }
   };
 
-  const stripMeta = (t: Trip) => {
+  const stripMeta = (t: Trip, includeCountryCache = true) => {
     const copy: any = { ...t };
     delete copy.metadata;
+    if (!includeCountryCache) {
+      delete copy.updatedAt;
+      copy.segments = t.segments.map(({ countryCache: _cache, ...segment }) => segment);
+    }
     return JSON.stringify(copy);
   };
 
@@ -393,14 +409,14 @@ export default function App() {
         const remoteVariants = variants.filter(v => v.metadata?._sourceService && v.metadata._sourceService !== 'Local Browser Storage');
         
         // Count unique remote contents ignoring metadata
-        const uniqueRemoteContents = new Set(remoteVariants.map(v => stripMeta(v)));
+        const uniqueRemoteContents = new Set(remoteVariants.map(v => stripMeta(v, false)));
 
         // Only conflict if there are MULTIPLE distinct remote versions that disagree
         if (uniqueRemoteContents.size > 1) {
           // It's a conflict!
           const groupedVariants: Trip[] = [];
           variants.forEach(variant => {
-            const existing = groupedVariants.find(t => stripMeta(t) === stripMeta(variant));
+            const existing = groupedVariants.find(t => stripMeta(t, false) === stripMeta(variant, false));
             if (existing) {
               const existingSources = new Set((existing.metadata?._sourceService || '').split(', '));
               if (variant.metadata?._sourceService) existingSources.add(variant.metadata._sourceService);
@@ -551,7 +567,14 @@ export default function App() {
       }
     }
 
-    const cachedTrip = computeTripCaches(newTrip, affectedSegments);
+    const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
+    const segments = newTrip.segments.map(segment => {
+      const previous = currentTrip?.segments.find(old => old.id === segment.id);
+      if (!segment.countryCache || (previous && sameCountryInputs(previous, segment))) return segment;
+      const { countryCache: _cache, ...withoutCountryCache } = segment;
+      return withoutCountryCache;
+    });
+    const cachedTrip = computeTripCaches({ ...newTrip, segments }, affectedSegments);
     setTrips(prev => prev.map(t => t.id === tripId ? cachedTrip : t));
 
     setHistories(prev => {
