@@ -7,7 +7,7 @@ function sameProperties(a: object, b: object, ignored: string) {
   return keys.length === Object.keys(right).filter(key => key !== ignored).length && keys.every(key => left[key] === right[key]);
 }
 
-const sameSegment = (a: Segment | null, b: Segment | null): boolean => a === b || !!a && !!b && sameProperties(a, b, 'countryCache');
+const sameSegment = (a: Segment | null, b: Segment | null): boolean => a === b || !!a && !!b && sameProperties(a, b, 'countryDistances');
 const sameTrip = (a: Trip | null, b: Trip | null): boolean => a === b || !!a && !!b && sameProperties(a, b, 'segments') &&
   a.segments.length === b.segments.length && a.segments.every((segment, i) => sameSegment(segment, b.segments[i]));
 

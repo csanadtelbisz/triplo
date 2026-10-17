@@ -2,6 +2,7 @@ import type { PersistingService } from './PersistingService';
 import type { Trip, SharedTripReference } from '../../../shared/types';
 import { GoogleDrivePersistingService } from './GoogleDrivePersistingService';
 import { GitHubPersistingService } from './GitHubPersistingService';
+import { compactCountryData } from '../countries/cache';
 
 export class PersistingManager {
   private services: PersistingService[] = [
@@ -99,8 +100,9 @@ export class PersistingManager {
     trip.metadata = trip.metadata || {};
     trip.metadata.syncedServices = trip.metadata.syncedServices || [];
 
+    const content = Array.isArray(trip.segments) ? compactCountryData(trip) : trip;
     for (const service of available) {
-      await service.save(trip);
+      await service.save(content);
       if (!trip.metadata.syncedServices.includes(service.name)) {
         trip.metadata.syncedServices.push(service.name);
       }
@@ -116,8 +118,9 @@ export class PersistingManager {
       trip.metadata.syncedServices = trip.metadata.syncedServices || [];
     }
 
+    const content = trips.map(trip => Array.isArray(trip.segments) ? compactCountryData(trip) : trip);
     for (const service of available) {
-      await service.saveAll(trips);
+      await service.saveAll(content);
       for (const trip of trips) {
         if (!trip.metadata.syncedServices.includes(service.name)) {
           trip.metadata.syncedServices.push(service.name);
@@ -227,7 +230,7 @@ export class PersistingManager {
 
   async updateSharedTrip(shareLink: string, trip: Trip): Promise<void> {
     for (const service of this.services) {
-      await service.updateSharedTrip(shareLink, trip);
+      await service.updateSharedTrip(shareLink, compactCountryData(trip));
     }
   }
 }

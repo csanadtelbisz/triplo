@@ -468,7 +468,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       if (!tripIntersects(trip, timeRange)) continue;
       for (const segment of trip.segments) {
         const result = countryData?.results[segmentKey(trip.id, segment.id)];
-        for (const [code, distance] of Object.entries(result?.distanceKmByCountry || {})) {
+        for (const [code, distance] of Object.entries(result?.distanceKmByCountry || segment.countryDistances || {})) {
           if (distance > 0) totals[code] = (totals[code] || 0) + distance * tripFraction(trip, timeRange);
         }
       }

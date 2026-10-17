@@ -1,54 +1,73 @@
-import type { Segment, SegmentCountryCache, Trip } from '../../../shared/types';
-import { copyEffectiveGeometryCache, GEOMETRY_VERSION } from '../utils/effectiveGeometry';
-import { COUNTRY_ALGORITHM_VERSION, segmentKey } from './types';
-import type { CountryData, CountryIndex } from './types';
+import type { Segment, Trip } from '../../../shared/types';
+import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
+import { segmentKey } from './types';
+import type { CountryData, CountryResult } from './types';
 
-export const canPersistCountryCache = (trip: Trip) => !trip.metadata?.isSharedTripReference;
+export const canPersistCountryDistances = (trip: Trip) => !trip.metadata?.isSharedTripReference;
 
-export function withSavedCountryCaches(working: Trip, saved: Trip): Trip {
-  const originals = new Map(saved.segments.map(segment => [segment.id, segment.countryCache]));
+export function withSavedCountryDistances(working: Trip, saved: Trip): Trip {
+  const originals = new Map(saved.segments.map(segment => [segment.id, segment.countryDistances]));
   let changed = false;
   const segments = working.segments.map(segment => {
-    const countryCache = originals.get(segment.id);
-    if (segment.countryCache === countryCache || (countryCache &&
-      validCountryCache(countryCache, countryCache.boundaryVersion, countryCache.inputHash) &&
-      validCountryCache(segment.countryCache, countryCache.boundaryVersion, countryCache.inputHash))) return segment;
+    const countryDistances = originals.get(segment.id);
+    if (sameCountryDistances(segment.countryDistances, countryDistances)) return segment;
     changed = true;
-    const { countryCache: _cache, ...content } = segment;
-    return countryCache ? { ...content, countryCache } : content;
+    const content = { ...segment };
+    delete content.countryDistances;
+    return countryDistances ? { ...content, countryDistances } : content;
   });
   return changed ? { ...working, segments } : working;
 }
 
-export function validCountryCache(cache: SegmentCountryCache | undefined, boundaryVersion: string, hash: string): cache is SegmentCountryCache {
-  return !!cache && cache.boundaryVersion === boundaryVersion &&
-    cache.algorithmVersion === COUNTRY_ALGORITHM_VERSION && cache.geometryVersion === GEOMETRY_VERSION &&
-    cache.inputHash === hash && !!cache.result && Number.isFinite(cache.result.totalDistanceKm) &&
-    Array.isArray(cache.result.pieces) && !!cache.result.distanceKmByCountry &&
-    !!cache.result.shares && !!cache.result.waypointCountries;
+export function validCountryDistances(value: unknown): value is Record<string, number> {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(distance => typeof distance === 'number' && Number.isFinite(distance) && distance >= 0);
 }
 
-export function attachCountryCaches(trips: Trip[], caches: Record<string, SegmentCountryCache>): Trip[] {
-  if (!Object.keys(caches).length) return trips;
+function sameCountryDistances(a: Record<string, number> | undefined, b: Record<string, number> | undefined) {
+  return a === b || !!a && !!b && Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([code, distance]) => b[code] === distance);
+}
+
+export function countrySummary(distances: Record<string, number>): CountryResult {
+  const totalDistanceKm = Object.values(distances).reduce((sum, distance) => sum + distance, 0);
+  return { distanceKmByCountry: distances, totalDistanceKm, shares: Object.fromEntries(Object.entries(distances).map(([code, distance]) => [code, totalDistanceKm ? distance / totalDistanceKm : 0])), pieces: [], waypointCountries: {}, geometryReady: false };
+}
+
+export function compactCountryData(trip: Trip): Trip {
+  let changed = false;
+  const segments = trip.segments.map(segment => {
+    if (!('countryCache' in segment) && !('geometryVersion' in (segment.distanceStats || {}))) return segment;
+    changed = true;
+    const { countryCache, ...content } = segment as Segment & { countryCache?: { result?: { distanceKmByCountry?: unknown } } };
+    const distances = content.countryDistances ?? countryCache?.result?.distanceKmByCountry;
+    if (validCountryDistances(distances)) content.countryDistances = distances;
+    if (content.distanceStats && 'geometryVersion' in content.distanceStats) {
+      const stats = { ...content.distanceStats };
+      delete stats.geometryVersion;
+      content.distanceStats = stats;
+    }
+    copyEffectiveGeometryCache(segment, content);
+    return content;
+  });
+  return changed ? { ...trip, segments } : trip;
+}
+
+export function attachCountryDistances(trips: Trip[], distances: Record<string, Record<string, number>>): Trip[] {
+  if (!Object.keys(distances).length) return trips;
   let changed = false;
   const next = trips.map(trip => {
-    if (!canPersistCountryCache(trip)) return trip;
+    if (!canPersistCountryDistances(trip)) return trip;
     let tripChanged = false;
     const segments = trip.segments.map(segment => {
-      const cache = caches[segmentKey(trip.id, segment.id)];
-      if (!cache || validCountryCache(segment.countryCache, cache.boundaryVersion, cache.inputHash)) return segment;
+      const mapping = distances[segmentKey(trip.id, segment.id)];
+      if (!mapping || sameCountryDistances(segment.countryDistances, mapping)) return segment;
       changed = tripChanged = true;
-      const updated = { ...segment, countryCache: cache };
+      const updated = { ...segment, countryDistances: mapping };
       copyEffectiveGeometryCache(segment, updated);
       return updated;
     });
     return tripChanged ? { ...trip, segments } : trip;
   });
   return changed ? next : trips;
-}
-
-export function countryCacheFor(index: CountryIndex, inputHash: string, result: SegmentCountryCache['result']): SegmentCountryCache {
-  return { boundaryVersion: index.version, algorithmVersion: COUNTRY_ALGORITHM_VERSION, geometryVersion: GEOMETRY_VERSION, inputHash, result };
 }
 
 export function sameCountryInputs(a: Segment, b: Segment): boolean {
@@ -68,7 +87,7 @@ export function sameCountryTripInputs(a: Trip[], b: Trip[]): boolean {
   return a.every(trip => {
     const other = byId.get(trip.id);
     if (trip === other) return true;
-    if (!other || canPersistCountryCache(trip) !== canPersistCountryCache(other) || trip.segments.length !== other.segments.length) return false;
+    if (!other || canPersistCountryDistances(trip) !== canPersistCountryDistances(other) || trip.segments.length !== other.segments.length) return false;
     const segments = new Map(other.segments.map(segment => [segment.id, segment]));
     return trip.segments.every(segment => {
       const target = segments.get(segment.id);

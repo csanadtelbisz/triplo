@@ -39,9 +39,8 @@ export interface Segment {
   customColor?: string;
   customIcon?: string;
   isHidden?: boolean;
-  countryCache?: SegmentCountryCache;
+  countryDistances?: Record<string, number>;
   distanceStats?: {
-    geometryVersion?: number;
     totalDistance: number;
     hasElevation: boolean;
     elevationUp: number;
@@ -53,28 +52,6 @@ export interface Segment {
     elevationUp: number;
     elevationDown: number;
   }[];
-}
-
-export interface CountryPiece {
-  country: string;
-  coordinates: GeoJSON.Position[];
-  distanceKm: number;
-}
-
-export interface CountryResult {
-  distanceKmByCountry: Record<string, number>;
-  shares: Record<string, number>;
-  totalDistanceKm: number;
-  pieces: CountryPiece[];
-  waypointCountries: Record<string, string>;
-}
-
-export interface SegmentCountryCache {
-  boundaryVersion: string;
-  algorithmVersion: number;
-  geometryVersion: number;
-  inputHash: string;
-  result: CountryResult;
 }
 
 export interface Trip {

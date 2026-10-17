@@ -34,7 +34,7 @@ export function tripFraction(trip: Trip, range: [number, number] | null): number
 }
 export function selectedDistance(trip: Trip, segment: Segment, country: string | null, data?: CountryData): number {
   if (segment.routingProfile === 'teleport') return 0;
-  return country ? data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry[country] || 0 : segment.distanceStats?.totalDistance || 0;
+  return country ? (data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry || segment.countryDistances)?.[country] || 0 : segment.distanceStats?.totalDistance || 0;
 }
 export function countryYearDistances(trips: Trip[], selection: AnalyticsSelection, data?: CountryData) {
   const years = new Map<number, number>();

@@ -5,6 +5,7 @@ import { booleanPointInPolygon, point } from '@turf/turf';
 import { CountryPartitioner } from '../src/countries/partition';
 import { getEffectiveGeometry, geometryDistance } from '../src/utils/effectiveGeometry';
 import { computeTripCaches } from '../src/utils/distance';
+import { compactCountryData } from '../src/countries/cache';
 import { countryYearDistances, emptyAnalyticsSelection, tripFraction, tripIntersects } from '../src/countries/analytics';
 import { UNASSIGNED, segmentKey } from '../src/countries/types';
 import type { CountryAsset, CountryData } from '../src/countries/types';
@@ -17,6 +18,20 @@ const rectangle = (code: string, west: number, east: number): CountryAsset => {
 const segment = (coordinates: number[][], properties: Partial<Segment> = {}): Segment => ({ id: 'route', name: 'Border trip', transportMode: 'car', routingProfile: 'car', routingService: 'manual', source: 'manual', geometry: { type: 'LineString', coordinates }, waypoints: coordinates.map((coordinates, i) => ({ id: `w${i}`, coordinates: coordinates.slice(0, 2) as [number, number] })), ...properties });
 const trip = (segments: Segment[], properties: Partial<Trip> = {}): Trip => computeTripCaches({ id: 'trip', name: 'Journey', segments, startDate: '2024-12-31', endDate: '2025-01-02', createdAt: '', updatedAt: '', ...properties });
 const partition = (s: Segment, assets = [rectangle('AA', -2, 0), rectangle('BB', 0, 2)]) => new CountryPartitioner(assets).partition(s, getEffectiveGeometry(s));
+
+test('saved country stats contain only distances and remove the previous expanded format', () => {
+  const original = trip([segment([[-1, 0], [1, 0]])]);
+  const source = original.segments[0];
+  const expanded = { ...original, segments: [{ ...source, countryCache: {
+    boundaryVersion: 'old', algorithmVersion: 1, geometryVersion: 1, inputHash: 'old', result: partition(source),
+  }, distanceStats: { ...source.distanceStats!, geometryVersion: 1 } }] };
+  const compact = compactCountryData(expanded);
+  expect(compact.segments[0].countryDistances).toEqual(partition(source).distanceKmByCountry);
+  expect(compact.segments[0]).not.toHaveProperty('countryCache');
+  expect(compact.segments[0].distanceStats).not.toHaveProperty('geometryVersion');
+  expect(compact.segments[0].geometry).toBe(source.geometry);
+  expect(compact.segments[0].waypoints).toBe(source.waypoints);
+});
 
 test('crossing without a border vertex conserves distance and derived shares', () => {
   const result = partition(segment([[-1, 0], [1, 0]]));

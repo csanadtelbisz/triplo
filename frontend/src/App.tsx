@@ -7,7 +7,7 @@ import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
 import './styles/Mobile.css';
-import type { SegmentCountryCache, Trip } from '../../shared/types';
+import type { Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
@@ -39,8 +39,7 @@ import { applyAppearanceTheme } from './utils/appearancePreferences';
 import { emptyAnalyticsSelection } from './countries/analytics';
 import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
-import { attachCountryCaches, sameCountryInputs, sameCountryTripInputs, withSavedCountryCaches } from './countries/cache';
-import { GEOMETRY_VERSION } from './utils/effectiveGeometry';
+import { attachCountryDistances, compactCountryData, sameCountryInputs, sameCountryTripInputs, withSavedCountryDistances } from './countries/cache';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -63,7 +62,7 @@ function stripMeta(trip: Trip, includeCaches = true): string {
   const { metadata: _metadata, ...copy } = trip;
   if (!includeCaches) {
     const { updatedAt: _updatedAt, tripDistanceSummary: _summary, ...content } = copy;
-    return JSON.stringify({ ...content, segments: trip.segments.map(({ countryCache: _country, distanceStats: _distance, waypointDistances: _waypoints, ...segment }) => segment) });
+    return JSON.stringify({ ...content, segments: compactCountryData(trip).segments.map(({ countryDistances: _country, distanceStats: _distance, waypointDistances: _waypoints, ...segment }) => segment) });
   }
   const serialized = JSON.stringify(copy);
   serializedTrips.set(trip, serialized);
@@ -239,10 +238,10 @@ export default function App() {
   }, [trips, selectedTrip, isViewingSharedTrip]);
   const countryTripsRef = useRef(countryTrips);
   useEffect(() => { countryTripsRef.current = countryTrips; }, [countryTrips]);
-  const applyCountryCaches = useCallback((source: Trip[], caches: Record<string, SegmentCountryCache>) => {
+  const applyCountryDistances = useCallback((source: Trip[], distances: Record<string, Record<string, number>>) => {
     const latest = countryTripsRef.current;
     if (!sameCountryTripInputs(source, latest)) return undefined;
-    const updated = attachCountryCaches(latest, caches);
+    const updated = attachCountryDistances(latest, distances);
     if (updated === latest) return latest;
     countryTripsRef.current = updated;
     const current = tripsRef.current;
@@ -260,7 +259,7 @@ export default function App() {
     });
     return updated;
   }, []);
-  const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryCaches);
+  const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryDistances, isAnalyticsOpen ? analyticsSelection.country : null);
 
   const getPanelHistoryState = useCallback((): PanelHistoryState => {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
@@ -549,11 +548,11 @@ export default function App() {
           const existing = oldCache.find(t => t.id === trip.id);
           const freshMetadata = { ...(trip.metadata || {}) };
           delete (freshMetadata as any)._isCached;
-          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary && existing.segments.every(s => s.distanceStats?.geometryVersion === GEOMETRY_VERSION)) {
-             cachedTrips.push({
+          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary && existing.segments.every(s => s.distanceStats)) {
+             cachedTrips.push(compactCountryData({
                 ...existing,
                 metadata: { ...existing.metadata, ...freshMetadata, _isCached: false }
-             });
+             }));
           } else {
              const newlyComputed = computeTripCaches(trip);
              newlyComputed.metadata = { ...newlyComputed.metadata, ...freshMetadata, _isCached: false };
@@ -565,7 +564,7 @@ export default function App() {
       saveTripCache(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
       cachedTrips.forEach(t => {
-        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(withSavedCountryCaches(t, tripsMap.get(t.id)!)) };
+        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(withSavedCountryDistances(t, tripsMap.get(t.id)!)) };
       });
       setHistories(initHistories);
       if (localStorage.getItem('defaultReadOnly') !== 'true') {
@@ -638,8 +637,8 @@ export default function App() {
     const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
     const segments = newTrip.segments.map(segment => {
       const previous = currentTrip?.segments.find(old => old.id === segment.id);
-      if (!segment.countryCache || (previous && sameCountryInputs(previous, segment))) return segment;
-      const { countryCache: _cache, ...withoutCountryCache } = segment;
+      if (!segment.countryDistances || (previous && sameCountryInputs(previous, segment))) return segment;
+      const { countryDistances: _distances, ...withoutCountryCache } = segment;
       return withoutCountryCache;
     });
     const cachedTrip = computeTripCaches({ ...newTrip, segments }, affectedSegments);

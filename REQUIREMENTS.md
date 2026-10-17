@@ -93,7 +93,7 @@ random suffix. IDs are strings; a UUID format is not required.
 | `waypoints` | Ordered array of embedded waypoint objects |
 | `customColor`, `customIcon`, `isHidden` | Optional presentation overrides |
 | `distanceStats`, `waypointDistances` | Optional distance and elevation caches |
-| `countryCache` | Optional versioned country distances, shares, clipped route pieces, and waypoint assignments; validated against route inputs before reuse |
+| `countryDistances` | Optional mapping from country code to kilometres; the only country analytics data added to trip JSON |
 
 Segments can share a boundary waypoint ID. Editing operations update matching
 waypoints across segments to keep the trip connected. A segment being built may
@@ -188,9 +188,12 @@ supports version selection and uploads to missing services.
 Editing updates React state and per-trip undo/redo history. Local trip state is
 cached; explicit Save or Save All writes to connected providers and updates the
 saved-state baseline. Preference changes use a separate synchronization path.
-Country calculations attach derived per-segment caches without creating an
-undo step. Save and Save All persist these caches in trip JSON, allowing reuse
-on other devices; cache-only differences are ignored for sync conflicts.
+Country calculations attach per-segment country distance maps without creating
+an undo step. Save and Save All persist only these maps in trip JSON. Clipped
+routes, waypoint assignments, hashes, and versions remain browser-local.
+Saved distance maps work without boundary downloads; a country selection can
+prepare clipped rendering geometry in a fresh browser. Country-distance-only
+differences are ignored for sync conflicts.
 The worker runs after loading and normal geometry/mode/waypoint updates,
 including routing and imports, independently of Analytics visibility. Analytics
 receives available results every 500 ms and displays the current trip name.

@@ -1266,6 +1266,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     if (focusedCountryRef.current === focusKey) return;
     const entry = countryData.index.countries.find(c => c.code === country);
     const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => !analyticsSelection.mode || modeKey(s) === analyticsSelection.mode).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
+    if (!coordinates.length) return;
     const landParts = entry?.landParts || (entry ? [entry.landBounds] : []);
     const score = (b: number[]) => coordinates.filter(c => c[0] >= b[0] - 0.2 && c[0] <= b[2] + 0.2 && c[1] >= b[1] - 0.2 && c[1] <= b[3] + 0.2).length;
     const focus = [...landParts].sort((a, b) => score(b) - score(a))[0];
