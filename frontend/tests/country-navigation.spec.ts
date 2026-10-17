@@ -6,6 +6,7 @@ import type { Trip, Segment, SegmentCountryCache } from '../../shared/types';
 import type { CountryData } from '../src/countries/types';
 import { segmentKey, UNASSIGNED } from '../src/countries/types';
 import { attachCountryCaches } from '../src/countries/cache';
+import { computeTripCaches } from '../src/utils/distance';
 
 const segment = (id: string, mode: Segment['transportMode'], coordinates: number[][]): Segment => ({ id, name: id, transportMode: mode, routingService: 'manual', routingProfile: 'straight', source: 'manual', geometry: { type: 'LineString', coordinates }, waypoints: coordinates.map((c, i) => ({ id: `${id}-${i}`, coordinates: c as [number, number] })) });
 const trip: Trip = { id: 'crossing', name: 'Cross-year crossing', startDate: '2024-12-31', endDate: '2025-01-02', createdAt: '', updatedAt: '', segments: [segment('drive', 'car', [[-1, 0], [1, 0], [-1, 0]]), segment('flight', 'flight', [[-1, 0.1], [1, 0.1]])] };
@@ -244,7 +245,7 @@ test('shared trip references never acquire or write country cache geometry', asy
 
 test('providers differing only in country caches do not create sync conflicts', async ({ page }) => {
   const computed = await calculateCountries(page, [trip]);
-  const cached = attachCountryCaches([trip], computed.caches!)[0];
+  const cached = computeTripCaches(attachCountryCaches([trip], computed.caches!)[0]);
   await page.evaluate(async ({ original, cached }) => {
     const { persistingManager } = await import('/src/persisting/PersistingManager.ts');
     persistingManager.loadAllTrips = async () => [
@@ -257,4 +258,15 @@ test('providers differing only in country caches do not create sync conflicts', 
   await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled();
   await expect(page.getByTitle('Conflicts found between devices/services', { exact: true })).toHaveCount(0);
   await expect(page.getByTitle('Sync conflicts or missing trips', { exact: true })).toHaveCount(0);
+  const edited = structuredClone(trip);
+  edited.segments[0].geometry.coordinates[1] = [0.5, 0];
+  await page.evaluate(async ({ edited, cached }) => {
+    const { persistingManager } = await import('/src/persisting/PersistingManager.ts');
+    persistingManager.loadAllTrips = async () => [
+      { ...edited, metadata: { _sourceService: 'Google Drive' } },
+      { ...cached, metadata: { _sourceService: 'GitHub' } },
+    ];
+  }, { edited, cached });
+  await page.getByTitle('Reload from all services', { exact: true }).click();
+  await expect(page.getByTitle('Conflicts found between devices/services', { exact: true })).toHaveCount(1);
 });

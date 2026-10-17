@@ -340,12 +340,13 @@ export default function App() {
     }
   };
 
-  const stripMeta = (t: Trip, includeCountryCache = true) => {
+  const stripMeta = (t: Trip, includeCaches = true) => {
     const copy: any = { ...t };
     delete copy.metadata;
-    if (!includeCountryCache) {
+    if (!includeCaches) {
       delete copy.updatedAt;
-      copy.segments = t.segments.map(({ countryCache: _cache, ...segment }) => segment);
+      delete copy.tripDistanceSummary;
+      copy.segments = t.segments.map(({ countryCache: _country, distanceStats: _distance, waypointDistances: _waypoints, ...segment }) => segment);
     }
     return JSON.stringify(copy);
   };
