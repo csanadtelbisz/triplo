@@ -311,6 +311,25 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
           })}
         </div>
 
+        <section aria-labelledby="other-providers-title">
+        <h3 id="other-providers-title" className="status-panel-section-title second">Other providers</h3>
+        <div className="status-panel-list">
+          <div className="status-panel-card">
+            <div className="status-panel-card-header with-margin">
+              <div className="status-panel-card-title-container">
+                <MaterialIcon name="public" size={20} />
+                <span className="status-panel-card-title">Overture Maps</span>
+              </div>
+            </div>
+            <div className="status-panel-attribution">
+              <a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noreferrer">© Overture Maps Foundation</a>
+              {' · Country and territory boundaries · '}
+              <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noreferrer">ODbL 1.0</a>
+            </div>
+          </div>
+        </div>
+        </section>
+
         <h3 className="status-panel-section-title second">Browser data</h3>
         <div className="status-panel-list">
           <div className="status-panel-card">

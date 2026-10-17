@@ -7,6 +7,7 @@ import type { AnalyticsSelection } from '../countries/analytics';
 import { countryYearDistances, selectedDistance, tripFraction, tripIntersects } from '../countries/analytics';
 import type { CountryData } from '../countries/types';
 import { UNASSIGNED, segmentKey } from '../countries/types';
+import { countryName } from '../countries/names';
 import '../styles/Analytics.css';
 import {
   buildTransportModeFilterStyleConfig,
@@ -473,7 +474,10 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       }
     }
     if (selection.country && !totals[selection.country]) totals[selection.country] = 0;
-    return Object.entries(totals).sort(([, a], [, b]) => b - a).map(([code, distance]) => ({ code, distance, name: code === UNASSIGNED ? 'Unassigned' : countryData?.index.countries.find(c => c.code === code)?.name || code }));
+    return Object.entries(totals).sort(([a, distanceA], [b, distanceB]) => a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : distanceB - distanceA).map(([code, distance]) => {
+      const country = countryData?.index.countries.find(c => c.code === code);
+      return { code, distance, name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
+    });
   }, [trips, countryData, timeRange, selection.country]);
 
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
@@ -633,53 +637,46 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           <div className="country-list" aria-label="Countries">
             {countryLoading && <p role="status">{countryCurrentTrip ? `Calculating country distances for ${countryCurrentTrip}…` : 'Calculating country distances…'}</p>}
             {countryError && <p role="alert">{countryError} <button type="button" onClick={onRetryCountries}>Retry</button></p>}
-            {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
-              <button type="button" className="country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, mode: null })}>
-                <span>{row.name}</span><span>{row.distance.toFixed(1)} km</span>
-              </button>
-            ))}
+            <div className="trip-summary-table analytics-summary-table">
+              <div className="analytics-summary-header">
+                <div>Country</div><div className="analytics-summary-distance">Distance (km)</div>
+              </div>
+              <div className="analytics-summary-rows">
+                {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
+                  <button type="button" className="trip-summary-row analytics-summary-row country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, mode: null })}>
+                    <span className="trip-summary-td analytics-summary-cell">{row.name}</span><span className="trip-summary-td right analytics-summary-cell">{row.distance.toFixed(1)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             {!countryLoading && !countryError && countryRows.length === 0 && <p>No countries in this period.</p>}
-            {countryData && <p className="country-attribution"><a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noreferrer">{countryData.index.attribution}</a></p>}
           </div>
         )}
         {(
           <>
             {(!selection.countries || selection.country) && (
-            <div className="trip-summary-table" style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', borderBottom: '1px solid #dee2e6', padding: '4px 0', fontSize: '0.85rem', fontWeight: 'bold' }}>
+            <div className="trip-summary-table analytics-summary-table">
+              <div className="analytics-summary-header">
                 <div>Mode</div>
-                <div style={{ textAlign: 'right' }}>Distance (km)</div>
+                <div className="analytics-summary-distance">Distance (km)</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+              <div className="analytics-summary-rows">
                 {modeRows.map(row => {
                   const collapsed = selectedModeKey !== null && selectedModeKey !== row.modeKey;
 
                   return (
                     <div
                       key={row.modeKey}
-                      className="trip-summary-row"
+                      className={`trip-summary-row analytics-summary-row${collapsed ? ' is-collapsed' : ''}`}
                       onClick={() => handleModeClick(row.modeKey)}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 120px',
-                        alignItems: 'center',
-                        borderBottom: `${collapsed ? '0px' : '1px'} solid #f1f3f5`,
-                        cursor: 'pointer',
-                        overflow: 'hidden',
-                        maxHeight: collapsed ? '0px' : '44px',
-                        padding: collapsed ? '0px' : '6px 0',
-                        opacity: collapsed ? 0 : 1,
-                        transform: collapsed ? 'translateY(-4px)' : 'translateY(0)',
-                        transition: 'max-height 220ms ease, opacity 180ms ease, transform 180ms ease, padding 220ms ease, background-color 180ms ease'
-                      }}
                     >
-                      <div className="trip-summary-td" style={{ padding: '0 8px 0 0', fontSize: '0.85rem' }}>
+                      <div className="trip-summary-td analytics-summary-cell">
                         <span style={{ color: row.color }}>
                           {row.targetIcon && row.actualMode === 'other' ? <MaterialIcon name={row.targetIcon} size={18} /> : getModeIcon(row.actualMode as any, 18)}
                         </span>
                         <span style={{ textTransform: 'capitalize' }}>{row.displayName}</span>
                       </div>
-                      <div className="trip-summary-td right" style={{ padding: '0', fontSize: '0.85rem', fontWeight: 500 }}>
+                      <div className="trip-summary-td right analytics-summary-cell">
                         {row.distance.toFixed(1)}
                       </div>
                     </div>

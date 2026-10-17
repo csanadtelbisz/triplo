@@ -2,7 +2,7 @@ name: Country boundaries
 
 on:
   pull_request:
-    paths: ['scripts/boundaries/**', 'frontend/public/countries/**', '.github/workflows/country-boundaries.yml']
+    paths: ['scripts/boundaries/**', 'frontend/public/countries/**', 'frontend/src/countries/englishNames.ts', '.github/workflows/country-boundaries.yml']
   workflow_dispatch:
     inputs:
       release:
@@ -28,6 +28,7 @@ jobs:
       - run: pip install -r scripts/boundaries/requirements.txt
       - run: python -m unittest discover -s scripts/boundaries
       - run: python scripts/boundaries/boundaries.py verify
+      - run: python scripts/boundaries/names.py verify
 
   prepare:
     if: github.event_name == 'workflow_dispatch'
@@ -53,12 +54,15 @@ jobs:
           else
             python scripts/boundaries/boundaries.py build
           fi
+          python scripts/boundaries/names.py build
       - uses: actions/upload-artifact@v4
         with:
           name: country-boundaries
           path: |
             frontend/public/countries
             scripts/boundaries/source.lock.json
+            frontend/src/countries/englishNames.ts
+            scripts/boundaries/names.lock.json
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
@@ -68,4 +72,6 @@ jobs:
             frontend/public/countries/manifest.json
             frontend/public/countries/validation.json
             scripts/boundaries/source.lock.json
+            frontend/src/countries/englishNames.ts
+            scripts/boundaries/names.lock.json
           retention-days: 7

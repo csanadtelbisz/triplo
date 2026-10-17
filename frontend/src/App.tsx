@@ -7,7 +7,7 @@ import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
 import './styles/Mobile.css';
-import type { Trip } from '../../shared/types';
+import type { SegmentCountryCache, Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
@@ -39,7 +39,7 @@ import { applyAppearanceTheme } from './utils/appearancePreferences';
 import { emptyAnalyticsSelection } from './countries/analytics';
 import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
-import { sameCountryInputs } from './countries/cache';
+import { attachCountryCaches, sameCountryInputs, sameCountryTripInputs } from './countries/cache';
 import { GEOMETRY_VERSION } from './utils/effectiveGeometry';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
@@ -197,12 +197,15 @@ export default function App() {
   const countryTrips = useMemo(() => selectedTrip && !trips.some(trip => trip.id === selectedTrip.id) ? [...trips, selectedTrip] : trips, [trips, selectedTrip]);
   const countryTripsRef = useRef(countryTrips);
   useEffect(() => { countryTripsRef.current = countryTrips; }, [countryTrips]);
-  const applyCountryCaches = useCallback((source: Trip[], updated: Trip[]) => {
-    if (countryTripsRef.current !== source) return false;
+  const applyCountryCaches = useCallback((source: Trip[], caches: Record<string, SegmentCountryCache>) => {
+    const latest = countryTripsRef.current;
+    if (!sameCountryTripInputs(source, latest)) return undefined;
+    const updated = attachCountryCaches(latest, caches);
+    if (updated === latest) return latest;
     countryTripsRef.current = updated;
     const current = tripsRef.current;
     const next = current.map(trip => {
-      const index = source.indexOf(trip);
+      const index = latest.indexOf(trip);
       return index < 0 ? trip : updated[index];
     });
     if (next.some((trip, i) => trip !== current[i])) {
@@ -210,10 +213,10 @@ export default function App() {
       setTrips(next);
     }
     setSelectedTrip(selected => {
-      const index = selected ? source.indexOf(selected) : -1;
+      const index = selected ? latest.indexOf(selected) : -1;
       return index < 0 ? selected : updated[index];
     });
-    return true;
+    return updated;
   }, []);
   const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryCaches);
 

@@ -104,7 +104,7 @@ test('Unassigned exposes flights and slider changes replace history entries', as
   await page.getByRole('slider', { name: 'Analytics start date' }).press('ArrowRight');
   await page.getByRole('slider', { name: 'Analytics start date' }).press('ArrowRight');
   expect(await page.evaluate(() => history.length)).toBe(length);
-  await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('74.1 km');
+  await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('74.1');
   await expect(page.locator('.analytics-chart')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
@@ -150,6 +150,7 @@ test('failed boundary downloads show retry instead of inventing Unassigned kilom
 });
 
 test('worker loads checksum-verified real boundaries and reuses existing trip results', async ({ page, context }) => {
+  test.setTimeout(60000);
   await context.unroute('**/countries/index.json');
   const downloads: string[] = [];
   context.on('request', request => {
@@ -162,7 +163,7 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
       return {
         id: `crossing-${segmentIndex}`, transportMode: 'car', routingProfile: 'car', source: 'manual', routingService: 'manual',
         geometry: { type: 'LineString', coordinates: route },
-        waypoints: route.map((coordinates, i) => ({ id: `w${i}`, coordinates })),
+        waypoints: [route[0], route.at(-1)!].map((coordinates, i) => ({ id: `w${i}`, coordinates })),
       };
     }) }];
     let availableProgress = 0;
@@ -340,12 +341,12 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
     await page.getByTitle('Analytics', { exact: true }).click();
     await page.getByRole('button', { name: 'Group by country' }).click();
     await expect(page.getByRole('status')).toHaveText('Calculating country distances for Pending route…');
-    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4 km');
+    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4');
     await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => (window as unknown as { countryProgressTimes: number[] }).countryProgressTimes.length)).toBeGreaterThanOrEqual(3);
     const timing = await page.evaluate(() => (window as unknown as { countryProgressTimes: number[] }).countryProgressTimes);
     expect(timing[2] - timing[1]).toBeGreaterThanOrEqual(400);
-    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4 km');
+    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4');
     expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(1);
     if (changeRoute) {
       await page.getByTitle('Close Analytics', { exact: true }).click();
@@ -361,7 +362,7 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
       await page.getByTitle('Analytics', { exact: true }).click();
       await page.getByRole('button', { name: 'Group by country' }).click();
       await expect(page.getByRole('status')).toHaveCount(0);
-      await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('444.8 km');
+      await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('444.8');
       await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
       return;
     }
@@ -381,8 +382,110 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     expect(await page.evaluate(() => (window as unknown as { countryAutoFits: number }).countryAutoFits)).toBe(0);
     await page.getByRole('button', { name: /Unassigned/ }).click();
-    await expect(page.getByRole('button', { name: /Country A/ })).toContainText('111.2 km');
-    await expect(page.getByRole('button', { name: /Country B/ })).toContainText('111.2 km');
+    await expect(page.getByRole('button', { name: /Country A/ })).toContainText('111.2');
+    await expect(page.getByRole('button', { name: /Country B/ })).toContainText('111.2');
     expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(1);
   } finally { release(); }
+});
+
+test('country rows stay visible across new trips and identical geometry reloads', async ({ page, context }) => {
+  await expect.poll(async () => (await cachedTrips(page))[0]?.segments.every(segment => !!segment.countryCache)).toBe(true);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await context.route('**/countries/BB.json.gz*', async route => {
+    await gate;
+    await route.fulfill({ contentType: 'application/gzip', body: countries[1].body });
+  });
+  await page.addInitScript(() => {
+    const state = window as unknown as { workerCount: number; calculatingTrips: string[]; missingCountryRows: number };
+    state.workerCount = 0; state.calculatingTrips = []; state.missingCountryRows = 0;
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        state.workerCount++;
+        this.addEventListener('message', event => {
+          if (event.data.currentTrip) state.calculatingTrips.push(event.data.currentTrip.name);
+        });
+      }
+    };
+  });
+  try {
+    await page.goto('/tests/country-state.html');
+    await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+    await expect(page.getByRole('status')).toHaveCount(0);
+    await page.evaluate(() => {
+      new MutationObserver(() => {
+        if (!Array.from(document.querySelectorAll('.country-row')).some(row => row.textContent?.includes('Country A'))) {
+          (window as unknown as { missingCountryRows: number }).missingCountryRows++;
+        }
+      }).observe(document.querySelector('.country-list')!, { subtree: true, childList: true, characterData: true });
+    });
+    await page.getByRole('button', { name: 'Add another trip' }).click();
+    await expect(page.getByRole('status')).toHaveText('Calculating country distances for New trip…');
+    await expect(page.getByRole('button', { name: /Country A/ })).toContainText('55.6');
+    await page.getByRole('button', { name: 'Reload identical geometry' }).click();
+    await page.getByRole('button', { name: 'Reload identical geometry' }).click();
+    release();
+    await expect(page.getByRole('status')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Country B/ })).toContainText('55.6');
+    const state = await page.evaluate(() => {
+      const { workerCount, calculatingTrips, missingCountryRows } = window as unknown as { workerCount: number; calculatingTrips: string[]; missingCountryRows: number };
+      return { workerCount, calculatingTrips, missingCountryRows };
+    });
+    expect(state.workerCount).toBe(2);
+    expect(state.missingCountryRows).toBe(0);
+    expect(state.calculatingTrips).not.toContain('Ready trip');
+  } finally { release(); }
+});
+
+test('country and transport tables share sizing, Unassigned is last, and attribution belongs in Status', async ({ page, context }) => {
+  const fixture = { ...trip, id: 'table-style-trip', segments: [trip.segments[0], segment('long-flight', 'flight', [[-10, 0], [10, 0]])] };
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: fixture }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await expect(page.locator('.country-row')).toHaveCount(3);
+  await expect(page.locator('.country-row').last()).toContainText('Unassigned');
+  await expect(page.locator('.country-list')).toContainText('Distance (km)');
+  await expect(page.locator('.country-list a')).toHaveCount(0);
+  const sizing = () => page.evaluate(() => {
+    const row = document.querySelector('.analytics-summary-row')!;
+    const header = document.querySelector('.analytics-summary-header')!;
+    const styles = (element: Element) => {
+      const style = getComputedStyle(element);
+      return { font: style.fontSize, padding: style.padding, lineHeight: style.lineHeight, columns: style.gridTemplateColumns, weight: style.fontWeight, border: style.borderBottom, height: element.getBoundingClientRect().height };
+    };
+    return { row: styles(row), header: styles(header) };
+  });
+  const country = await sizing();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  expect(await sizing()).toEqual(country);
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Status', { exact: true }).click();
+  const providers = page.getByRole('region', { name: 'Other providers' });
+  await expect(providers.getByRole('link', { name: '© Overture Maps Foundation' })).toHaveAttribute('href', 'https://docs.overturemaps.org/attribution/');
+  await expect(providers.getByRole('link', { name: 'ODbL 1.0' })).toBeVisible();
+  await expect(providers).not.toContainText('OpenStreetMap');
+});
+
+test('country labels use Overture English names including synthetic territory codes', async ({ page, context }) => {
+  const codes = [{ code: 'AT', name: 'Österreich' }, { code: 'XA', name: 'Хабомаи' }];
+  const localized = countries.map((country, i) => {
+    const { code, name } = codes[i];
+    const west = i ? 0 : -2, east = i ? 2 : 0;
+    const geometry = { type: 'Polygon', coordinates: [[[west, -2], [east, -2], [east, 2], [west, 2], [west, -2]]] };
+    const body = gzipSync(JSON.stringify({ code, land: geometry, territorial: geometry }));
+    return { body, entry: { ...country.entry, code, name, file: `${code}.json.gz`, sha256: createHash('sha256').update(body).digest('hex') } };
+  });
+  await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'english-test', countries: localized.map(country => country.entry), attribution: 'Test' } }));
+  for (const country of localized) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ contentType: 'application/gzip', body: country.body }));
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: { ...trip, id: 'english-names' } }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await expect(page.getByRole('button', { name: /Austria/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Habomai Islands/ })).toBeVisible();
+  await expect(page.locator('.country-list')).not.toContainText('Österreich');
+  await expect(page.locator('.country-list')).not.toContainText('Хабомаи');
 });

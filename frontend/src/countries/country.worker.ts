@@ -6,6 +6,7 @@ import { COUNTRY_ALGORITHM_VERSION, segmentKey } from './types';
 import type { Bounds, CountryAsset, CountryIndex, CountryResult } from './types';
 import type { CountryWorkerUpdate, SegmentCountryCache } from './types';
 import { canPersistCountryCache, countryCacheFor, validCountryCache } from './cache';
+import { countryName } from './names';
 
 const digest = async (bytes: BufferSource) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
 const textHash = (value: unknown) => digest(new TextEncoder().encode(JSON.stringify(value)));
@@ -44,9 +45,9 @@ async function asset(entry: CountryIndex['countries'][number], base: string): Pr
   const url = new URL(entry.file, base);
   url.searchParams.set('v', entry.sha256);
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Cannot load boundaries for ${entry.name} (${response.status})`);
+  if (!response.ok) throw new Error(`Cannot load boundaries for ${countryName(entry)} (${response.status})`);
   const bytes = await response.arrayBuffer();
-  if (await digest(bytes) !== entry.sha256) throw new Error(`Boundary checksum mismatch for ${entry.name}`);
+  if (await digest(bytes) !== entry.sha256) throw new Error(`Boundary checksum mismatch for ${countryName(entry)}`);
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
   const country: CountryAsset = await new Response(stream).json();
   return { code: country.code, territorial: country.territorial, land: country.territorial };
@@ -64,7 +65,7 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     const results: Record<string, CountryResult> = {};
     const caches: Record<string, SegmentCountryCache> = {};
     let pendingResults: typeof results = {}, pendingCaches: typeof caches = {};
-    let currentTrip: CountryWorkerUpdate['currentTrip'] = trips[0] && { id: trips[0].id, name: trips[0].name };
+    let currentTrip: CountryWorkerUpdate['currentTrip'];
     publish = complete => {
       const update: CountryWorkerUpdate = {
         complete, data: { index, results: complete ? results : pendingResults },
@@ -77,7 +78,6 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     timer = setInterval(() => publish!(false), 500);
     const entries = [];
     for (const trip of trips) for (const segment of trip.segments) {
-      currentTrip = { id: trip.id, name: trip.name };
       const geometry = getEffectiveGeometry(segment);
       const hash = await textHash([index.version, COUNTRY_ALGORITHM_VERSION, GEOMETRY_VERSION, segment.transportMode, segment.routingProfile, geometry, segment.waypoints.map(w => [w.id, w.coordinates])]);
       const allowCache = canPersistCountryCache(trip);
@@ -96,22 +96,28 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
       const bounds = entry.segment.transportMode === 'flight' || entry.segment.routingProfile === 'teleport' ? []
         : entry.geometry.coordinates.map(coordinates => bbox({ type: 'LineString', coordinates }) as Bounds);
       const candidates = index.countries.filter(country => country.bounds.some(b => bounds.some(route => overlaps(b, route))));
-      const key = candidates.map(c => c.code).join('|');
+      const key = JSON.stringify([entry.trip.id, candidates.map(c => c.code)]);
       const group = groups.get(key) || { candidates, entries: [] };
       group.entries.push(entry);
       groups.set(key, group);
     }
+    let loadedCountries: string | undefined;
+    let partitioner: CountryPartitioner | undefined;
     for (const group of groups.values()) {
       currentTrip = { id: group.entries[0].trip.id, name: group.entries[0].trip.name };
-      const assets: CountryAsset[] = [];
-      // Retain boundaries for one route group, rather than the entire travel history.
-      for (let i = 0; i < group.candidates.length; i += 3) assets.push(...await Promise.all(group.candidates.slice(i, i + 3).map(entry => asset(entry, base))));
-      const partitioner = new CountryPartitioner(assets);
+      const countriesKey = group.candidates.map(country => country.code).join('|');
+      if (loadedCountries !== countriesKey) {
+        const assets: CountryAsset[] = [];
+        // Retain boundaries for one route group, rather than the entire travel history.
+        for (let i = 0; i < group.candidates.length; i += 3) assets.push(...await Promise.all(group.candidates.slice(i, i + 3).map(entry => asset(entry, base))));
+        partitioner = new CountryPartitioner(assets);
+        loadedCountries = countriesKey;
+      }
       let sliceStarted = performance.now();
       const toCache: { hash: string; result: CountryResult }[] = [];
       for (const entry of group.entries) {
         currentTrip = { id: entry.trip.id, name: entry.trip.name };
-        const steps = partitioner.partitionSteps(entry.segment, entry.geometry);
+        const steps = partitioner!.partitionSteps(entry.segment, entry.geometry);
         let step = steps.next();
         while (!step.done) {
           await new Promise(resolve => setTimeout(resolve, 0));

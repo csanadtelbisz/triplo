@@ -45,6 +45,10 @@ includes a new trip being edited before its first save. The worker reuses valid
 unchanged segment caches. Country Analytics shows available results every
 500 ms while displaying the name of the trip currently being calculated;
 date filters do not limit which trips receive caches.
+Completed rows remain visible as other trips are processed; unchanged geometry
+does not restart calculations. Countries use Overture's English names and the
+same table layout as transport modes, with Unassigned last. Overture attribution
+is listed in **System Status → Other providers**.
 Results are attached to `segment.countryCache`, including kilometres, derived
 shares, clipped route pieces, waypoint countries, version identifiers, and an
 input hash. Save or Save All writes them into trip JSON through the configured

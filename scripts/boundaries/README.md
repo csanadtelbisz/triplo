@@ -1,6 +1,6 @@
 # Country boundaries
 
-Triplo uses Overture Divisions country codes, primary names, and territorial
+Triplo uses Overture Divisions country codes, names, and territorial
 assignments. There are no country overrides. `normalize_country` is the policy
 entry point for a future override feature. Region-level areas with their own
 country code are included, so extraction is not restricted to `subtype=country`.
@@ -14,6 +14,8 @@ python -m venv .boundary-cache/venv
 .boundary-cache/venv/bin/python -m unittest discover -s scripts/boundaries
 .boundary-cache/venv/bin/python scripts/boundaries/boundaries.py build
 .boundary-cache/venv/bin/python scripts/boundaries/boundaries.py verify
+.boundary-cache/venv/bin/python scripts/boundaries/names.py build
+.boundary-cache/venv/bin/python scripts/boundaries/names.py verify
 ```
 
 On Windows use `.boundary-cache/venv/Scripts/python.exe` and `pip.exe`.
@@ -21,6 +23,15 @@ The initial extraction downloads about 4.5 GB of source Parquet, one file at a
 time, then retains a smaller extract in `.boundary-cache`. A clean build needs
 network access to Overture S3. Rebuilds reuse the extract. DuckDB extensions,
 API keys, and runtime access to Overture are not required.
+
+English display labels come from the same locked Overture objects' `names.common.en`,
+with `names.primary` as the fallback. `names.py build` reads metadata columns with
+conditional, ETag-checked byte-range requests, avoiding geometry downloads. It
+generates `frontend/src/countries/englishNames.ts` and `names.lock.json`, which pins
+the source-lock and output SHA-256 hashes. This includes Overture's synthetic
+territory codes; no separate country catalog or territory overrides are used.
+The primary names remain in the boundary catalog, and display-name updates do
+not invalidate country distance caches.
 
 `source.lock.json` pins the release, object names, sizes, ETags, source Parquet
 SHA-256 hashes, and the SHA-256 of the canonical extracted records. The checked-in
@@ -45,11 +56,13 @@ resolved by arbitrary country ordering. After reviewing the candidate:
 
 ```sh
 python scripts/boundaries/boundaries.py update --release YYYY-MM-DD.N --promote
+python scripts/boundaries/names.py build
 python scripts/boundaries/boundaries.py verify
+python scripts/boundaries/names.py verify
 ```
 
 Commit the source lock and the complete `frontend/public/countries` directory
-together. Previous datasets remain available in Git. The preparation workflow
+together with the generated English names and their lock. Previous datasets remain available in Git. The preparation workflow
 also provides the generated directory and lock as an artifact for inspection.
 
 The boundary database is derived from Overture Divisions, including OpenStreetMap
