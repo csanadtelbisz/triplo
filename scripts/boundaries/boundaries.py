@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEST = ROOT / "frontend/public/countries"
 LOCK = Path(__file__).with_name("source.lock.json")
 BUCKET = "https://overturemaps-us-west-2.s3.amazonaws.com/"
-CONVERTER = 1
+CONVERTER = 2
 ATTRIBUTION = "© Overture Maps Foundation · © OpenStreetMap contributors · ODbL 1.0"
 
 
@@ -146,7 +146,7 @@ def build(records, release, files, output, old_index):
         geometries.append(territorial)
         payload = encoded({"code": code, "territorial": mapping(territorial), "land": mapping(land)})
         compressed = gzip.compress(payload, mtime=0)
-        name = f"{code}.json.gz"
+        name = f"{code}.json.gz.bin"
         (output / name).write_bytes(compressed)
         countries.append({"code": code, "name": names[0], "file": name, "sha256": checksum(compressed), "bounds": [list(p.bounds) for p in components(territorial)], "landBounds": list(land.bounds), "landParts": [list(p.bounds) for p in sorted(components(land), key=lambda p: p.area, reverse=True)[:32]], "bytes": len(compressed)})
     tree = STRtree(geometries)

@@ -27,7 +27,9 @@ SHA-256 hashes, and the SHA-256 of the canonical extracted records. The checked-
 manifest records those identifiers and checksums, conversion version, upstream
 licenses, attribution, and the index checksum. The index checksums every output.
 Country files are deterministic gzip JSON, with full territorial and land
-geometry; no coordinate rounding or simplification is applied.
+geometry; no coordinate rounding or simplification is applied. The `.gz.bin`
+suffix keeps static servers from transparently decoding the gzip payload before
+the worker verifies its checksum.
 
 To update, explicitly select a release:
 

@@ -95,7 +95,7 @@ test('country/mode yearly totals retain inclusive trip-day allocation and date o
 });
 
 test('installed Overture boundaries attribute an Austria–Germany crossing and preserve territories', () => {
-  const asset = (code: string): CountryAsset => JSON.parse(gunzipSync(readFileSync(new URL(`../public/countries/${code}.json.gz`, import.meta.url))).toString());
+  const asset = (code: string): CountryAsset => JSON.parse(gunzipSync(readFileSync(new URL(`../public/countries/${code}.json.gz.bin`, import.meta.url))).toString());
   const crossing = partition(segment([[11.4, 47.26], [11.58, 48.14]]), [asset('AT'), asset('DE')]);
   expect(crossing.distanceKmByCountry.AT).toBeGreaterThan(0);
   expect(crossing.distanceKmByCountry.DE).toBeGreaterThan(0);

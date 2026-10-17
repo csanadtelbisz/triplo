@@ -26,6 +26,18 @@ async function cached(db: IDBDatabase | null, key: string): Promise<CountryResul
   });
 }
 
+async function cacheResults(db: IDBDatabase | null, entries: { hash: string; result: CountryResult }[]): Promise<void> {
+  if (!db || !entries.length) return;
+  await new Promise<void>(resolve => {
+    try {
+      const transaction = db.transaction('results', 'readwrite');
+      transaction.oncomplete = transaction.onerror = transaction.onabort = () => resolve();
+      const store = transaction.objectStore('results');
+      for (const entry of entries) store.put(entry.result, entry.hash);
+    } catch { resolve(); }
+  });
+}
+
 async function asset(entry: CountryIndex['countries'][number], base: string): Promise<CountryAsset> {
   const url = new URL(entry.file, base);
   url.searchParams.set('v', entry.sha256);
@@ -68,13 +80,13 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
       // Retain boundaries for one route group, rather than the entire travel history.
       for (let i = 0; i < group.candidates.length; i += 3) assets.push(...await Promise.all(group.candidates.slice(i, i + 3).map(entry => asset(entry, base))));
       const partitioner = new CountryPartitioner(assets);
+      const toCache: { hash: string; result: CountryResult }[] = [];
       for (const entry of group.entries) {
         const result = partitioner.partition(entry.segment, entry.geometry);
         results[entry.key] = result;
-        if (db && entry.allowCache) {
-          try { db.transaction('results', 'readwrite').objectStore('results').put(result, entry.hash); } catch { /* Optional local cache. */ }
-        }
+        if (entry.allowCache) toCache.push({ hash: entry.hash, result });
       }
+      await cacheResults(db, toCache);
     }
     self.postMessage({ data: { index, results } });
   } catch (error) {

@@ -24,13 +24,13 @@ class BoundaryTests(unittest.TestCase):
             self.assertEqual({p.name: p.read_bytes() for p in a.iterdir()}, {p.name: p.read_bytes() for p in b.iterdir()})
             verify(a)
             self.assertEqual([c["code"] for c in json.loads((a / "index.json").read_bytes())["countries"]], ["FK", "GL", "RE"])
-            self.assertEqual(json.loads(gzip.decompress((a / "RE.json.gz").read_bytes()))["code"], "RE")
+            self.assertEqual(json.loads(gzip.decompress((a / "RE.json.gz.bin").read_bytes()))["code"], "RE")
 
     def test_verification_rejects_corruption(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             build([record()], "test", [], directory, {})
-            (directory / "GL.json.gz").write_bytes(b"corrupt")
+            (directory / "GL.json.gz.bin").write_bytes(b"corrupt")
             with self.assertRaisesRegex(ValueError, "Checksum mismatch"):
                 verify(directory)
 

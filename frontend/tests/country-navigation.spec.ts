@@ -104,3 +104,38 @@ test('failed boundary downloads show retry instead of inventing Unassigned kilom
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
 });
+
+test('worker loads checksum-verified real boundaries and reuses existing trip results', async ({ page, context }) => {
+  await context.unroute('**/countries/index.json');
+  const downloads: string[] = [];
+  context.on('request', request => {
+    if (request.url().includes('.json.gz.bin')) downloads.push(request.url());
+  });
+  const distances = await page.evaluate(async () => {
+    const coordinates = [[11.4, 47.26], [11.58, 48.14]];
+    const trips = [{ id: 'existing', name: 'Existing trip', createdAt: '', updatedAt: '', segments: Array.from({ length: 100 }, (_, segmentIndex) => {
+      const route = coordinates.map(([lon, lat]) => [lon + segmentIndex * 0.0001, lat]);
+      return {
+        id: `crossing-${segmentIndex}`, transportMode: 'car', routingProfile: 'car', source: 'manual', routingService: 'manual',
+        geometry: { type: 'LineString', coordinates: route },
+        waypoints: route.map((coordinates, i) => ({ id: `w${i}`, coordinates })),
+      };
+    }) }];
+    const calculate = () => new Promise<Record<string, number>>((resolve, reject) => {
+      const worker = new Worker('/src/countries/country.worker.ts', { type: 'module' });
+      worker.onerror = event => { worker.terminate(); reject(new Error(event.message)); };
+      worker.onmessage = event => {
+        worker.terminate();
+        if (event.data.error) reject(new Error(event.data.error));
+        else resolve(Object.values(event.data.data.results as Record<string, { distanceKmByCountry: Record<string, number> }>)[0].distanceKmByCountry);
+      };
+      worker.postMessage({ trips, base: `${location.origin}/countries/` });
+    });
+    return [await calculate(), await calculate()];
+  });
+  expect(distances[0].AT).toBeGreaterThan(0);
+  expect(distances[0].DE).toBeGreaterThan(0);
+  expect(distances[1]).toEqual(distances[0]);
+  expect(downloads.length).toBeGreaterThan(0);
+  expect(new Set(downloads).size).toBe(downloads.length);
+});

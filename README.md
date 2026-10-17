@@ -38,6 +38,16 @@ Country files load on demand and failures show a retry action instead of being
 counted as Unassigned. Disconnected route pieces retain their segment identity.
 Country zoom uses a relevant land component when an entity spans distant islands.
 
+Existing trips need no reimport or cloud-data migration. Enabling the globe in
+Analytics starts country calculations for all loaded trips, including trips
+outside the current date filter. Results appear once calculation finishes.
+Reopening country analytics reuses per-segment IndexedDB results; route/mode or
+boundary/algorithm changes invalidate the relevant results. Dates are applied
+after attribution. A new browser/device or cleared site data requires fresh
+calculations. Country results are not synced back to account storage. First-use
+time depends on boundary downloads, route vertex counts, and device speed;
+detailed tracks can take substantially longer than sparse routes.
+
 See [boundary preparation and updates](scripts/boundaries/README.md) for the
 reproducible Overture pipeline, checksums, validation report, and attribution.
 
