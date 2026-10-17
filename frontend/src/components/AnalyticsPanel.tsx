@@ -30,6 +30,7 @@ interface AnalyticsPanelProps {
   onSelectionChange: (selection: AnalyticsSelection, replace?: boolean) => void;
   countryData?: CountryData;
   countryLoading: boolean;
+  countryCurrentTrip?: string;
   countryError?: string;
   onRetryCountries: () => void;
 }
@@ -452,7 +453,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
   );
 }
 
-export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selection, onSelectionChange, countryData, countryLoading, countryError, onRetryCountries }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selection, onSelectionChange, countryData, countryLoading, countryCurrentTrip, countryError, onRetryCountries }: AnalyticsPanelProps) {
   const selectedModeKey = selection.mode;
   const onSelectedModeKeyChange = (mode: string | null) => onSelectionChange({ ...selection, mode });
   const selectedYear = selection.year;
@@ -630,9 +631,9 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
         {selection.countries && (
           <div className="country-list" aria-label="Countries">
-            {countryLoading && <p role="status">Calculating country distances…</p>}
+            {countryLoading && <p role="status">{countryCurrentTrip ? `Calculating country distances for ${countryCurrentTrip}…` : 'Calculating country distances…'}</p>}
             {countryError && <p role="alert">{countryError} <button type="button" onClick={onRetryCountries}>Retry</button></p>}
-            {!countryLoading && !countryError && countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
+            {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
               <button type="button" className="country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, mode: null })}>
                 <span>{row.name}</span><span>{row.distance.toFixed(1)} km</span>
               </button>

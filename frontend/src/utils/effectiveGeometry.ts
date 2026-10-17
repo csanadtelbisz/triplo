@@ -5,6 +5,11 @@ export const GEOMETRY_VERSION = 1;
 export type RouteGeometry = GeoJSON.MultiLineString;
 const cache = new WeakMap<Segment, RouteGeometry>();
 
+export function copyEffectiveGeometryCache(source: Segment, target: Segment): void {
+  const geometry = cache.get(source);
+  if (geometry) cache.set(target, geometry);
+}
+
 export function routeLines(geometry: GeoJSON.LineString | RouteGeometry): GeoJSON.Position[][] {
   return geometry.type === 'LineString' ? [geometry.coordinates] : geometry.coordinates;
 }

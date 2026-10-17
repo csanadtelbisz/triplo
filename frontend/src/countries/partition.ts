@@ -52,13 +52,22 @@ export class CountryPartitioner {
   }
 
   partition(segment: Segment, geometry: RouteGeometry): CountryResult {
+    const steps = this.partitionSteps(segment, geometry);
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return step.value;
+  }
+
+  *partitionSteps(segment: Segment, geometry: RouteGeometry): Generator<void, CountryResult> {
     const pieces: CountryPiece[] = [];
     const distanceKmByCountry: Record<string, number> = {};
     const excluded = segment.routingProfile === 'teleport';
     const flight = segment.transportMode === 'flight';
+    let sliceStarted = performance.now();
     if (!excluded) for (const line of geometry.coordinates) {
       // Split each original edge independently: repeated coordinates must not erase travel.
       for (let i = 1; i < line.length; i++) {
+        if (performance.now() - sliceStarted >= 16) { yield; sliceStarted = performance.now(); }
         const a = line[i - 1], b = line[i], r = [b[0] - a[0], b[1] - a[1]];
         const total = distance(a, b);
         if (!total) continue;
@@ -101,10 +110,15 @@ export class CountryPartitioner {
       }
     }
     const totalDistanceKm = excluded ? 0 : geometryDistance(geometry);
+    const waypointCountries: Record<string, string> = {};
+    for (const waypoint of segment.waypoints) {
+      if (performance.now() - sliceStarted >= 16) { yield; sliceStarted = performance.now(); }
+      waypointCountries[waypoint.id] = flight ? UNASSIGNED : this.countryAt(waypoint.coordinates);
+    }
     return {
       pieces, distanceKmByCountry, totalDistanceKm,
       shares: Object.fromEntries(Object.entries(distanceKmByCountry).map(([code, km]) => [code, totalDistanceKm ? km / totalDistanceKm : 0])),
-      waypointCountries: Object.fromEntries(segment.waypoints.map(w => [w.id, flight ? UNASSIGNED : this.countryAt(w.coordinates)]))
+      waypointCountries
     };
   }
 }

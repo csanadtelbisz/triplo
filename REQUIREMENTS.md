@@ -191,6 +191,9 @@ saved-state baseline. Preference changes use a separate synchronization path.
 Country calculations attach derived per-segment caches without creating an
 undo step. Save and Save All persist these caches in trip JSON, allowing reuse
 on other devices; cache-only differences are ignored for sync conflicts.
+The worker runs after loading and normal geometry/mode/waypoint updates,
+including routing and imports, independently of Analytics visibility. Analytics
+receives available results every 500 ms and displays the current trip name.
 Startup read-only and mobile-panel preferences remain local, while language,
 appearance, map home, mode overrides, list settings, API keys, and custom styles
 are synchronized. Custom style scripts are saved as separate files.

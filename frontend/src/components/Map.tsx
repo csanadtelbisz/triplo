@@ -95,6 +95,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<{ marker: Marker, wp: any, pref: number, tripId: string }[]>([]);
+  const focusedCountryRef = useRef<string | null>(null);
   const tempMarkerRef = useRef<Marker | null>(null);
   const hoverCoordMarkerRef = useRef<Marker | null>(null);
   const selectedPoiMarkerRef = useRef<Marker | null>(null);
@@ -1256,7 +1257,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
     const map = mapRef.current;
     const country = analyticsSelection?.country;
+    if (!country) { focusedCountryRef.current = null; return; }
     if (!country || !countryData) return;
+    const focusKey = `${countryData.index.version}/${country}`;
+    if (focusedCountryRef.current === focusKey) return;
     const entry = countryData.index.countries.find(c => c.code === country);
     const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => !analyticsSelection.mode || modeKey(s) === analyticsSelection.mode).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
     const landParts = entry?.landParts || (entry ? [entry.landBounds] : []);
@@ -1267,7 +1271,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       : coordinates.reduce((bounds, c) => bounds.extend([c[0], c[1]]), new LngLatBounds());
     if (!bounds.isEmpty()) {
       const camera = map.cameraForBounds(bounds, { padding: getPadding('current', 'manager'), maxZoom: 12 });
-      if (camera) map.flyTo({ ...camera, duration: 700 });
+      if (camera) {
+        map.flyTo({ ...camera, duration: 700 });
+        focusedCountryRef.current = focusKey;
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analyticsSelection?.country, countryData, mapLoaded]);

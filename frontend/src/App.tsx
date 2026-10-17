@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import './styles/App.css';
 import './styles/Shared.css';
@@ -194,17 +194,28 @@ export default function App() {
     tripsRef.current = trips;
   }, [trips]);
 
+  const countryTrips = useMemo(() => selectedTrip && !trips.some(trip => trip.id === selectedTrip.id) ? [...trips, selectedTrip] : trips, [trips, selectedTrip]);
+  const countryTripsRef = useRef(countryTrips);
+  useEffect(() => { countryTripsRef.current = countryTrips; }, [countryTrips]);
   const applyCountryCaches = useCallback((source: Trip[], updated: Trip[]) => {
-    if (tripsRef.current !== source) return false;
-    tripsRef.current = updated;
-    setTrips(updated);
+    if (countryTripsRef.current !== source) return false;
+    countryTripsRef.current = updated;
+    const current = tripsRef.current;
+    const next = current.map(trip => {
+      const index = source.indexOf(trip);
+      return index < 0 ? trip : updated[index];
+    });
+    if (next.some((trip, i) => trip !== current[i])) {
+      tripsRef.current = next;
+      setTrips(next);
+    }
     setSelectedTrip(selected => {
       const index = selected ? source.indexOf(selected) : -1;
       return index < 0 ? selected : updated[index];
     });
     return true;
   }, []);
-  const countries = useCountryData(trips, isAnalyticsOpen && analyticsSelection.countries, applyCountryCaches);
+  const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryCaches);
 
   const getPanelHistoryState = useCallback((): PanelHistoryState => {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
@@ -1421,6 +1432,7 @@ export default function App() {
                 }}
                 countryData={countries.data}
                 countryLoading={countries.loading}
+                countryCurrentTrip={countries.currentTrip}
                 countryError={countries.error}
                 onRetryCountries={countries.retry}
                 onFocusSegment={(tripId, segmentId) => {

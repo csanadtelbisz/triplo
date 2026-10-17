@@ -38,9 +38,13 @@ Country files load on demand and failures show a retry action instead of being
 counted as Unassigned. Disconnected route pieces retain their segment identity.
 Country zoom uses a relevant land component when an entity spans distant islands.
 
-Existing trips need no reimport or cloud-data migration. Enabling the globe in
-Analytics starts country calculations for all loaded trips, including trips
-outside the current date filter. Results appear once calculation finishes.
+Existing trips need no reimport or cloud-data migration. Country calculations
+run in the background after trip loading and geometry, mode, or waypoint changes,
+including routing and track imports, even when Analytics is closed. This also
+includes a new trip being edited before its first save. The worker reuses valid
+unchanged segment caches. Country Analytics shows available results every
+500 ms while displaying the name of the trip currently being calculated;
+date filters do not limit which trips receive caches.
 Results are attached to `segment.countryCache`, including kilometres, derived
 shares, clipped route pieces, waypoint countries, version identifiers, and an
 input hash. Save or Save All writes them into trip JSON through the configured

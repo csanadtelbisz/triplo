@@ -27,7 +27,7 @@ async function calculateCountries(page: Page, trips: Trip[]) {
     return new Promise<{ data?: CountryData; caches?: Record<string, SegmentCountryCache>; error?: string }>((resolve, reject) => {
       const worker = new Worker('/src/countries/country.worker.ts', { type: 'module' });
       worker.onerror = event => { worker.terminate(); reject(new Error(event.message)); };
-      worker.onmessage = event => { worker.terminate(); resolve(event.data); };
+      worker.onmessage = event => { if (!event.data.complete) return; worker.terminate(); resolve(event.data); };
       worker.postMessage({ trips, base: `${location.origin}/countries/` });
     });
   }, trips);
@@ -40,7 +40,21 @@ async function routes(page: Page) {
   });
 }
 
+async function cachedTrips(page: Page): Promise<Trip[]> {
+  return page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('TriploDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const read = db.transaction('trips').objectStore('trips').get('triplo_cached_trips_v2');
+      read.onsuccess = () => { resolve(read.result || []); db.close(); };
+      read.onerror = () => { reject(read.error); db.close(); };
+    };
+  }));
+}
+
 test.beforeEach(async ({ page, context }) => {
+  page.on('dialog', dialog => dialog.accept());
   await page.setViewportSize({ width: 1100, height: 850 });
   await page.addInitScript(() => {
     localStorage.setItem('github_token', 'test-token');
@@ -117,6 +131,16 @@ test('country cropping keeps outside waypoint markers hidden after camera moveme
 
 test('failed boundary downloads show retry instead of inventing Unassigned kilometres', async ({ page, context }) => {
   await context.route('**/countries/AA.json.gz*', route => route.fulfill({ status: 503, body: 'Unavailable' }));
+  await page.goto('/tests/map-distance.html');
+  await page.evaluate(async () => {
+    for (const name of ['TriploDB', 'TriploCountryCache']) await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  });
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
   await page.getByRole('button', { name: 'Group by country' }).click();
   await expect(page.getByRole('alert')).toContainText('Cannot load boundaries');
   await expect(page.getByRole('button', { name: /Unassigned/ })).toHaveCount(0);
@@ -132,7 +156,7 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
     if (request.url().includes('.json.gz.bin')) downloads.push(request.url());
   });
   const distances = await page.evaluate(async () => {
-    const coordinates = [[11.4, 47.26], [11.58, 48.14]];
+    const coordinates = Array.from({ length: 10 }, (_, i) => [11.4 + 0.18 * i / 9, 47.26 + 0.88 * i / 9]);
     const trips = [{ id: 'existing', name: 'Existing trip', createdAt: '', updatedAt: '', segments: Array.from({ length: 100 }, (_, segmentIndex) => {
       const route = coordinates.map(([lon, lat]) => [lon + segmentIndex * 0.0001, lat]);
       return {
@@ -141,21 +165,29 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
         waypoints: route.map((coordinates, i) => ({ id: `w${i}`, coordinates })),
       };
     }) }];
+    let availableProgress = 0;
     const calculate = () => new Promise<Record<string, number>>((resolve, reject) => {
       const worker = new Worker('/src/countries/country.worker.ts', { type: 'module' });
       worker.onerror = event => { worker.terminate(); reject(new Error(event.message)); };
       worker.onmessage = event => {
+        if (!event.data.complete) {
+          if (Object.keys(event.data.data?.results || {}).length) availableProgress++;
+          return;
+        }
         worker.terminate();
         if (event.data.error) reject(new Error(event.data.error));
         else resolve(Object.values(event.data.data.results as Record<string, { distanceKmByCountry: Record<string, number> }>)[0].distanceKmByCountry);
       };
       worker.postMessage({ trips, base: `${location.origin}/countries/` });
     });
-    return [await calculate(), await calculate()];
+    const first = await calculate();
+    const second = await calculate();
+    return { distances: [first, second], availableProgress };
   });
-  expect(distances[0].AT).toBeGreaterThan(0);
-  expect(distances[0].DE).toBeGreaterThan(0);
-  expect(distances[1]).toEqual(distances[0]);
+  expect(distances.distances[0].AT).toBeGreaterThan(0);
+  expect(distances.distances[0].DE).toBeGreaterThan(0);
+  expect(distances.distances[1]).toEqual(distances.distances[0]);
+  expect(distances.availableProgress).toBeGreaterThan(0);
   expect(downloads.length).toBeGreaterThan(0);
   expect(new Set(downloads).size).toBe(downloads.length);
 });
@@ -226,9 +258,10 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
     await page.getByTitle('Flight', { exact: true }).click();
     await page.goBack();
     await expect(page.getByTitle('Undo', { exact: true })).toBeEnabled();
+    await expect.poll(async () => (await cachedTrips(page))[0]?.segments[0].countryCache?.result.shares[UNASSIGNED]).toBeDefined();
     await page.getByTitle('Save', { exact: true }).click();
     await expect.poll(() => saved!.segments[0].transportMode).toBe('flight');
-    expect(saved!.segments[0].countryCache).toBeUndefined();
+    await expect.poll(() => saved!.segments[0].countryCache?.result.shares[UNASSIGNED]).toBeDefined();
     expect(saved!.segments[1].countryCache).toBeDefined();
   }
 });
@@ -269,4 +302,87 @@ test('providers differing only in country caches do not create sync conflicts', 
   }, { edited, cached });
   await page.getByTitle('Reload from all services', { exact: true }).click();
   await expect(page.getByTitle('Conflicts found between devices/services', { exact: true })).toHaveCount(1);
+});
+
+for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes replace a running country calculation while Analytics is closed' : 'country rows update every 500 ms while another trip is calculating without restarting the worker', async ({ page, context }) => {
+  const ready: Trip = { ...trip, id: 'ready', name: 'Ready flight', segments: [segment('ready-flight', 'flight', [[-1, 0], [1, 0]])] };
+  const pending: Trip = { ...trip, id: 'pending', name: 'Pending route', segments: [segment('pending-drive', 'car', [[-1, 0], [1, 0]])] };
+  await context.route('https://api.github.com/repos/test/trips/contents/trips', route => route.fulfill({ json: [
+    { name: 'ready.triplo.json', download_url: 'https://fixtures.test/ready.json' },
+    { name: 'pending.triplo.json', download_url: 'https://fixtures.test/pending.json' },
+  ] }));
+  await context.route('https://fixtures.test/ready.json', route => route.fulfill({ json: ready }));
+  await context.route('https://fixtures.test/pending.json', route => route.fulfill({ json: pending }));
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await context.route('**/countries/AA.json.gz*', async route => {
+    await gate;
+    await route.fulfill({ contentType: 'application/gzip', body: countries[0].body });
+  });
+  await page.addInitScript(() => {
+    const state = window as unknown as { countryWorkerCount: number; countryProgressTimes: number[] };
+    state.countryWorkerCount = 0; state.countryProgressTimes = [];
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (String(url).includes('country.worker')) {
+          state.countryWorkerCount++;
+          this.addEventListener('message', event => {
+            if (!event.data.complete) state.countryProgressTimes.push(performance.now());
+          });
+        }
+      }
+    };
+  });
+  try {
+    await page.goto('/tests/country-app.html');
+    await page.getByTitle('Analytics', { exact: true }).click();
+    await page.getByRole('button', { name: 'Group by country' }).click();
+    await expect(page.getByRole('status')).toHaveText('Calculating country distances for Pending route…');
+    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4 km');
+    await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => (window as unknown as { countryProgressTimes: number[] }).countryProgressTimes.length)).toBeGreaterThanOrEqual(3);
+    const timing = await page.evaluate(() => (window as unknown as { countryProgressTimes: number[] }).countryProgressTimes);
+    expect(timing[2] - timing[1]).toBeGreaterThanOrEqual(400);
+    await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4 km');
+    expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(1);
+    if (changeRoute) {
+      await page.getByTitle('Close Analytics', { exact: true }).click();
+      await page.getByTitle('Close Analytics', { exact: true }).click();
+      await page.locator('.trip-card').filter({ hasText: pending.name }).click();
+      await page.getByTitle('Segment Info', { exact: true }).click();
+      await page.getByTitle('Flight', { exact: true }).click();
+      await page.goBack();
+      await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === pending.id)?.segments[0].countryCache?.result.shares[UNASSIGNED]).toBeDefined();
+      expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(2);
+      release();
+      await page.goBack();
+      await page.getByTitle('Analytics', { exact: true }).click();
+      await page.getByRole('button', { name: 'Group by country' }).click();
+      await expect(page.getByRole('status')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('444.8 km');
+      await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
+      return;
+    }
+    await page.getByRole('button', { name: /Unassigned/ }).click();
+    await page.evaluate(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const state = window as unknown as { countryAutoFits: number; testMap: { stop(): void; flyTo(options: unknown): unknown; jumpTo(options: unknown): void } };
+      const map = state.testMap;
+      map.stop();
+      state.countryAutoFits = 0;
+      const flyTo = map.flyTo.bind(map);
+      map.flyTo = options => { state.countryAutoFits++; return flyTo(options); };
+      map.jumpTo({ center: [30, 20], zoom: 4 });
+    });
+    release();
+    await expect(page.getByRole('status')).toHaveCount(0);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(await page.evaluate(() => (window as unknown as { countryAutoFits: number }).countryAutoFits)).toBe(0);
+    await page.getByRole('button', { name: /Unassigned/ }).click();
+    await expect(page.getByRole('button', { name: /Country A/ })).toContainText('111.2 km');
+    await expect(page.getByRole('button', { name: /Country B/ })).toContainText('111.2 km');
+    expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(1);
+  } finally { release(); }
 });

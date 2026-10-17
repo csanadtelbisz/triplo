@@ -1,5 +1,5 @@
 import type { Segment, SegmentCountryCache, Trip } from '../../../shared/types';
-import { GEOMETRY_VERSION } from '../utils/effectiveGeometry';
+import { copyEffectiveGeometryCache, GEOMETRY_VERSION } from '../utils/effectiveGeometry';
 import { COUNTRY_ALGORITHM_VERSION, segmentKey } from './types';
 import type { CountryIndex } from './types';
 
@@ -22,7 +22,9 @@ export function attachCountryCaches(trips: Trip[], caches: Record<string, Segmen
       const cache = caches[segmentKey(trip.id, segment.id)];
       if (!cache || validCountryCache(segment.countryCache, cache.boundaryVersion, cache.inputHash)) return segment;
       changed = tripChanged = true;
-      return { ...segment, countryCache: cache };
+      const updated = { ...segment, countryCache: cache };
+      copyEffectiveGeometryCache(segment, updated);
+      return updated;
     });
     return tripChanged ? { ...trip, segments } : trip;
   });
@@ -37,4 +39,10 @@ export function sameCountryInputs(a: Segment, b: Segment): boolean {
   return a.transportMode === b.transportMode && a.routingProfile === b.routingProfile && a.geometry === b.geometry &&
     a.routingService === b.routingService && a.waypoints.length === b.waypoints.length &&
     a.waypoints.every((waypoint, i) => waypoint.id === b.waypoints[i].id && waypoint.coordinates.every((value, axis) => value === b.waypoints[i].coordinates[axis]));
+}
+
+export function sameCountryTripInputs(a: Trip[], b: Trip[]): boolean {
+  return a.length === b.length && a.every((trip, i) => trip.id === b[i].id &&
+    canPersistCountryCache(trip) === canPersistCountryCache(b[i]) && trip.segments.length === b[i].segments.length &&
+    trip.segments.every((segment, j) => segment.id === b[i].segments[j].id && sameCountryInputs(segment, b[i].segments[j])));
 }
