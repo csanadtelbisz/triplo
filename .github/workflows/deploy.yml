@@ -9,6 +9,10 @@ on:
       preview:
         type: boolean
         default: false
+    outputs:
+      page_url:
+        description: Successfully deployed Pages URL
+        value: ${{ jobs.deploy.outputs.page_url }}
 
 permissions:
   contents: read
@@ -96,6 +100,8 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: ${{ inputs.preview && 'pull-request-previews' || 'github-pages' }}
       url: ${{ inputs.preview && github.event.action != 'closed' && format('{0}pr-preview/pr-{1}/', steps.deployment.outputs.page_url, github.event.pull_request.number) || steps.deployment.outputs.page_url }}

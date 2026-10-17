@@ -10,7 +10,10 @@ architecture. Implementation starts in [App.tsx](frontend/src/App.tsx) and the
 On desktop, a collapsible left sidebar sits beside the map. It shows the trip
 manager, trip editor, detail panels, search, analytics, preferences, or system
 status. Panel navigation is reflected in browser history, and panels expose
-back or close controls.
+back or close controls. Analytics Back goes through segment details, mode,
+country, the unselected list, and the trip manager as applicable. Clearing a
+selection returns to its parent; it does not add a step that Back reactivates.
+The globe toggle changes the view at the current list level.
 
 At widths up to 768 px, the sidebar becomes a bottom sheet over the map. Its
 drag handle can be tapped to expand or dragged to expand/collapse; downward
@@ -151,6 +154,11 @@ chart. Selecting a mode filters the map and opens that mode's segment list;
 segments can be focused on the map or opened in Segment Info, and titles can be
 edited when permitted.
 
+The globe toggle switches to countries using Overture English names. Its table
+matches the transport table and keeps Unassigned last. Available country rows
+stay visible during background calculation, with the current trip shown above
+the table. Selecting a country reveals its modes and crops the map to it.
+
 The time-filter button opens a floating date-range slider with daily or yearly
 granularity. Date filtering affects the displayed trips/segments and map; the
 slider remains accessible as the mobile sheet is collapsed. The chart supports
@@ -181,6 +189,9 @@ state and open connection settings. Routing cards show provider availability
 and attribution, with key configuration for supported providers. Tile-provider
 cards show their checks and key configuration where needed. These are external
 service/configuration indicators, not a Triplo backend health check.
+
+**Other providers** shows the Overture Maps logo and attribution for country boundaries.
+OpenStreetMap attribution remains with map tile providers.
 
 Storage configuration dialogs expose provider-specific settings such as a Drive
 folder or GitHub repository/access/share tokens. API-key dialogs provide key

@@ -1,0 +1,77 @@
+name: Country boundaries
+
+on:
+  pull_request:
+    paths: ['scripts/boundaries/**', 'frontend/public/countries/**', 'frontend/src/countries/englishNames.ts', '.github/workflows/country-boundaries.yml']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Overture release to prepare (blank rebuilds the source lock)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/boundaries/requirements.txt
+      - run: pip install -r scripts/boundaries/requirements.txt
+      - run: python -m unittest discover -s scripts/boundaries
+      - run: python scripts/boundaries/boundaries.py verify
+      - run: python scripts/boundaries/names.py verify
+
+  prepare:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/boundaries/requirements.txt
+      - run: pip install -r scripts/boundaries/requirements.txt
+      - name: Prepare and validate boundaries
+        env:
+          OVERTURE_RELEASE: ${{ inputs.release }}
+        run: |
+          if [ -n "$OVERTURE_RELEASE" ]; then
+            python scripts/boundaries/boundaries.py update --release "$OVERTURE_RELEASE" --promote
+          else
+            python scripts/boundaries/boundaries.py build
+          fi
+          python scripts/boundaries/names.py build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: country-boundaries
+          path: |
+            frontend/public/countries
+            scripts/boundaries/source.lock.json
+            frontend/src/countries/englishNames.ts
+            scripts/boundaries/names.lock.json
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: country-catalog
+          path: |
+            frontend/public/countries/index.json
+            frontend/public/countries/manifest.json
+            frontend/public/countries/validation.json
+            scripts/boundaries/source.lock.json
+            frontend/src/countries/englishNames.ts
+            scripts/boundaries/names.lock.json
+          retention-days: 7

@@ -21,6 +21,58 @@ there is no application backend to run.
 - Save trips and preferences to Google Drive or GitHub, resolve sync conflicts,
   and share read-only trip links.
 
+## Country analytics
+
+Country analytics adds a globe toggle above transport modes. Select a country
+to crop routes and waypoint markers to it; select a mode to narrow the results.
+Flights are entirely **Unassigned** and teleport segments contribute no distance.
+Yearly distances retain proportional allocation across inclusive trip days.
+Date filters use trip overlap; they do not infer the date of a border crossing.
+
+The full yearly chart remains visible as context. Browser Back/Forward restores
+country, mode, date, and segment-detail selections. Clearing a country or mode
+returns to its parent level; Back from an unselected list returns to the trip
+manager. View toggles and date changes replace the current entry. Calculations
+run in a worker and use per-segment caches with geometry, boundary, and algorithm
+versions. Shared-trip references remain metadata-only and never acquire cached geometry.
+Country files load on demand and failures show a retry action instead of being
+counted as Unassigned. Disconnected route pieces retain their segment identity.
+Country zoom uses a relevant land component when an entity spans distant islands.
+
+Existing trips need no reimport or cloud-data migration. Country calculations
+run in the background after trip loading and geometry, mode, or waypoint changes,
+including routing and track imports, even when Analytics is closed. This also
+includes a new trip being edited before its first save. The worker reuses valid
+unchanged segment caches. Country Analytics shows available results every
+500 ms while displaying the name of the trip currently being calculated;
+date filters do not limit which trips receive caches.
+Completed rows remain visible as other trips are processed; unchanged geometry
+does not restart calculations. Countries use Overture's English names and the
+same table layout as transport modes, with Unassigned last. The country header
+counts countries with positive distance in the current period, excluding Unassigned.
+Overture's logo and attribution are listed in **System Status → Other providers**.
+Background progress without new results does not refresh the interface.
+Background cache updates preserve existing map routes and markers; new country results
+update the map only when a country is selected. Unsaved-change checks reuse trip
+snapshots, and distance calculations preserve effective geometry for map reuse.
+Results are attached to `segment.countryCache`, including kilometres, derived
+shares, clipped route pieces, waypoint countries, version identifiers, and an
+input hash. Save or Save All writes them into trip JSON through the configured
+storage providers. Computing new caches makes these save actions available
+without adding an undo step or editing route data. Cache-only differences do
+not create sync conflicts.
+
+Reopening country analytics first reuses valid caches from trip JSON, then
+IndexedDB. Another browser/device can reuse saved results without downloading
+boundaries or repeating route splitting. Missing or stale caches are rebuilt;
+route/mode, waypoint, or boundary/algorithm changes invalidate the relevant
+results. Dates are applied after attribution. First-use time depends on boundary
+downloads, route vertex counts, and device speed; detailed tracks can take
+substantially longer than sparse routes.
+
+See [boundary preparation and updates](scripts/boundaries/README.md) for the
+reproducible Overture pipeline, checksums, validation report, and attribution.
+
 ## Using Triplo and storing trips
 
 On first launch, choose **Explore Triplo** to try the app without connecting an
@@ -149,7 +201,9 @@ the `/triplo/` base path. For an equivalent local build, run
 [pr-preview.yml](.github/workflows/pr-preview.yml) builds and tests pull requests.
 Branches in this repository also get a preview at
 `https://csanadtelbisz.github.io/triplo/pr-preview/pr-<number>/`; fork PRs run
-validation only. Preview links appear on the deployment and in the job summary.
+validation only. After a successful preview deployment, a PR comment links to
+the deployed preview and identifies its commit. Subsequent deployments update
+that comment. Links also appear on the deployment and in the job summary.
 
 GitHub Pages hosts one site per repository, so each deployment includes the
 default-branch production build and all open same-repository PR previews.
