@@ -30,10 +30,11 @@ Yearly distances retain proportional allocation across inclusive trip days.
 Date filters use trip overlap; they do not infer the date of a border crossing.
 
 The full yearly chart remains visible as context. Browser Back/Forward restores
-country, mode, date, and segment-detail selections. Slider changes replace the
-current history entry. Calculations run in a worker and use per-segment caches
-with geometry, boundary, and algorithm versions. Shared-trip references remain
-metadata-only and never acquire cached geometry.
+country, mode, date, and segment-detail selections. Clearing a country or mode
+returns to its parent level; Back from an unselected list returns to the trip
+manager. View toggles and date changes replace the current entry. Calculations
+run in a worker and use per-segment caches with geometry, boundary, and algorithm
+versions. Shared-trip references remain metadata-only and never acquire cached geometry.
 Country files load on demand and failures show a retry action instead of being
 counted as Unassigned. Disconnected route pieces retain their segment identity.
 Country zoom uses a relevant land component when an entity spans distant islands.
@@ -47,8 +48,9 @@ unchanged segment caches. Country Analytics shows available results every
 date filters do not limit which trips receive caches.
 Completed rows remain visible as other trips are processed; unchanged geometry
 does not restart calculations. Countries use Overture's English names and the
-same table layout as transport modes, with Unassigned last. Overture attribution
-is listed in **System Status → Other providers**.
+same table layout as transport modes, with Unassigned last. The country header
+counts countries with positive distance in the current period, excluding Unassigned.
+Overture's logo and attribution are listed in **System Status → Other providers**.
 Results are attached to `segment.countryCache`, including kilometres, derived
 shares, clipped route pieces, waypoint countries, version identifiers, and an
 input hash. Save or Save All writes them into trip JSON through the configured

@@ -112,6 +112,62 @@ test('Unassigned exposes flights and slider changes replace history entries', as
   await expect(page.getByRole('slider', { name: 'Analytics start date' })).toHaveValue('2');
 });
 
+test('clearing a country returns to the list and Back leaves Analytics without reactivating it', async ({ page }) => {
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'false');
+  await page.goForward();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.getByRole('button', { name: /Country B/ }).click();
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: /Country B/ })).toHaveAttribute('aria-pressed', 'false');
+  await page.goBack();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+});
+
+test('clearing a transport selection skips the old mode on Back', async ({ page }) => {
+  const car = page.locator('.analytics-summary-row').filter({ hasText: 'car' });
+  await car.click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await car.click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+});
+
+test('country and mode deselection, view toggles, and panel arrows preserve logical parents', async ({ page }) => {
+  const globe = page.getByRole('button', { name: 'Group by country' });
+  await globe.click();
+  await page.getByRole('button', { name: /Country A/ }).click();
+  const car = page.locator('.analytics-summary-row').filter({ hasText: 'car' });
+  await car.click();
+  await car.click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
+  await globe.click();
+  await globe.click();
+  await globe.click();
+  await page.goBack();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(globe).toHaveAttribute('aria-pressed', 'false');
+  await globe.click();
+  await page.getByRole('button', { name: /Country B/ }).click();
+  await globe.click();
+  await expect(globe).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+});
+
 test('country cropping keeps outside waypoint markers hidden after camera movement', async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem('renderStyleConfigs', JSON.stringify([{ id: 'all-markers', name: 'All markers', script: 'return { getSegmentStyle: () => ({hidden:false}), getWaypointStyle: () => ({hidden:false, type:"dot"}) };' }]));
@@ -238,8 +294,7 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
   await page.getByRole('button', { name: 'Group by country' }).click();
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await page.getByTitle('Close Analytics', { exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Group by country' })).toHaveAttribute('aria-pressed', 'false');
-  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
   if (!saveAll) {
     await page.locator('.trip-card').filter({ hasText: trip.name }).click();
     await expect(page.getByTitle('Undo', { exact: true })).toBeDisabled();
@@ -350,7 +405,7 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
     expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(1);
     if (changeRoute) {
       await page.getByTitle('Close Analytics', { exact: true }).click();
-      await page.getByTitle('Close Analytics', { exact: true }).click();
+      await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
       await page.locator('.trip-card').filter({ hasText: pending.name }).click();
       await page.getByTitle('Segment Info', { exact: true }).click();
       await page.getByTitle('Flight', { exact: true }).click();
@@ -447,6 +502,7 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   await page.getByRole('button', { name: 'Group by country' }).click();
   await expect(page.locator('.country-row')).toHaveCount(3);
   await expect(page.locator('.country-row').last()).toContainText('Unassigned');
+  await expect(page.locator('.country-list .analytics-summary-header')).toContainText('Country (2)');
   await expect(page.locator('.country-list')).toContainText('Distance (km)');
   await expect(page.locator('.country-list a')).toHaveCount(0);
   const sizing = () => page.evaluate(() => {
@@ -464,6 +520,9 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Status', { exact: true }).click();
   const providers = page.getByRole('region', { name: 'Other providers' });
+  const logo = providers.getByRole('img', { name: 'Overture Maps logo' });
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   await expect(providers.getByRole('link', { name: '© Overture Maps Foundation' })).toHaveAttribute('href', 'https://docs.overturemaps.org/attribution/');
   await expect(providers.getByRole('link', { name: 'ODbL 1.0' })).toBeVisible();
   await expect(providers).not.toContainText('OpenStreetMap');

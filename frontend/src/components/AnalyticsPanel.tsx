@@ -639,7 +639,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
             {countryError && <p role="alert">{countryError} <button type="button" onClick={onRetryCountries}>Retry</button></p>}
             <div className="trip-summary-table analytics-summary-table">
               <div className="analytics-summary-header">
-                <div>Country</div><div className="analytics-summary-distance">Distance (km)</div>
+                <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED && row.distance > 0).length})</div><div className="analytics-summary-distance">Distance (km)</div>
               </div>
               <div className="analytics-summary-rows">
                 {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (

@@ -13,6 +13,7 @@ import { ApiKeyDialog } from './ApiKeyDialog';
 import { ConfirmDialog } from './Dialog';
 import type { ApiKeyServiceConfiguration } from '../utils/apiKeyPreferences';
 import { ThemedServiceIcon } from './ThemedServiceIcon';
+import overtureLogo from '../assets/icons/overture.png';
 
 interface StatusPanelProps {
   onGoBack: () => void;
@@ -317,7 +318,7 @@ export function StatusPanel({ onGoBack, trips, onUpdateTrips }: StatusPanelProps
           <div className="status-panel-card">
             <div className="status-panel-card-header with-margin">
               <div className="status-panel-card-title-container">
-                <MaterialIcon name="public" size={20} />
+                <img src={overtureLogo} alt="Overture Maps logo" width={20} height={20} className="status-panel-provider-logo" />
                 <span className="status-panel-card-title">Overture Maps</span>
               </div>
             </div>

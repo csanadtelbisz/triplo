@@ -70,7 +70,21 @@ type PanelHistoryState = {
 
 type AppHistoryState = {
   triploPanel?: PanelHistoryState;
+  triploHistoryId?: string;
 };
+
+const analyticsHistoryPath = (state: PanelHistoryState | null) => {
+  if (!state || (!['analytics', 'analytics-segment'].includes(state.panel) && !state.analyticsSelection)) return null;
+  const selection = state.analyticsSelection;
+  const path = ['analytics'];
+  if (selection?.countries && selection.country) path.push(`country:${selection.country}`);
+  if (selection?.mode || state.analyticsModeFilter) path.push(`mode:${selection?.mode || state.analyticsModeFilter}`);
+  if (state.analyticsSegmentInfo) path.push(`segment:${state.analyticsSegmentInfo.tripId}:${state.analyticsSegmentInfo.segmentId}`);
+  if (state.panel === 'poi') path.push(`poi:${state.poi?.id}`);
+  return path;
+};
+
+const panelHistoryKey = (state: PanelHistoryState) => JSON.stringify(analyticsHistoryPath(state) || [state.panel, state.tripId, state.segmentId, state.waypointId, state.poi?.id, state.styleConfigId]);
 
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -187,8 +201,11 @@ export default function App() {
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const tripsRef = useRef(trips);
   const historyInitializedRef = useRef(false);
-  const historyUpdateModeRef = useRef<'replace' | 'restore' | null>(null);
+  const historyUpdateModeRef = useRef<'replace' | null>(null);
   const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
+  const panelHistoryEntriesRef = useRef<{ id: string; panel: PanelHistoryState }[]>([]);
+  const panelHistoryIndexRef = useRef(0);
+  const pendingPanelHistoryRef = useRef<{ id: string; panel: PanelHistoryState } | null>(null);
 
   useEffect(() => {
     tripsRef.current = trips;
@@ -250,27 +267,38 @@ export default function App() {
     const panelState = getPanelHistoryState();
     const updateMode = historyUpdateModeRef.current;
 
-    if (!historyInitializedRef.current || updateMode === 'replace') {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      historyInitializedRef.current = true;
-      historyUpdateModeRef.current = null;
-      currentPanelHistoryRef.current = panelState;
-      return;
+    historyUpdateModeRef.current = null;
+    if (isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) return;
+
+    const previousPath = analyticsHistoryPath(currentPanelHistoryRef.current);
+    const nextPath = analyticsHistoryPath(panelState);
+    const analyticsTransition = previousPath && nextPath;
+    const entries = panelHistoryEntriesRef.current;
+    const index = panelHistoryIndexRef.current;
+    const key = panelHistoryKey(panelState);
+    if (analyticsTransition && nextPath.length < previousPath.length) {
+      const ancestor = entries.slice(0, index).findLastIndex(entry => panelHistoryKey(entry.panel) === key);
+      if (ancestor >= 0) {
+        pendingPanelHistoryRef.current = { id: entries[ancestor].id, panel: panelState };
+        currentPanelHistoryRef.current = panelState;
+        window.history.go(ancestor - index);
+        return;
+      }
     }
 
-    // Browser Back/Forward already selected the target entry. Rendering that
-    // entry must not be mistaken for a new navigation, which would discard
-    // the browser's forward stack.
-    if (updateMode === 'restore') {
-      historyUpdateModeRef.current = null;
-      currentPanelHistoryRef.current = panelState;
-      return;
+    const replace = !historyInitializedRef.current || updateMode === 'replace' || !!(analyticsTransition && nextPath.length <= previousPath.length);
+    const entry = { id: replace && entries[index] ? entries[index].id : crypto.randomUUID(), panel: panelState };
+    const browserState = { triploPanel: panelState, triploHistoryId: entry.id } satisfies AppHistoryState;
+    if (replace) {
+      entries[index] = entry;
+      window.history.replaceState(browserState, '', window.location.href);
+    } else {
+      entries.splice(index + 1, entries.length, entry);
+      panelHistoryIndexRef.current = index + 1;
+      window.history.pushState(browserState, '', window.location.href);
     }
-
-    if (!isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) {
-      window.history.pushState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-    }
+    historyInitializedRef.current = true;
+    currentPanelHistoryRef.current = panelState;
   }, [getPanelHistoryState]);
 
   const replacePanelHistoryOnNextRender = () => {
@@ -304,10 +332,21 @@ export default function App() {
 
   useEffect(() => {
     const handlePanelPopState = (event: PopStateEvent) => {
-      const panelState = (event.state as AppHistoryState | null)?.triploPanel;
+      const browserState = event.state as AppHistoryState | null;
+      const pending = pendingPanelHistoryRef.current;
+      const panelState = pending && pending.id === browserState?.triploHistoryId ? pending.panel : browserState?.triploPanel;
       if (!panelState) return;
 
-      historyUpdateModeRef.current = 'restore';
+      pendingPanelHistoryRef.current = null;
+      historyUpdateModeRef.current = null;
+      const index = panelHistoryEntriesRef.current.findIndex(entry => entry.id === browserState?.triploHistoryId);
+      if (index >= 0) {
+        panelHistoryIndexRef.current = index;
+        panelHistoryEntriesRef.current[index].panel = panelState;
+      }
+      if (pending?.id === browserState?.triploHistoryId) {
+        window.history.replaceState({ ...browserState, triploPanel: panelState }, '', window.location.href);
+      }
       currentPanelHistoryRef.current = panelState;
       const trip = panelState.tripId ? tripsRef.current.find(item => item.id === panelState.tripId) || null : null;
       flushSync(() => {

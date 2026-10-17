@@ -10,7 +10,10 @@ architecture. Implementation starts in [App.tsx](frontend/src/App.tsx) and the
 On desktop, a collapsible left sidebar sits beside the map. It shows the trip
 manager, trip editor, detail panels, search, analytics, preferences, or system
 status. Panel navigation is reflected in browser history, and panels expose
-back or close controls.
+back or close controls. Analytics Back goes through segment details, mode,
+country, the unselected list, and the trip manager as applicable. Clearing a
+selection returns to its parent; it does not add a step that Back reactivates.
+The globe toggle changes the view at the current list level.
 
 At widths up to 768 px, the sidebar becomes a bottom sheet over the map. Its
 drag handle can be tapped to expand or dragged to expand/collapse; downward
@@ -187,7 +190,7 @@ and attribution, with key configuration for supported providers. Tile-provider
 cards show their checks and key configuration where needed. These are external
 service/configuration indicators, not a Triplo backend health check.
 
-**Other providers** lists Overture Maps attribution for country boundaries.
+**Other providers** shows the Overture Maps logo and attribution for country boundaries.
 OpenStreetMap attribution remains with map tile providers.
 
 Storage configuration dialogs expose provider-specific settings such as a Drive
