@@ -59,14 +59,19 @@ Results are attached to `segment.countryCache`, including kilometres, derived
 shares, clipped route pieces, waypoint countries, version identifiers, and an
 input hash. Save or Save All writes them into trip JSON through the configured
 storage providers. Computing new caches makes these save actions available
-without adding an undo step or editing route data. Cache-only differences do
-not create sync conflicts.
+without adding an undo step or editing route data, including for owned trips
+shared with others. Browser-local results remain marked unsaved after refresh
+until Save or Save All writes them to connected storage. Computation does not
+automatically save to the cloud. External shared views and references do not
+acquire writable caches. Cache-only differences do not create sync conflicts.
 
 Reopening country analytics first reuses valid caches from trip JSON, then
 IndexedDB. Another browser/device can reuse saved results without downloading
 boundaries or repeating route splitting. Missing or stale caches are rebuilt;
 route/mode, waypoint, or boundary/algorithm changes invalidate the relevant
-results. Dates are applied after attribution. First-use time depends on boundary
+results. Startup shows **Loading country distances** while checking saved results
+and **Calculating country distances for…** when processing an uncached trip.
+Dates are applied after attribution. First-use time depends on boundary
 downloads, route vertex counts, and device speed; detailed tracks can take
 substantially longer than sparse routes.
 

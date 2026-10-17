@@ -39,7 +39,7 @@ import { applyAppearanceTheme } from './utils/appearancePreferences';
 import { emptyAnalyticsSelection } from './countries/analytics';
 import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
-import { attachCountryCaches, sameCountryInputs, sameCountryTripInputs } from './countries/cache';
+import { attachCountryCaches, sameCountryInputs, sameCountryTripInputs, withSavedCountryCaches } from './countries/cache';
 import { GEOMETRY_VERSION } from './utils/effectiveGeometry';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
@@ -232,7 +232,11 @@ export default function App() {
     serializedTripVersionsRef.current = [...live];
   }, [trips, selectedTrip]);
 
-  const countryTrips = useMemo(() => selectedTrip && !trips.some(trip => trip.id === selectedTrip.id) ? [...trips, selectedTrip] : trips, [trips, selectedTrip]);
+  const countryTrips = useMemo(() => {
+    if (!selectedTrip || trips.some(trip => trip.id === selectedTrip.id)) return trips;
+    const input = isViewingSharedTrip ? { ...selectedTrip, metadata: { ...selectedTrip.metadata, isSharedTripReference: true } } : selectedTrip;
+    return [...trips, input];
+  }, [trips, selectedTrip, isViewingSharedTrip]);
   const countryTripsRef = useRef(countryTrips);
   useEffect(() => { countryTripsRef.current = countryTrips; }, [countryTrips]);
   const applyCountryCaches = useCallback((source: Trip[], caches: Record<string, SegmentCountryCache>) => {
@@ -561,7 +565,7 @@ export default function App() {
       saveTripCache(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
       cachedTrips.forEach(t => {
-        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(t) };
+        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(withSavedCountryCaches(t, tripsMap.get(t.id)!)) };
       });
       setHistories(initHistories);
       if (localStorage.getItem('defaultReadOnly') !== 'true') {

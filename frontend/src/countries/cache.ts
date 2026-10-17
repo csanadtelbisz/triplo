@@ -3,7 +3,22 @@ import { copyEffectiveGeometryCache, GEOMETRY_VERSION } from '../utils/effective
 import { COUNTRY_ALGORITHM_VERSION, segmentKey } from './types';
 import type { CountryData, CountryIndex } from './types';
 
-export const canPersistCountryCache = (trip: Trip) => !trip.metadata?.isSharedTripReference && !trip.metadata?.sharedService;
+export const canPersistCountryCache = (trip: Trip) => !trip.metadata?.isSharedTripReference;
+
+export function withSavedCountryCaches(working: Trip, saved: Trip): Trip {
+  const originals = new Map(saved.segments.map(segment => [segment.id, segment.countryCache]));
+  let changed = false;
+  const segments = working.segments.map(segment => {
+    const countryCache = originals.get(segment.id);
+    if (segment.countryCache === countryCache || (countryCache &&
+      validCountryCache(countryCache, countryCache.boundaryVersion, countryCache.inputHash) &&
+      validCountryCache(segment.countryCache, countryCache.boundaryVersion, countryCache.inputHash))) return segment;
+    changed = true;
+    const { countryCache: _cache, ...content } = segment;
+    return countryCache ? { ...content, countryCache } : content;
+  });
+  return changed ? { ...working, segments } : working;
+}
 
 export function validCountryCache(cache: SegmentCountryCache | undefined, boundaryVersion: string, hash: string): cache is SegmentCountryCache {
   return !!cache && cache.boundaryVersion === boundaryVersion &&

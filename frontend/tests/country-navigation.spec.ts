@@ -7,6 +7,7 @@ import type { CountryData } from '../src/countries/types';
 import { segmentKey, UNASSIGNED } from '../src/countries/types';
 import { attachCountryCaches } from '../src/countries/cache';
 import { computeTripCaches } from '../src/utils/distance';
+import { encodeSharePayload } from '../src/utils/shareLinkEncoding';
 
 const segment = (id: string, mode: Segment['transportMode'], coordinates: number[][]): Segment => ({ id, name: id, transportMode: mode, routingService: 'manual', routingProfile: 'straight', source: 'manual', geometry: { type: 'LineString', coordinates }, waypoints: coordinates.map((c, i) => ({ id: `${id}-${i}`, coordinates: c as [number, number] })) });
 const trip: Trip = { id: 'crossing', name: 'Cross-year crossing', startDate: '2024-12-31', endDate: '2025-01-02', createdAt: '', updatedAt: '', segments: [segment('drive', 'car', [[-1, 0], [1, 0], [-1, 0]]), segment('flight', 'flight', [[-1, 0.1], [1, 0.1]])] };
@@ -51,6 +52,17 @@ async function cachedTrips(page: Page): Promise<Trip[]> {
       read.onerror = () => { reject(read.error); db.close(); };
     };
   }));
+}
+
+async function clearDatabases(page: Page, names: string[]) {
+  await page.evaluate(async names => {
+    for (const name of names) await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error(`Database still open: ${name}`));
+    });
+  }, names);
 }
 
 test.beforeEach(async ({ page, context }) => {
@@ -320,6 +332,86 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
     await expect.poll(() => saved!.segments[0].countryCache?.result.shares[UNASSIGNED]).toBeDefined();
     expect(saved!.segments[1].countryCache).toBeDefined();
   }
+});
+
+for (const shared of [false, true]) test(`country caches remain unsaved across refresh until saved for ${shared ? 'owned shared' : 'owned'} trips`, async ({ page, context }) => {
+  test.setTimeout(60000);
+  const shareLink = encodeSharePayload({ service: 'GitHub', data: 'owned-share' });
+  let remote: Trip = { ...trip, id: shared ? 'owned-shared' : 'owned', metadata: shared ? { sharedService: 'GitHub', shareLink } : undefined };
+  let writes = 0;
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: remote }));
+  await context.route('https://api.github.com/repos/test/trips/contents/trips/**', async route => {
+    if (route.request().method() === 'PUT') {
+      remote = JSON.parse(Buffer.from(route.request().postDataJSON().content, 'base64').toString('utf8'));
+      writes++;
+      await route.fulfill({ json: { content: { sha: 'saved' } } });
+    } else await route.fulfill({ status: 404, json: {} });
+  });
+  await context.route('https://api.github.com/gists/owned-share', route => route.fulfill({ json: {} }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByTitle('Unsaved changes', { exact: true })).toBeVisible();
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toBeVisible();
+  expect(writes).toBe(0);
+  await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === remote.id)?.segments.every(segment => !!segment.countryCache)).toBe(true);
+  await clearDatabases(page, ['TriploCountryCache']);
+  for (const country of countries) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ status: 503 }));
+  await page.reload();
+  await expect(page.getByTitle('Unsaved changes', { exact: true })).toBeVisible();
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
+  await expect.poll(() => writes).toBe(1);
+  expect(remote.segments.every(segment => !!segment.countryCache)).toBe(true);
+  await expect(page.getByTitle('Unsaved changes', { exact: true })).toHaveCount(0);
+  await page.goto('/tests/map-distance.html');
+  await clearDatabases(page, ['TriploDB', 'TriploCountryCache']);
+  await page.goto('/tests/country-app.html');
+  await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled();
+  await expect(page.getByTitle('Unsaved changes', { exact: true })).toHaveCount(0);
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Group by country' }).click();
+  await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled();
+  await expect(page.getByTitle('Unsaved changes', { exact: true })).toHaveCount(0);
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+});
+
+test('public shared views produce country results without writable caches', async ({ page, context }) => {
+  const external = { ...trip, id: 'external', name: 'External trip', metadata: { sharedService: 'GitHub' } };
+  const shareLink = encodeSharePayload({ service: 'GitHub', data: 'external-share' });
+  await context.route('https://api.github.com/gists/external-share', route => route.fulfill({ json: { files: { 'external.triplo.json': { content: JSON.stringify(external) } } } }));
+  await page.addInitScript(() => {
+    const state = window as any;
+    state.countryUpdates = [];
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (String(url).includes('country.worker')) this.addEventListener('message', event => {
+          state.countryUpdates.push({ results: Object.keys(event.data.data?.results || {}), caches: Object.keys(event.data.caches || {}) });
+        });
+      }
+    };
+  });
+  await page.goto(`/share/${shareLink}`);
+  const key = segmentKey(external.id, 'drive');
+  await expect.poll(() => page.evaluate(key => (window as any).countryUpdates.some((update: any) => update.results.includes(key)), key)).toBe(true);
+  const caches = await page.evaluate(() => (window as any).countryUpdates.flatMap((update: any) => update.caches));
+  expect(caches).not.toContain(key);
+  expect((await cachedTrips(page)).map(trip => trip.id)).not.toContain(external.id);
 });
 
 test('shared trip references never acquire or write country cache geometry', async ({ page }) => {
