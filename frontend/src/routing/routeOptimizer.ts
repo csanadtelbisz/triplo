@@ -1,3 +1,4 @@
+import { getSegmentGeometry } from '../utils/segmentGeometry';
 import * as turf from '@turf/turf';
 import type { Segment } from '../../../shared/types';
 import { route } from './RoutingService';
@@ -8,8 +9,9 @@ import { route } from './RoutingService';
  * Otherwise, finds the changed waypoint(s) and patches the geometry.
  */
 export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): Promise<GeoJSON.LineString | undefined> {
+  const oldGeometry = oldSeg ? getSegmentGeometry(oldSeg) : undefined;
   if (newSeg.routingService === 'gpx' || newSeg.routingProfile === 'Imported GPX') {
-    return newSeg.geometry || oldSeg?.geometry;
+    return getSegmentGeometry(newSeg) || oldGeometry;
   }
 
   const validCoords = newSeg.waypoints
@@ -31,9 +33,9 @@ export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): P
     !oldSeg ||
     hasDuplicates ||
     hasOldDuplicates ||
-    !oldSeg.geometry ||
-    !oldSeg.geometry.coordinates ||
-    oldSeg.geometry.coordinates.length < 2 ||
+    !oldGeometry ||
+    !oldGeometry.coordinates ||
+    oldGeometry.coordinates.length < 2 ||
     newSeg.routingService !== oldSeg.routingService ||
     newSeg.routingProfile !== oldSeg.routingProfile ||
     newSeg.transportMode !== oldSeg.transportMode
@@ -66,7 +68,7 @@ export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): P
 
   // If no change from the start, check if anything at all changed
   if (firstDiff === -1 && oldWays.length === newWays.length) {
-    return oldSeg.geometry; // No geometries changed
+    return oldGeometry; // No geometries changed
   }
   if (firstDiff === -1) {
     firstDiff = Math.min(oldWays.length, newWays.length);
@@ -110,7 +112,7 @@ export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): P
   }
 
   // Find splice points in old geometry
-  const geomLine = turf.lineString(oldSeg.geometry.coordinates);
+  const geomLine = turf.lineString(oldGeometry.coordinates);
   
   let geomStartIdx = 0;
   if (startIdx > 0) {
@@ -119,19 +121,19 @@ export async function optimizeSegmentRoute(newSeg: Segment, oldSeg?: Segment): P
     geomStartIdx = snappedStart.properties.index || 0;
   }
 
-  let geomEndIdx = oldSeg.geometry.coordinates.length - 1;
+  let geomEndIdx = oldGeometry.coordinates.length - 1;
   if (endIdxOld < oldWays.length - 1) {
     const ptEnd = turf.point(oldWays[endIdxOld].coordinates as [number, number]);
     const snappedEnd = turf.nearestPointOnLine(geomLine, ptEnd);
-    geomEndIdx = snappedEnd.properties.index || oldSeg.geometry.coordinates.length - 1;
+    geomEndIdx = snappedEnd.properties.index || oldGeometry.coordinates.length - 1;
     // ensure we don't accidentally get an index before geomStartIdx
     if (geomEndIdx < geomStartIdx) {
        geomEndIdx = geomStartIdx;
     }
   }
 
-  const beforeCoords = oldSeg.geometry.coordinates.slice(0, geomStartIdx);
-  let afterCoords = oldSeg.geometry.coordinates.slice(geomEndIdx + 1);
+  const beforeCoords = oldGeometry.coordinates.slice(0, geomStartIdx);
+  let afterCoords = oldGeometry.coordinates.slice(geomEndIdx + 1);
 
   // Combine
   const combinedCoords = [...beforeCoords, ...newChunk.coordinates, ...afterCoords];

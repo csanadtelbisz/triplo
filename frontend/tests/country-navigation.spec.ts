@@ -2,10 +2,13 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import type { Trip, Segment } from '../../shared/types';
+import type { CountryPart, Trip, Segment } from '../../shared/types';
 import type { CountryData } from '../src/countries/types';
 import { segmentKey, UNASSIGNED } from '../src/countries/types';
-import { attachCountryDistances } from '../src/countries/cache';
+import { attachCountryParts } from '../src/countries/cache';
+import { countryDistances } from '../src/countries/parts';
+import { getSegmentGeometry } from '../src/utils/segmentGeometry';
+import { serializeTrip } from '../src/utils/serializeTrip';
 import { computeTripCaches } from '../src/utils/distance';
 import { encodeSharePayload } from '../src/utils/shareLinkEncoding';
 
@@ -25,7 +28,7 @@ async function calculateCountries(page: Page, trips: Trip[], country: string | n
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
-    return new Promise<{ data?: CountryData; distances?: Record<string, Record<string, number>>; error?: string }>((resolve, reject) => {
+    return new Promise<{ data?: CountryData; parts?: Record<string, CountryPart[]>; revisions?: Record<string, string>; error?: string }>((resolve, reject) => {
       const worker = new Worker('/src/countries/country.worker.ts', { type: 'module' });
       worker.onerror = event => { worker.terminate(); reject(new Error(event.message)); };
       worker.onmessage = event => { if (!event.data.complete) return; worker.terminate(); resolve(event.data); };
@@ -226,7 +229,8 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
   });
   const distances = await page.evaluate(async () => {
     const coordinates = Array.from({ length: 10 }, (_, i) => [11.4 + 0.18 * i / 9, 47.26 + 0.88 * i / 9]);
-    const trips = [{ id: 'existing', name: 'Existing trip', createdAt: '', updatedAt: '', segments: Array.from({ length: 100 }, (_, segmentIndex) => {
+    const { attachCountryParts } = await import('/src/countries/cache.ts');
+    let trips = [{ id: 'existing', name: 'Existing trip', createdAt: '', updatedAt: '', segments: Array.from({ length: 100 }, (_, segmentIndex) => {
       const route = coordinates.map(([lon, lat]) => [lon + segmentIndex * 0.0001, lat]);
       return {
         id: `crossing-${segmentIndex}`, transportMode: 'car', routingProfile: 'car', source: 'manual', routingService: 'manual',
@@ -239,6 +243,7 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
       const worker = new Worker('/src/countries/country.worker.ts', { type: 'module' });
       worker.onerror = event => { worker.terminate(); reject(new Error(event.message)); };
       worker.onmessage = event => {
+        trips = attachCountryParts(trips as Trip[], event.data.parts || {}, event.data.revisions || {}) as typeof trips;
         if (!event.data.complete) {
           if (Object.keys(event.data.data?.results || {}).length) availableProgress++;
           return;
@@ -261,47 +266,40 @@ test('worker loads checksum-verified real boundaries and reuses existing trip re
   expect(new Set(downloads).size).toBe(downloads.length);
 });
 
-test('trip JSON contains only country distance maps; clipped routes stay browser-local', async ({ page, context }) => {
+test('country parts are the saved geometry and work without boundaries in a fresh browser', async ({ page, context }) => {
   const first = await calculateCountries(page, [trip]);
   expect(first.error).toBeUndefined();
-  const saved: Trip[] = JSON.parse(JSON.stringify(attachCountryDistances([trip], first.distances!)));
-  expect(first.data!.results[segmentKey(trip.id, 'drive')].pieces.filter(piece => piece.country === 'AA')).toHaveLength(2);
-  expect(saved[0].segments[0].countryDistances).toEqual(first.data!.results[segmentKey(trip.id, 'drive')].distanceKmByCountry);
-  expect(Object.keys(saved[0].segments[0]).filter(key => !(key in trip.segments[0]))).toEqual(['countryDistances']);
-  expect(saved[0].segments[1].countryDistances![UNASSIGNED]).toBeGreaterThan(0);
+  const saved: Trip = JSON.parse(serializeTrip(attachCountryParts([trip], first.parts!, first.revisions!)[0]));
+  const restoredTrip = saved;
+  expect(restoredTrip.countryDataRevision).toMatch(/^[a-f0-9]{64}$/);
+  const drive = restoredTrip.segments[0];
+  expect(drive.countryParts!.map(part => part.country)).toEqual(['AA', 'BB', 'AA']);
+  expect(drive).not.toHaveProperty('geometry');
+  expect(drive).not.toHaveProperty('distanceStats');
+  expect(drive).not.toHaveProperty('countryDistances');
   for (const country of countries) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ status: 503 }));
-  const restored = await calculateCountries(page, saved);
+  const restored = await calculateCountries(page, [restoredTrip]);
   expect(restored.error).toBeUndefined();
-  expect(restored.data!.results[segmentKey(trip.id, 'drive')].distanceKmByCountry).toEqual(saved[0].segments[0].countryDistances);
-  expect(restored.data!.results[segmentKey(trip.id, 'drive')].pieces).toEqual([]);
-  expect(restored.data!.results[segmentKey(trip.id, 'drive')].geometryReady).toBe(false);
-  const dated = structuredClone(saved);
-  dated[0].startDate = '2000-01-01';
-  dated[0].name = 'Renamed trip';
-  expect((await calculateCountries(page, dated)).data).toEqual(restored.data);
-  expect((await calculateCountries(page, saved, 'AA')).error).toContain('Cannot load boundaries');
-  const moved = structuredClone(saved);
-  moved[0].segments[0].geometry.coordinates[1][0] = 0.5;
-  delete moved[0].segments[0].countryDistances;
-  expect((await calculateCountries(page, moved)).error).toContain('Cannot load boundaries');
-  const movedWaypoint = structuredClone(saved);
-  movedWaypoint[0].segments[0].waypoints[0].coordinates[0] = -0.5;
-  delete movedWaypoint[0].segments[0].countryDistances;
-  expect((await calculateCountries(page, movedWaypoint)).error).toContain('Cannot load boundaries');
-  const flight = structuredClone(saved);
-  flight[0].segments[0].transportMode = 'flight';
-  delete flight[0].segments[0].countryDistances;
-  const flown = await calculateCountries(page, flight);
-  expect(flown.data!.results[segmentKey(trip.id, 'drive')].shares[UNASSIGNED]).toBeCloseTo(1, 9);
-  for (const country of countries) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ contentType: 'application/gzip', body: country.body }));
-  const clipped = await calculateCountries(page, saved, 'AA');
-  expect(clipped.error).toBeUndefined();
-  expect(clipped.data!.results[segmentKey(trip.id, 'drive')].pieces.filter(piece => piece.country === 'AA')).toHaveLength(2);
+  expect(restored.data!.results[segmentKey(trip.id, 'drive')].pieces.filter(piece => piece.country === 'AA')).toHaveLength(2);
+  expect(restored.data!.results[segmentKey(trip.id, 'drive')].distanceKmByCountry).toEqual(countryDistances(drive));
+  const dated = structuredClone(restoredTrip);
+  dated.startDate = '2000-01-01'; dated.name = 'Renamed trip';
+  expect((await calculateCountries(page, [dated])).data).toEqual(restored.data);
+  await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'fixture-1', countries: countries.map(country => ({ ...country.entry, name: 'Renamed label' })), attribution: 'Updated attribution text' } }));
+  expect((await calculateCountries(page, [restoredTrip])).error).toBeUndefined();
+  const stale = structuredClone(restoredTrip);
+  stale.countryDataRevision = 'outdated';
+  expect((await calculateCountries(page, [stale])).error).toContain('Cannot load boundaries');
+  const moved = structuredClone(restoredTrip);
+  moved.segments[0].geometry = getSegmentGeometry(moved.segments[0]);
+  delete moved.segments[0].countryParts;
+  moved.segments[0].geometry!.coordinates[1][0] = 0.5;
+  expect((await calculateCountries(page, [moved])).error).toContain('Cannot load boundaries');
 });
 
-test('saved distance maps need no boundaries until a cold browser crops a country', async ({ page, context }) => {
+test('saved country parts crop immediately without boundary downloads in a cold browser', async ({ page, context }) => {
   const calculated = await calculateCountries(page, [trip]);
-  const saved = attachCountryDistances([trip], calculated.distances!)[0];
+  const saved: Trip = JSON.parse(serializeTrip(attachCountryParts([trip], calculated.parts!, calculated.revisions!)[0]));
   await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: saved }));
   await page.goto('/tests/map-distance.html');
   await clearDatabases(page, ['TriploDB', 'TriploCountryCache']);
@@ -318,14 +316,14 @@ test('saved distance maps need no boundaries until a cold browser crops a countr
   expect(downloads).toEqual([]);
   await page.getByRole('button', { name: /Country A/ }).click();
   await expect.poll(async () => (await routes(page)).flatMap(feature => (feature.geometry as GeoJSON.MultiLineString).coordinates).length).toBe(2);
-  expect(downloads.sort()).toEqual(['AA', 'BB']);
+  expect(downloads).toEqual([]);
   for (const feature of await routes(page)) {
     expect(feature.properties?.segmentId).toBe('drive');
     for (const line of (feature.geometry as GeoJSON.MultiLineString).coordinates) for (const point of line) expect(point[0]).toBeLessThanOrEqual(0);
   }
 });
 
-for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writes only country distance maps into segment JSON without an undo step`, async ({ page, context }) => {
+for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writes country parts as the only segment geometry without an undo step`, async ({ page, context }) => {
   let saved: Trip | undefined;
   let serialized = '';
   await context.route('https://api.github.com/repos/test/trips/contents/trips/**', async route => {
@@ -346,27 +344,68 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
   await page.getByTitle(saveAll ? 'Save All Unsaved Trips' : 'Save', { exact: true }).click();
   await expect.poll(() => saved?.segments.length).toBe(2);
   const geometryLines = serialized.split('\n').filter(line => line.trimStart().startsWith('"geometry":'));
-  expect(geometryLines).toHaveLength(2);
+  expect(geometryLines).toHaveLength(4);
   for (const line of geometryLines) expect(line).toContain('"coordinates":[[');
   for (const segment of saved!.segments) {
-    expect(Object.values(segment.countryDistances!).reduce((sum, distance) => sum + distance, 0)).toBeCloseTo(segment.distanceStats!.totalDistance, 8);
+    expect(segment).not.toHaveProperty('geometry');
+    expect(segment).not.toHaveProperty('distanceStats');
+    expect(segment).not.toHaveProperty('countryDistances');
+    expect(Object.values(countryDistances(segment)).reduce((sum, distance) => sum + distance, 0)).toBeCloseTo(computeTripCaches(trip).segments.find(source => source.id === segment.id)!.distanceStats!.totalDistance, 8);
     expect(segment).not.toHaveProperty('countryCache');
-    expect(segment.distanceStats).not.toHaveProperty('geometryVersion');
+    for (const part of segment.countryParts!) expect(part.distanceStats).not.toHaveProperty('geometryVersion');
   }
-  expect(saved!.segments[0].countryDistances!.AA).toBeGreaterThan(0);
-  expect(saved!.segments[1].countryDistances![UNASSIGNED]).toBeGreaterThan(0);
+  expect(countryDistances(saved!.segments[0]).AA).toBeGreaterThan(0);
+  expect(countryDistances(saved!.segments[1])[UNASSIGNED]).toBeGreaterThan(0);
   await expect(page.getByTitle(saveAll ? 'Save All Unsaved Trips' : 'Save', { exact: true })).toHaveCount(0);
   if (!saveAll) {
     await page.getByTitle('Segment Info', { exact: true }).first().click();
     await page.getByTitle('Flight', { exact: true }).click();
     await page.goBack();
     await expect(page.getByTitle('Undo', { exact: true })).toBeEnabled();
-    await expect.poll(async () => (await cachedTrips(page))[0]?.segments[0].countryDistances?.[UNASSIGNED]).toBeDefined();
+    await expect.poll(async () => (await cachedTrips(page))[0]?.segments[0].countryParts?.find(part => part.country === UNASSIGNED)?.distanceStats.totalDistance).toBeDefined();
     await page.getByTitle('Save', { exact: true }).click();
     await expect.poll(() => saved!.segments[0].transportMode).toBe('flight');
-    await expect.poll(() => saved!.segments[0].countryDistances?.[UNASSIGNED]).toBeDefined();
-    expect(saved!.segments[1].countryDistances).toBeDefined();
+    await expect.poll(() => saved!.segments[0].countryParts?.find(part => part.country === UNASSIGNED)?.distanceStats.totalDistance).toBeDefined();
+    expect(saved!.segments[1].countryParts).toBeDefined();
   }
+});
+
+test('a trip revision is stamped only after all parts finish; saving pending work keeps a valid mixed layout', async ({ page, context }) => {
+  let remote: Trip = { ...trip, id: 'pending-trip-revision', segments: [...trip.segments].reverse() };
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: remote }));
+  await context.route('https://api.github.com/repos/test/trips/contents/trips/**', async route => {
+    if (route.request().method() === 'PUT') {
+      remote = JSON.parse(Buffer.from(route.request().postDataJSON().content, 'base64').toString('utf8'));
+      await route.fulfill({ json: { content: { sha: 'saved' } } });
+    } else await route.fulfill({ status: 404, json: {} });
+  });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await context.route('**/countries/AA.json.gz*', async route => {
+    await pending;
+    await route.fulfill({ contentType: 'application/gzip', body: countries[0].body });
+  });
+  try {
+    await page.goto('/tests/country-app.html');
+    await expect.poll(async () => (await cachedTrips(page))[0]?.segments[0].countryParts?.length).toBe(1);
+    const partial = (await cachedTrips(page))[0];
+    expect(partial.countryDataRevision).toBeUndefined();
+    expect(partial.segments[1].geometry).toEqual(trip.segments[0].geometry);
+    expect(partial.segments[1].countryParts).toBeUndefined();
+    await expect.poll(async () => (await routes(page)).map(feature => feature.properties?.segmentId)).toContain('drive');
+    await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
+    await expect.poll(() => !!remote.segments[0].countryParts).toBe(true);
+    expect(remote.countryDataRevision).toBeUndefined();
+    expect(remote.segments[0]).not.toHaveProperty('geometry');
+    expect(remote.segments[1].geometry).toEqual(trip.segments[0].geometry);
+    release();
+    await expect.poll(async () => (await cachedTrips(page))[0]?.countryDataRevision).toMatch(/^[a-f0-9]{64}$/);
+    await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toBeVisible();
+    await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
+    await expect.poll(() => remote.countryDataRevision).toMatch(/^[a-f0-9]{64}$/);
+    expect(remote.segments.every(segment => !segment.geometry && !!segment.countryParts)).toBe(true);
+    expect(await page.evaluate(async () => (await indexedDB.databases()).some(db => db.name === 'TriploCountryCache'))).toBe(false);
+  } finally { release(); }
 });
 
 for (const shared of [false, true]) test(`country caches remain unsaved across refresh until saved for ${shared ? 'owned shared' : 'owned'} trips`, async ({ page, context }) => {
@@ -392,7 +431,7 @@ for (const shared of [false, true]) test(`country caches remain unsaved across r
   await expect(page.getByTitle('Unsaved changes', { exact: true })).toBeVisible();
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toBeVisible();
   expect(writes).toBe(0);
-  await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === remote.id)?.segments.every(segment => !!segment.countryDistances)).toBe(true);
+  await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === remote.id)?.segments.every(segment => !!segment.countryParts)).toBe(true);
   await clearDatabases(page, ['TriploCountryCache']);
   for (const country of countries) await context.route(`**/countries/${country.entry.file}*`, route => route.fulfill({ status: 503 }));
   await page.reload();
@@ -405,7 +444,7 @@ for (const shared of [false, true]) test(`country caches remain unsaved across r
   await page.getByTitle('Close Analytics', { exact: true }).click();
   await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
   await expect.poll(() => writes).toBe(1);
-  expect(remote.segments.every(segment => !!segment.countryDistances)).toBe(true);
+  expect(remote.segments.every(segment => !!segment.countryParts)).toBe(true);
   await expect(page.getByTitle('Unsaved changes', { exact: true })).toHaveCount(0);
   await page.goto('/tests/map-distance.html');
   await clearDatabases(page, ['TriploDB', 'TriploCountryCache']);
@@ -436,7 +475,7 @@ test('public shared views produce country results without writable caches', asyn
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
         if (String(url).includes('country.worker')) this.addEventListener('message', event => {
-          state.countryUpdates.push({ results: Object.keys(event.data.data?.results || {}), distances: Object.keys(event.data.distances || {}) });
+          state.countryUpdates.push({ results: Object.keys(event.data.data?.results || {}), parts: Object.keys(event.data.parts || {}) });
         });
       }
     };
@@ -444,7 +483,7 @@ test('public shared views produce country results without writable caches', asyn
   await page.goto(`/share/${shareLink}`);
   const key = segmentKey(external.id, 'drive');
   await expect.poll(() => page.evaluate(key => (window as any).countryUpdates.some((update: any) => update.results.includes(key)), key)).toBe(true);
-  const caches = await page.evaluate(() => (window as any).countryUpdates.flatMap((update: any) => update.distances));
+  const caches = await page.evaluate(() => (window as any).countryUpdates.flatMap((update: any) => update.parts));
   expect(caches).not.toContain(key);
   expect((await cachedTrips(page)).map(trip => trip.id)).not.toContain(external.id);
 });
@@ -453,15 +492,15 @@ test('shared trip references never acquire or write country cache geometry', asy
   const shared = { ...trip, metadata: { isSharedTripReference: true } };
   const computed = await calculateCountries(page, [shared]);
   expect(computed.error).toBeUndefined();
-  expect(computed.distances).toEqual({});
+  expect(computed.parts).toEqual({});
   const owned = await calculateCountries(page, [trip]);
   const sharedTrips = [shared];
-  expect(attachCountryDistances(sharedTrips, owned.distances!)).toBe(sharedTrips);
+  expect(attachCountryParts(sharedTrips, owned.parts!, owned.revisions!)).toBe(sharedTrips);
 });
 
-test('providers differing only in country caches do not create sync conflicts', async ({ page }) => {
+test('providers differing only in country representation do not create sync conflicts', async ({ page }) => {
   const computed = await calculateCountries(page, [trip]);
-  const cached = computeTripCaches(attachCountryDistances([trip], computed.distances!)[0]);
+  const cached = computeTripCaches(attachCountryParts([trip], computed.parts!, computed.revisions!)[0]);
   await page.evaluate(async ({ original, cached }) => {
     const { persistingManager } = await import('/src/persisting/PersistingManager.ts');
     persistingManager.loadAllTrips = async () => [
@@ -537,7 +576,7 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
       await page.getByTitle('Segment Info', { exact: true }).click();
       await page.getByTitle('Flight', { exact: true }).click();
       await page.goBack();
-      await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === pending.id)?.segments[0].countryDistances?.[UNASSIGNED]).toBeDefined();
+      await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === pending.id)?.segments[0].countryParts?.find(part => part.country === UNASSIGNED)?.distanceStats.totalDistance).toBeDefined();
       expect(await page.evaluate(() => (window as unknown as { countryWorkerCount: number }).countryWorkerCount)).toBe(2);
       release();
       await page.goBack();
@@ -632,7 +671,7 @@ test('background country work does not rebuild the map or repeatedly serialize u
       return work;
     });
     release[0]();
-    await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === ready.id)?.segments[0].countryDistances?.AA).toBeGreaterThan(0);
+    await expect.poll(async () => (await cachedTrips(page)).find(trip => trip.id === ready.id)?.segments[0].countryParts?.find(part => part.country === 'AA')?.distanceStats.totalDistance).toBeGreaterThan(0);
     const cacheArrival = await page.evaluate(() => ({ ...(window as any).mapWork }));
     await test.info().attach('background-map-work', { body: JSON.stringify({ idle, cacheArrival }), contentType: 'application/json' });
     expect(idle).toEqual({ uploads: 0, markerRemovals: 0, serializations: 0 });
@@ -647,7 +686,7 @@ test('background country work does not rebuild the map or repeatedly serialize u
 });
 
 test('country rows stay visible across new trips and identical geometry reloads', async ({ page, context }) => {
-  await expect.poll(async () => (await cachedTrips(page))[0]?.segments.every(segment => !!segment.countryDistances)).toBe(true);
+  await expect.poll(async () => (await cachedTrips(page))[0]?.segments.every(segment => !!segment.countryParts)).toBe(true);
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   await context.route('**/countries/BB.json.gz*', async route => {

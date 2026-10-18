@@ -1,3 +1,4 @@
+import { getSegmentGeometry } from '../utils/segmentGeometry';
 import { useState, useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import type { Segment, Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
@@ -337,8 +338,8 @@ const hotkeyRefs = useRef({ isReadOnly, selectedTrip, updateTripState, handleCoo
           }
         }
       });
-      if (seg.geometry && seg.geometry.coordinates) {
-          seg.geometry.coordinates.forEach(coord => {
+      if (getSegmentGeometry(seg)?.coordinates) {
+          getSegmentGeometry(seg)!.coordinates.forEach(coord => {
               allWps.push({ id: 'geom', coordinates: coord as [number, number] });
           });
       }

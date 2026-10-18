@@ -33,51 +33,62 @@ The full yearly chart remains visible as context. Browser Back/Forward restores
 country, mode, date, and segment-detail selections. Clearing a country or mode
 returns to its parent level; Back from an unselected list returns to the trip
 manager. View toggles and date changes replace the current entry. Calculations
-run in a worker. Geometry, boundary, and algorithm versions belong to the
-browser cache. Shared-trip references remain metadata-only.
-Country files load on demand and failures show a retry action instead of being
-counted as Unassigned. Disconnected route pieces retain their segment identity.
-Country zoom uses a relevant land component when an entity spans distant islands.
+run in a worker. Shared-trip references remain metadata-only. Country files
+load on demand and failures show a retry action instead of being counted as
+Unassigned. Disconnected route pieces retain their segment identity. Country
+zoom uses a relevant land component when an entity spans distant islands.
 
-Existing trips need no reimport or cloud-data migration. Country calculations
-run in the background after trip loading and geometry, mode, or waypoint changes,
-including routing and track imports, even when Analytics is closed. This also
-includes a new trip being edited before its first save. The worker reuses valid
-unchanged segment caches. Country Analytics shows available results every
-500 ms while displaying the name of the trip currently being calculated;
-date filters do not limit which trips receive caches.
-Completed rows remain visible as other trips are processed; unchanged geometry
-does not restart calculations. Countries use Overture's English names and the
-same table layout as transport modes, with Unassigned last. The country header
-counts countries with positive distance in the current period, excluding Unassigned.
-Overture's logo and attribution are listed in **System Status → Other providers**.
-Background progress without new results does not refresh the interface.
-Background cache updates preserve existing map routes and markers; new country results
-update the map only when a country is selected. Unsaved-change checks reuse trip
-snapshots, and distance calculations preserve effective geometry for map reuse.
-Trip JSON stores only `segment.countryDistances`, a mapping from country code
-to kilometres, such as `{"HU": 5.6, "SI": 25.8}`. Clipped routes, waypoint
-assignments, derived shares, hashes, and version metadata stay in the browser.
-Save or Save All writes the compact maps through the configured storage
-providers. Trip files use two-space indentation with each geometry object on
-one compact line, including shared copies. Computing new distances makes these
-save actions available
-without adding an undo step or editing route data, including for owned trips
-shared with others. Browser-local results remain marked unsaved after refresh
-until Save or Save All writes them to connected storage. Computation does not
-automatically save to the cloud. External shared views and references do not
-acquire writable caches. Cache-only differences do not create sync conflicts.
+Each completed segment stores an ordered `countryParts` array. Each part has a
+country code, GeoJSON `geometry`, and `distanceStats` (kilometres and elevation).
+Together the parts replace the segment's full `geometry`, aggregate
+`distanceStats`, and old `countryDistances`; the full route is not duplicated.
+Re-entry stays in route order, for example HU → SK → HU. Waypoints and their
+`waypointDistances` remain unchanged. Imported GPX tracks retain their full
+source geometry, including portions outside the current waypoints; only the
+traversed portions contribute country statistics and map cropping.
 
-Saved distance maps can populate country analytics without boundary downloads.
-Clipped rendering geometry is cached in IndexedDB; a fresh browser prepares it
-when a country is selected. Route, mode, and waypoint edits clear the affected
-distance maps. Browser rendering caches include boundary and algorithm versions.
-The previous expanded JSON format is compacted when saved.
-Startup shows **Loading country distances** while checking saved results
-and **Calculating country distances for…** when processing an uncached trip.
-Dates are applied after attribution. First-use time depends on boundary
-downloads, route vertex counts, and device speed; detailed tracks can take
-substantially longer than sparse routes.
+A bounded A → B → A excursion is attributed entirely to A when its whole path
+stays within 10 metres of A. The check includes the interiors of sparse edges,
+not just recorded vertices, and conservatively retains uncertain excursions.
+It changes country attribution without moving or discarding route coordinates.
+Unassigned pieces, disconnected pieces, deeper excursions, and one-way border
+crossings are not merged. Markers follow the nearest traversed country piece;
+ties between countries remain Unassigned.
+
+One `countryDataRevision` per trip identifies the boundary catalog, splitting
+rules, geometry rules, and 10 m tolerance. It is updated only after every
+segment has been processed with that revision. Saved current parts provide
+country distances and cropped maps in a fresh browser without downloading
+boundary polygons. There are no coordinate hashes or persistent browser
+country-result caches; the previous preview's result database is discarded.
+The normal browser trip storage and temporary map geometry remain.
+
+Legacy trip files stay readable. After routing, the new full geometry is drawn
+immediately using the legacy layout. Background conversion replaces it with
+country parts; a newer route edit cancels or discards older work. Saving before
+conversion finishes writes a valid unsplit route. On a boundary/rule update,
+the worker rebuilds parts before stamping the new trip revision.
+
+Calculations run after loading and normal geometry, mode, or waypoint changes,
+including routing and track imports, independently of Analytics visibility.
+Available results update every 500 ms with the current trip name. Completed
+rows remain visible while other trips are processed. Representation changes
+preserve map routes and markers outside country selection and add no undo step.
+Countries use Overture's English names, share transport-table styling, and list
+Unassigned last. The header counts countries with positive distance in the
+current period, excluding Unassigned. Overture's logo and attribution appear
+under **System Status → Other providers**.
+
+Save or Save All writes country parts through connected storage providers,
+including for owned shared trips. New parts remain marked unsaved across
+refresh until saved; computation does not automatically save to the cloud.
+Foreign shared views and references do not acquire writable country data.
+Equivalent split/unsplit route representations do not create sync conflicts.
+Trip files use two-space indentation with each geometry object on one compact
+line, including shared copies. Startup shows **Loading country distances**
+while reading saved parts and **Calculating country distances for…** during
+conversion. First-use time depends on boundary downloads, route vertex counts,
+and device speed; detailed tracks can take longer than sparse routes.
 
 See [boundary preparation and updates](scripts/boundaries/README.md) for the
 reproducible Overture pipeline, checksums, validation report, and attribution.

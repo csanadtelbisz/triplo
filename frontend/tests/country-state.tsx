@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Trip } from '../../shared/types';
+import type { CountryPart, Trip } from '../../shared/types';
 import { AnalyticsPanel } from '../src/components/AnalyticsPanel';
 import { emptyAnalyticsSelection } from '../src/countries/analytics';
-import { attachCountryDistances, sameCountryTripInputs } from '../src/countries/cache';
+import { attachCountryParts, sameCountryTripInputs } from '../src/countries/cache';
 import { useCountryData } from '../src/countries/useCountryData';
 import '../src/styles/TripEditor.css';
 
@@ -20,9 +20,9 @@ function CountryState() {
   const latest = useRef(trips);
   latest.current = trips;
   const [selection, setSelection] = useState({ ...emptyAnalyticsSelection, countries: true });
-  const apply = useCallback((source: Trip[], caches: Record<string, Record<string, number>>) => {
+  const apply = useCallback((source: Trip[], parts: Record<string, CountryPart[]>, revisions: Record<string, string>) => {
     if (!sameCountryTripInputs(source, latest.current)) return undefined;
-    const updated = attachCountryDistances(latest.current, caches);
+    const updated = attachCountryParts(latest.current, parts, revisions);
     if (updated !== latest.current) {
       latest.current = JSON.parse(JSON.stringify(updated));
       setTrips(latest.current);

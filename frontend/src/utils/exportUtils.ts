@@ -1,3 +1,4 @@
+import { getSegmentGeometry } from './segmentGeometry';
 import type { Trip, Segment, Waypoint } from '../../../shared/types';
 import { getModeColor } from './builtInModesPreferences';
 
@@ -38,8 +39,8 @@ export function exportGPX(segment: Segment, trip?: Trip, includeAppMetadata: boo
   }
 
   gpx += `    <trkseg>\n`;
-  if (segment.geometry && segment.geometry.coordinates) {
-    for (const coord of segment.geometry.coordinates) {
+  if (getSegmentGeometry(segment)?.coordinates) {
+    for (const coord of getSegmentGeometry(segment)!.coordinates) {
       gpx += `      <trkpt lat="${coord[1]}" lon="${coord[0]}">`;
       if (coord.length > 2 && coord[2] !== undefined) {
         gpx += `<ele>${coord[2]}</ele>`;
@@ -95,8 +96,8 @@ export function exportTripGPX(trip: Trip, includeAppMetadata: boolean = true): s
     }
 
     gpx += `    <trkseg>\n`;
-    if (segment.geometry && segment.geometry.coordinates) {
-      for (const coord of segment.geometry.coordinates) {
+    if (getSegmentGeometry(segment)?.coordinates) {
+      for (const coord of getSegmentGeometry(segment)!.coordinates) {
         gpx += `      <trkpt lat="${coord[1]}" lon="${coord[0]}">`;
         if (coord.length > 2 && coord[2] !== undefined) {
           gpx += `<ele>${coord[2]}</ele>`;
@@ -150,10 +151,10 @@ export function exportTripGeoJSON(trip: Trip, includeAppMetadata: boolean = true
       }
     }
 
-    if (segment.geometry) {
+    if (getSegmentGeometry(segment)) {
       const feature: any = {
         type: "Feature",
-        geometry: segment.geometry,
+        geometry: getSegmentGeometry(segment),
         properties: {
           name: segment.name || `Segment ${segment.id.slice(0, 8)}`,
           transportMode: segment.transportMode

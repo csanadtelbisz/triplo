@@ -2,6 +2,7 @@ import * as turf from '@turf/turf';
 import type { Waypoint, Trip } from '../../../shared/types';
 import { copyEffectiveGeometryCache, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
 import { compactCountryData } from '../countries/cache';
+import { countryPartStats, getSegmentGeometry } from './segmentGeometry';
 
 export interface DistanceStats {
   distanceKm: number;
@@ -334,10 +335,10 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
 
     if (needsComputation) {
       // Computing Segment stats
-      segDistStats = getSegmentDistanceSummary(seg);
+      segDistStats = !seg.geometry && seg.countryParts ? countryPartStats(seg)! : getSegmentDistanceSummary(seg);
 
       // Computing intermediate waypoint distances
-      wpStats = computeWaypointDistanceStats(seg.waypoints, seg.geometry as GeoJSON.LineString | undefined);
+      if (!wpStats || seg.geometry || !seg.countryParts) wpStats = computeWaypointDistanceStats(seg.waypoints, getSegmentGeometry(seg));
     }
 
     if (seg.routingProfile !== 'teleport' && segDistStats) {

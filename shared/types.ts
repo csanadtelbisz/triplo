@@ -27,25 +27,34 @@ export interface Waypoint {
   };
 }
 
+export interface SegmentDistanceStats {
+  totalDistance: number;
+  hasElevation: boolean;
+  elevationUp: number;
+  elevationDown: number;
+}
+
+export interface CountryPart {
+  country: string;
+  geometry: GeoJSON.LineString;
+  distanceStats: SegmentDistanceStats;
+}
+
 export interface Segment {
   id: string; // UUID
   transportMode: TransportMode;
   routingProfile: string;
   source: 'router' | 'gpx' | 'manual';
   routingService: string;
-  geometry: GeoJSON.LineString;
+  geometry?: GeoJSON.LineString;
+  countryParts?: CountryPart[];
   waypoints: Waypoint[];
   name?: string;
   customColor?: string;
   customIcon?: string;
   isHidden?: boolean;
   countryDistances?: Record<string, number>;
-  distanceStats?: {
-    totalDistance: number;
-    hasElevation: boolean;
-    elevationUp: number;
-    elevationDown: number;
-  };
+  distanceStats?: SegmentDistanceStats;
   waypointDistances?: {
     distanceKm: number;
     hasElevation: boolean;
@@ -61,6 +70,7 @@ export interface Trip {
   startDate?: string;
   endDate?: string;
   segments: Segment[];
+  countryDataRevision?: string;
   createdAt: string;
   updatedAt: string;
   sourceService?: string;

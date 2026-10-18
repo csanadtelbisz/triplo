@@ -1,3 +1,4 @@
+import { getSegmentGeometry } from '../utils/segmentGeometry';
 import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -670,8 +671,8 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                </span>
              </div>
            )}
-           {seg.geometry && seg.distanceStats?.hasElevation && (
-             <ElevationProfile geometry={seg.geometry} onHoverCoordinate={onHoverCoordinate} />
+           {getSegmentGeometry(seg) && seg.distanceStats?.hasElevation && (
+             <ElevationProfile geometry={getSegmentGeometry(seg)!} onHoverCoordinate={onHoverCoordinate} />
            )}
         </div>
 

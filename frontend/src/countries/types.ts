@@ -1,4 +1,4 @@
-import type { Segment } from '../../../shared/types';
+import type { CountryPart, Segment } from '../../../shared/types';
 import type { RouteGeometry } from '../utils/effectiveGeometry';
 
 export interface CountryPiece {
@@ -12,11 +12,11 @@ export interface CountryResult {
   totalDistanceKm: number;
   pieces: CountryPiece[];
   waypointCountries: Record<string, string>;
-  geometryReady?: boolean;
 }
 
 export const UNASSIGNED = '__unassigned__';
-export const COUNTRY_ALGORITHM_VERSION = 1;
+export const COUNTRY_ALGORITHM_VERSION = 2;
+export const BORDER_EXCURSION_METRES = 10;
 export type CountryGeometry = GeoJSON.Polygon | GeoJSON.MultiPolygon;
 export type Bounds = [number, number, number, number];
 export interface CountryEntry {
@@ -40,12 +40,14 @@ export interface CountryAsset {
 }
 export interface CountryData {
   index: CountryIndex;
+  revision?: string;
   results: Record<string, CountryResult>;
 }
 export interface CountryWorkerUpdate {
   complete: boolean;
   data?: CountryData;
-  distances?: Record<string, Record<string, number>>;
+  parts?: Record<string, CountryPart[]>;
+  revisions?: Record<string, string>;
   currentTrip?: { id: string; name: string };
   error?: string;
 }
