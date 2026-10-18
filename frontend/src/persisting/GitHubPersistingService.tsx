@@ -4,6 +4,7 @@ import type { PersistingService, ConnectionInstruction } from './PersistingServi
 import type { Trip } from '../../../shared/types';
 import githubIcon from '../assets/icons/github.png';
 import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
+import { serializeTrip } from '../utils/serializeTrip';
 
 export class GitHubPersistingService implements PersistingService {
   name = 'GitHub' as const;
@@ -202,7 +203,7 @@ export class GitHubPersistingService implements PersistingService {
     if (!this.isAvailable()) throw new Error('GitHub service unavailable');
     const repo = this.getRepo();
     const path = `trips/${trip.id}.triplo.json`;
-    const serializedTrip = JSON.stringify(trip, null, 2);
+    const serializedTrip = serializeTrip(trip);
     const existingContent = await this.loadTextFile(path);
     if (existingContent === serializedTrip) return;
     
@@ -328,7 +329,7 @@ export class GitHubPersistingService implements PersistingService {
         public: false,
         files: {
           [fileName]: {
-            content: JSON.stringify(trip, null, 2)
+            content: serializeTrip(trip)
           }
         }
       })
@@ -414,7 +415,7 @@ export class GitHubPersistingService implements PersistingService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        files: { [`${trip.id}.triplo.json`]: { content: JSON.stringify(trip, null, 2) } }
+        files: { [`${trip.id}.triplo.json`]: { content: serializeTrip(trip) } }
       })
     });
     if (!response.ok) throw new Error(`Failed to update GitHub shared trip: ${response.status} ${await response.text()}`);

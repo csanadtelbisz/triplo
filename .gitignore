@@ -1,2 +1,5 @@
 *.geojson
 *.gpx
+.boundary-cache/
+frontend/public/countries-candidate/
+__pycache__/

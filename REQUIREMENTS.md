@@ -77,6 +77,7 @@ canonical field reference.
 | `createdAt`, `updatedAt` | Creation and modification timestamps |
 | `sourceService`, `metadata` | Optional source, sync, and sharing information |
 | `tripDistanceSummary` | Optional cached total distance and distance by mode |
+| `countryDataRevision` | One boundary/catalog and calculation-rule fingerprint for completed country parts |
 
 New trips use a temporary ID until saved. Saving assigns a name-based ID with a
 random suffix. IDs are strings; a UUID format is not required.
@@ -89,10 +90,12 @@ random suffix. IDs are strings; a UUID format is not required.
 | `transportMode` | Built-in mode or `other` |
 | `routingService`, `routingProfile` | Provider name and profile used for routing |
 | `source` | `router`, `gpx`, or `manual` |
-| `geometry` | GeoJSON LineString with longitude/latitude positions and optional elevation |
+| `geometry` | Legacy or newly routed GeoJSON LineString, before country splitting |
+| `countryParts` | Ordered country pieces, each with country code, geometry, and distance/elevation statistics; replaces full geometry and segment distance stats |
 | `waypoints` | Ordered array of embedded waypoint objects |
 | `customColor`, `customIcon`, `isHidden` | Optional presentation overrides |
 | `distanceStats`, `waypointDistances` | Optional distance and elevation caches |
+| `countryDistances` | Older distance-only country data, readable during conversion to country parts |
 
 Segments can share a boundary waypoint ID. Editing operations update matching
 waypoints across segments to keep the trip connected. A segment being built may
@@ -187,6 +190,22 @@ supports version selection and uploads to missing services.
 Editing updates React state and per-trip undo/redo history. Local trip state is
 cached; explicit Save or Save All writes to connected providers and updates the
 saved-state baseline. Preference changes use a separate synchronization path.
+Country calculations replace unsplit geometry with ordered per-country parts,
+without adding an undo step or changing waypoint-distance statistics. Full GPX
+source tracks remain recoverable. One trip-level revision covers boundaries,
+calculation rules, and the 10 m border-excursion rule; it advances only when all
+segments use that revision. Consecutive A/B/A pieces merge into A only if the
+entire B path stays within 10 m of A. Unassigned and disconnected pieces do not
+merge. Splitting preserves route coordinates and total distance.
+Saved parts support statistics and country-cropped maps without boundary
+polygon downloads. Coordinate hashes and a persistent browser country-result
+database are not used. Route edits draw their full geometry immediately and
+split in a background worker, using the legacy layout until completion.
+Older worker results are rejected after a newer edit. Save and Save All accept
+both layouts and write indented JSON with each geometry on one compact line.
+Equivalent split/unsplit data does not create sync conflicts. The worker runs
+independently of Analytics visibility, streaming results every 500 ms with the
+current trip name.
 Startup read-only and mobile-panel preferences remain local, while language,
 appearance, map home, mode overrides, list settings, API keys, and custom styles
 are synchronized. Custom style scripts are saved as separate files.

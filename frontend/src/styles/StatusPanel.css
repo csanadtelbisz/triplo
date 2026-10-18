@@ -115,6 +115,11 @@ body.dark-mode .status-panel-section-title {
   color: #495057;
 }
 
+.status-panel-provider-logo {
+  display: block;
+  object-fit: contain;
+}
+
 .status-panel-badge {
   font-size: 0.85rem;
   padding: 4px 8px;

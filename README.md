@@ -21,6 +21,78 @@ there is no application backend to run.
 - Save trips and preferences to Google Drive or GitHub, resolve sync conflicts,
   and share read-only trip links.
 
+## Country analytics
+
+Country analytics adds a globe toggle above transport modes. Select a country
+to crop routes and waypoint markers to it; select a mode to narrow the results.
+Flights are entirely **Unassigned** and teleport segments contribute no distance.
+Yearly distances retain proportional allocation across inclusive trip days.
+Date filters use trip overlap; they do not infer the date of a border crossing.
+
+The full yearly chart remains visible as context. Browser Back/Forward restores
+country, mode, date, and segment-detail selections. Clearing a country or mode
+returns to its parent level; Back from an unselected list returns to the trip
+manager. View toggles and date changes replace the current entry. Calculations
+run in a worker. Shared-trip references remain metadata-only. Country files
+load on demand and failures show a retry action instead of being counted as
+Unassigned. Disconnected route pieces retain their segment identity. Country
+zoom uses a relevant land component when an entity spans distant islands.
+
+Each completed segment stores an ordered `countryParts` array. Each part has a
+country code, GeoJSON `geometry`, and `distanceStats` (kilometres and elevation).
+Together the parts replace the segment's full `geometry`, aggregate
+`distanceStats`, and old `countryDistances`; the full route is not duplicated.
+Re-entry stays in route order, for example HU → SK → HU. Waypoints and their
+`waypointDistances` remain unchanged. Imported GPX tracks retain their full
+source geometry, including portions outside the current waypoints; only the
+traversed portions contribute country statistics and map cropping.
+
+A bounded A → B → A excursion is attributed entirely to A when its whole path
+stays within 10 metres of A. The check includes the interiors of sparse edges,
+not just recorded vertices, and conservatively retains uncertain excursions.
+It changes country attribution without moving or discarding route coordinates.
+Unassigned pieces, disconnected pieces, deeper excursions, and one-way border
+crossings are not merged. Markers follow the nearest traversed country piece;
+ties between countries remain Unassigned.
+
+One `countryDataRevision` per trip identifies the boundary catalog, splitting
+rules, geometry rules, and 10 m tolerance. It is updated only after every
+segment has been processed with that revision. Saved current parts provide
+country distances and cropped maps in a fresh browser without downloading
+boundary polygons. There are no coordinate hashes or persistent browser
+country-result caches; the previous preview's result database is discarded.
+The normal browser trip storage and temporary map geometry remain.
+
+Legacy trip files stay readable. After routing, the new full geometry is drawn
+immediately using the legacy layout. Background conversion replaces it with
+country parts; a newer route edit cancels or discards older work. Saving before
+conversion finishes writes a valid unsplit route. On a boundary/rule update,
+the worker rebuilds parts before stamping the new trip revision.
+
+Calculations run after loading and normal geometry, mode, or waypoint changes,
+including routing and track imports, independently of Analytics visibility.
+Available results update every 500 ms with the current trip name. Completed
+rows remain visible while other trips are processed. Representation changes
+preserve map routes and markers outside country selection and add no undo step.
+Countries use Overture's English names, share transport-table styling, and list
+Unassigned last. The header counts countries with positive distance in the
+current period, excluding Unassigned. Overture's logo and attribution appear
+under **System Status → Other providers**.
+
+Save or Save All writes country parts through connected storage providers,
+including for owned shared trips. New parts remain marked unsaved across
+refresh until saved; computation does not automatically save to the cloud.
+Foreign shared views and references do not acquire writable country data.
+Equivalent split/unsplit route representations do not create sync conflicts.
+Trip files use two-space indentation with each geometry object on one compact
+line, including shared copies. Startup shows **Loading country distances**
+while reading saved parts and **Calculating country distances for…** during
+conversion. First-use time depends on boundary downloads, route vertex counts,
+and device speed; detailed tracks can take longer than sparse routes.
+
+See [boundary preparation and updates](scripts/boundaries/README.md) for the
+reproducible Overture pipeline, checksums, validation report, and attribution.
+
 ## Using Triplo and storing trips
 
 On first launch, choose **Explore Triplo** to try the app without connecting an
@@ -149,7 +221,9 @@ the `/triplo/` base path. For an equivalent local build, run
 [pr-preview.yml](.github/workflows/pr-preview.yml) builds and tests pull requests.
 Branches in this repository also get a preview at
 `https://csanadtelbisz.github.io/triplo/pr-preview/pr-<number>/`; fork PRs run
-validation only. Preview links appear on the deployment and in the job summary.
+validation only. After a successful preview deployment, a PR comment links to
+the deployed preview and identifies its commit. Subsequent deployments update
+that comment. Links also appear on the deployment and in the job summary.
 
 GitHub Pages hosts one site per repository, so each deployment includes the
 default-branch production build and all open same-repository PR previews.

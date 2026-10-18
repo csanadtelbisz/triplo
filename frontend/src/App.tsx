@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import './styles/App.css';
 import './styles/Shared.css';
@@ -7,7 +7,7 @@ import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
 import './styles/Mobile.css';
-import type { Trip } from '../../shared/types';
+import type { CountryPart, Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
@@ -36,6 +36,12 @@ import { routingManager } from './routing/RoutingService';
 import type { ApiKeyServiceConfiguration } from './utils/apiKeyPreferences';
 import { API_KEY_CONFIGURATION_WARNING_EVENT } from './utils/apiKeyConfigurationWarning';
 import { applyAppearanceTheme } from './utils/appearancePreferences';
+import { emptyAnalyticsSelection } from './countries/analytics';
+import type { AnalyticsSelection } from './countries/analytics';
+import { useCountryData } from './countries/useCountryData';
+import { getEffectiveGeometry } from './utils/effectiveGeometry';
+import { comparisonGeometry, getSegmentGeometry } from './utils/segmentGeometry';
+import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryTripInputs, tripForStorage, withSavedCountryParts } from './countries/cache';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -50,6 +56,20 @@ const getSharedTripTokenFromPath = () => {
 };
 
 const unavailableSharedTripMessage = 'This trip was deleted or made private by the owner.';
+const serializedTrips = new WeakMap<Trip, string>();
+
+function stripMeta(trip: Trip, includeCaches = true): string {
+  const cached = includeCaches ? serializedTrips.get(trip) : undefined;
+  if (cached !== undefined) return cached;
+  const { metadata: _metadata, ...copy } = trip;
+  if (!includeCaches) {
+    const { updatedAt: _updatedAt, tripDistanceSummary: _summary, countryDataRevision: _revision, ...content } = copy;
+    return JSON.stringify({ ...content, segments: compactCountryData(trip).segments.map(({ countryDistances: _country, countryParts: _parts, distanceStats: _distance, waypointDistances: _waypoints, geometry: _geometry, ...segment }, index) => ({ ...segment, geometry: segment.transportMode === 'flight' ? getEffectiveGeometry(trip.segments[index]) : comparisonGeometry(getSegmentGeometry(trip.segments[index])) })) });
+  }
+  const serialized = JSON.stringify(tripForStorage({ ...trip, metadata: undefined }));
+  serializedTrips.set(trip, serialized);
+  return serialized;
+}
 
 type PanelHistoryState = {
   panel: 'manager' | 'editor' | 'segment' | 'waypoint' | 'poi' | 'search' | 'status' | 'analytics' | 'analytics-segment' | 'preferences' | 'style-config';
@@ -59,12 +79,27 @@ type PanelHistoryState = {
   poi?: any;
   analyticsSegmentInfo?: { tripId: string; segmentId: string };
   analyticsModeFilter?: string | null;
+  analyticsSelection?: AnalyticsSelection;
   styleConfigId?: string;
 };
 
 type AppHistoryState = {
   triploPanel?: PanelHistoryState;
+  triploHistoryId?: string;
 };
+
+const analyticsHistoryPath = (state: PanelHistoryState | null) => {
+  if (!state || (!['analytics', 'analytics-segment'].includes(state.panel) && !state.analyticsSelection)) return null;
+  const selection = state.analyticsSelection;
+  const path = ['analytics'];
+  if (selection?.countries && selection.country) path.push(`country:${selection.country}`);
+  if (selection?.mode || state.analyticsModeFilter) path.push(`mode:${selection?.mode || state.analyticsModeFilter}`);
+  if (state.analyticsSegmentInfo) path.push(`segment:${state.analyticsSegmentInfo.tripId}:${state.analyticsSegmentInfo.segmentId}`);
+  if (state.panel === 'poi') path.push(`poi:${state.poi?.id}`);
+  return path;
+};
+
+const panelHistoryKey = (state: PanelHistoryState) => JSON.stringify(analyticsHistoryPath(state) || [state.panel, state.tripId, state.segmentId, state.waypointId, state.poi?.id, state.styleConfigId]);
 
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -152,7 +187,9 @@ export default function App() {
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [editingStyleConfigId, setEditingStyleConfigId] = useState<string | null>(null);
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
-  const [analyticsModeFilter, setAnalyticsModeFilter] = useState<string | null>(null);
+  const [analyticsSelection, setAnalyticsSelection] = useState<AnalyticsSelection>(emptyAnalyticsSelection);
+  const analyticsModeFilter = analyticsSelection.mode;
+  const setAnalyticsModeFilter = (mode: string | null) => setAnalyticsSelection(value => ({ ...value, mode }));
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
@@ -178,27 +215,67 @@ export default function App() {
   const [apiKeyWarningConfiguration, setApiKeyWarningConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const tripsRef = useRef(trips);
+  const serializedTripVersionsRef = useRef<Trip[]>([]);
   const historyInitializedRef = useRef(false);
-  const historyUpdateModeRef = useRef<'replace' | 'restore' | null>(null);
+  const historyUpdateModeRef = useRef<'replace' | null>(null);
   const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
+  const panelHistoryEntriesRef = useRef<{ id: string; panel: PanelHistoryState }[]>([]);
+  const panelHistoryIndexRef = useRef(0);
+  const pendingPanelHistoryRef = useRef<{ id: string; panel: PanelHistoryState } | null>(null);
 
   useEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
 
+  useEffect(() => {
+    const live = new Set(selectedTrip ? [...trips, selectedTrip] : trips);
+    for (const previous of serializedTripVersionsRef.current) if (!live.has(previous)) serializedTrips.delete(previous);
+    serializedTripVersionsRef.current = [...live];
+  }, [trips, selectedTrip]);
+
+  const countryTrips = useMemo(() => {
+    if (!selectedTrip || trips.some(trip => trip.id === selectedTrip.id)) return trips;
+    const input = isViewingSharedTrip ? { ...selectedTrip, metadata: { ...selectedTrip.metadata, isSharedTripReference: true } } : selectedTrip;
+    return [...trips, input];
+  }, [trips, selectedTrip, isViewingSharedTrip]);
+  const countryTripsRef = useRef(countryTrips);
+  useEffect(() => { countryTripsRef.current = countryTrips; }, [countryTrips]);
+  const applyCountryParts = useCallback((source: Trip[], parts: Record<string, CountryPart[]>, revisions: Record<string, string>) => {
+    const latest = countryTripsRef.current;
+    if (!sameCountryTripInputs(source, latest)) return undefined;
+    const updated = attachCountryParts(latest, parts, revisions);
+    if (updated === latest) return latest;
+    countryTripsRef.current = updated;
+    const current = tripsRef.current;
+    const next = current.map(trip => {
+      const index = latest.indexOf(trip);
+      return index < 0 ? trip : updated[index];
+    });
+    if (next.some((trip, i) => trip !== current[i])) {
+      tripsRef.current = next;
+      setTrips(next);
+    }
+    setSelectedTrip(selected => {
+      const index = selected ? latest.indexOf(selected) : -1;
+      return index < 0 ? selected : updated[index];
+    });
+    return updated;
+  }, []);
+  const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryParts);
+
   const getPanelHistoryState = useCallback((): PanelHistoryState => {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
-    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id };
-    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter };
-    if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter };
+    if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id, ...(isAnalyticsOpen ? { analyticsSelection, analyticsSegmentInfo: analyticsSegmentInfo || undefined } : {}) };
+    if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter, analyticsSelection };
+    if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter, analyticsSelection };
     if (isSearchOpen) return { panel: 'search' };
     if (selectedSegmentId && selectedTrip) return { panel: 'segment', tripId: selectedTrip.id, segmentId: selectedSegmentId };
     if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
     if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
     return { panel: 'manager' };
-  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter]);
+  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter, analyticsSelection]);
 
   const isSamePanelHistoryState = (a: PanelHistoryState | null, b: PanelHistoryState) =>
     a?.panel === b.panel &&
@@ -209,54 +286,45 @@ export default function App() {
     a?.analyticsSegmentInfo?.tripId === b.analyticsSegmentInfo?.tripId &&
     a?.analyticsSegmentInfo?.segmentId === b.analyticsSegmentInfo?.segmentId &&
     a?.analyticsModeFilter === b.analyticsModeFilter &&
+    JSON.stringify(a?.analyticsSelection) === JSON.stringify(b.analyticsSelection) &&
     a?.styleConfigId === b.styleConfigId;
 
   useEffect(() => {
     const panelState = getPanelHistoryState();
     const updateMode = historyUpdateModeRef.current;
 
-    if (!historyInitializedRef.current || updateMode === 'replace') {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      historyInitializedRef.current = true;
-      historyUpdateModeRef.current = null;
-      currentPanelHistoryRef.current = panelState;
-      return;
+    historyUpdateModeRef.current = null;
+    if (isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) return;
+
+    const previousPath = analyticsHistoryPath(currentPanelHistoryRef.current);
+    const nextPath = analyticsHistoryPath(panelState);
+    const analyticsTransition = previousPath && nextPath;
+    const entries = panelHistoryEntriesRef.current;
+    const index = panelHistoryIndexRef.current;
+    const key = panelHistoryKey(panelState);
+    if (analyticsTransition && nextPath.length < previousPath.length) {
+      const ancestor = entries.slice(0, index).findLastIndex(entry => panelHistoryKey(entry.panel) === key);
+      if (ancestor >= 0) {
+        pendingPanelHistoryRef.current = { id: entries[ancestor].id, panel: panelState };
+        currentPanelHistoryRef.current = panelState;
+        window.history.go(ancestor - index);
+        return;
+      }
     }
 
-    // Browser Back/Forward already selected the target entry. Rendering that
-    // entry must not be mistaken for a new navigation, which would discard
-    // the browser's forward stack.
-    if (updateMode === 'restore') {
-      historyUpdateModeRef.current = null;
-      currentPanelHistoryRef.current = panelState;
-      return;
+    const replace = !historyInitializedRef.current || updateMode === 'replace' || !!(analyticsTransition && nextPath.length <= previousPath.length);
+    const entry = { id: replace && entries[index] ? entries[index].id : crypto.randomUUID(), panel: panelState };
+    const browserState = { triploPanel: panelState, triploHistoryId: entry.id } satisfies AppHistoryState;
+    if (replace) {
+      entries[index] = entry;
+      window.history.replaceState(browserState, '', window.location.href);
+    } else {
+      entries.splice(index + 1, entries.length, entry);
+      panelHistoryIndexRef.current = index + 1;
+      window.history.pushState(browserState, '', window.location.href);
     }
-
-    if (
-      currentPanelHistoryRef.current?.panel === panelState.panel &&
-      currentPanelHistoryRef.current?.analyticsModeFilter &&
-      !panelState.analyticsModeFilter
-    ) {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-      return;
-    }
-
-    if (
-      currentPanelHistoryRef.current?.panel === panelState.panel &&
-      currentPanelHistoryRef.current?.analyticsModeFilter &&
-      panelState.analyticsModeFilter &&
-      currentPanelHistoryRef.current.analyticsModeFilter !== panelState.analyticsModeFilter
-    ) {
-      window.history.replaceState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-      return;
-    }
-
-    if (!isSamePanelHistoryState(currentPanelHistoryRef.current, panelState)) {
-      window.history.pushState({ triploPanel: panelState } satisfies AppHistoryState, '', window.location.href);
-      currentPanelHistoryRef.current = panelState;
-    }
+    historyInitializedRef.current = true;
+    currentPanelHistoryRef.current = panelState;
   }, [getPanelHistoryState]);
 
   const replacePanelHistoryOnNextRender = () => {
@@ -264,6 +332,7 @@ export default function App() {
   };
 
   const goBackPanel = () => {
+    if (isAnalyticsOpen) { window.history.back(); return; }
     replacePanelHistoryOnNextRender();
     if (isSearchOpen) {
       setIsSearchOpen(false);
@@ -289,10 +358,21 @@ export default function App() {
 
   useEffect(() => {
     const handlePanelPopState = (event: PopStateEvent) => {
-      const panelState = (event.state as AppHistoryState | null)?.triploPanel;
+      const browserState = event.state as AppHistoryState | null;
+      const pending = pendingPanelHistoryRef.current;
+      const panelState = pending && pending.id === browserState?.triploHistoryId ? pending.panel : browserState?.triploPanel;
       if (!panelState) return;
 
-      historyUpdateModeRef.current = 'restore';
+      pendingPanelHistoryRef.current = null;
+      historyUpdateModeRef.current = null;
+      const index = panelHistoryEntriesRef.current.findIndex(entry => entry.id === browserState?.triploHistoryId);
+      if (index >= 0) {
+        panelHistoryIndexRef.current = index;
+        panelHistoryEntriesRef.current[index].panel = panelState;
+      }
+      if (pending?.id === browserState?.triploHistoryId) {
+        window.history.replaceState({ ...browserState, triploPanel: panelState }, '', window.location.href);
+      }
       currentPanelHistoryRef.current = panelState;
       const trip = panelState.tripId ? tripsRef.current.find(item => item.id === panelState.tripId) || null : null;
       flushSync(() => {
@@ -304,9 +384,10 @@ export default function App() {
         setIsStatusOpen(panelState.panel === 'status');
         setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
         setEditingStyleConfigId(panelState.panel === 'style-config' ? panelState.styleConfigId || null : null);
-        setIsAnalyticsOpen(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment');
-        setAnalyticsSegmentInfo(panelState.panel === 'analytics-segment' ? panelState.analyticsSegmentInfo || null : null);
-        setAnalyticsModeFilter(panelState.panel === 'analytics' || panelState.panel === 'analytics-segment' ? panelState.analyticsModeFilter || null : null);
+        const analytics = panelState.panel === 'analytics' || panelState.panel === 'analytics-segment' || !!panelState.analyticsSelection;
+        setIsAnalyticsOpen(analytics);
+        setAnalyticsSegmentInfo(analytics ? panelState.analyticsSegmentInfo || null : null);
+        setAnalyticsSelection(analytics ? panelState.analyticsSelection || { ...emptyAnalyticsSelection, mode: panelState.analyticsModeFilter || null } : emptyAnalyticsSelection);
         setAttachingPoiToWaypointId(null);
         setHighlightedWaypointId(null);
       });
@@ -336,12 +417,6 @@ export default function App() {
       setSetupWizardCallback(null);
       await callback();
     }
-  };
-
-  const stripMeta = (t: Trip) => {
-    const copy: any = { ...t };
-    delete copy.metadata;
-    return JSON.stringify(copy);
   };
 
   const loadTrips = async () => {
@@ -403,14 +478,14 @@ export default function App() {
         const remoteVariants = variants.filter(v => v.metadata?._sourceService && v.metadata._sourceService !== 'Local Browser Storage');
         
         // Count unique remote contents ignoring metadata
-        const uniqueRemoteContents = new Set(remoteVariants.map(v => stripMeta(v)));
+        const uniqueRemoteContents = new Set(remoteVariants.map(v => stripMeta(v, false)));
 
         // Only conflict if there are MULTIPLE distinct remote versions that disagree
         if (uniqueRemoteContents.size > 1) {
           // It's a conflict!
           const groupedVariants: Trip[] = [];
           variants.forEach(variant => {
-            const existing = groupedVariants.find(t => stripMeta(t) === stripMeta(variant));
+            const existing = groupedVariants.find(t => stripMeta(t, false) === stripMeta(variant, false));
             if (existing) {
               const existingSources = new Set((existing.metadata?._sourceService || '').split(', '));
               if (variant.metadata?._sourceService) existingSources.add(variant.metadata._sourceService);
@@ -475,11 +550,11 @@ export default function App() {
           const existing = oldCache.find(t => t.id === trip.id);
           const freshMetadata = { ...(trip.metadata || {}) };
           delete (freshMetadata as any)._isCached;
-          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary) {
-             cachedTrips.push({
+          if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary && existing.segments.every(s => s.distanceStats)) {
+             cachedTrips.push(compactCountryData({
                 ...existing,
                 metadata: { ...existing.metadata, ...freshMetadata, _isCached: false }
-             });
+             }));
           } else {
              const newlyComputed = computeTripCaches(trip);
              newlyComputed.metadata = { ...newlyComputed.metadata, ...freshMetadata, _isCached: false };
@@ -491,7 +566,7 @@ export default function App() {
       saveTripCache(cachedTrips);
       const initHistories: Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }> = {};
       cachedTrips.forEach(t => {
-        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(t) };
+        initHistories[t.id] = { past: [], future: [], lastSavedStr: stripMeta(withSavedCountryParts(t, tripsMap.get(t.id)!)) };
       });
       setHistories(initHistories);
       if (localStorage.getItem('defaultReadOnly') !== 'true') {
@@ -561,7 +636,17 @@ export default function App() {
       }
     }
 
-    const cachedTrip = computeTripCaches(newTrip, affectedSegments);
+    const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
+    const segments = newTrip.segments.map(segment => {
+      const previous = currentTrip?.segments.find(old => old.id === segment.id);
+      if ((!segment.countryParts && !segment.countryDistances) || (previous && sameCountryInputs(previous, segment) && !(segment.countryParts && segment.geometry))) return segment;
+      const geometry = getSegmentGeometry(segment);
+      const content = { ...segment, geometry };
+      delete content.countryParts;
+      delete content.countryDistances;
+      return content;
+    });
+    const cachedTrip = computeTripCaches({ ...newTrip, segments }, affectedSegments);
     setTrips(prev => prev.map(t => t.id === tripId ? cachedTrip : t));
 
     setHistories(prev => {
@@ -833,9 +918,9 @@ export default function App() {
   };
 
   // Uses stripMeta to ignore metadata differences (like syncedServices lists) for local unsaved status
-  const unsavedTripIds = new Set(
+  const unsavedTripIds = useMemo(() => new Set(
     trips.filter(t => histories[t.id] && histories[t.id].lastSavedStr !== stripMeta(t)).map(t => t.id)
-  );
+  ), [trips, histories]);
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -1400,8 +1485,16 @@ export default function App() {
                 }}
                 timeSliderVisible={analyticsTimeSliderVisible}
                 onToggleTimeSlider={() => setAnalyticsTimeSliderVisible(value => !value)}
-                selectedModeKey={analyticsModeFilter}
-                onSelectedModeKeyChange={setAnalyticsModeFilter}
+                selection={analyticsSelection}
+                onSelectionChange={(selection, replace = false) => {
+                  if (replace) replacePanelHistoryOnNextRender();
+                  setAnalyticsSelection(selection);
+                }}
+                countryData={countries.data}
+                countryLoading={countries.loading}
+                countryCurrentTrip={countries.currentTrip}
+                countryError={countries.error}
+                onRetryCountries={countries.retry}
                 onFocusSegment={(tripId, segmentId) => {
                   const trip = trips.find(t => t.id === tripId);
                   const segment = trip?.segments.find(s => s.id === segmentId);
@@ -1525,6 +1618,7 @@ export default function App() {
               setMobileSidebarCollapsed(false);
             }}
             onOpenAnalytics={() => {
+              setAnalyticsSelection(emptyAnalyticsSelection);
               setIsAnalyticsOpen(true);
               setIsStatusOpen(false);
               setIsPreferencesOpen(false);
@@ -1580,6 +1674,9 @@ export default function App() {
         trips={trips}
         selectedTrip={selectedTrip}
         styleContextSelectedSegment={analyticsStyleSegment}
+        analyticsSelection={isAnalyticsOpen ? analyticsSelection : null}
+        countryData={countries.data}
+        onAnalyticsSegmentClick={(tripId, segmentId) => setAnalyticsSegmentInfo({ tripId, segmentId })}
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}
@@ -1665,7 +1762,10 @@ export default function App() {
           onTouchStart={handlePanelTouchStart}
           onTouchEnd={handlePanelTouchEnd}
         >
-          <TimeSliderToolbox trips={trips} onClose={() => setAnalyticsTimeSliderVisible(false)} />
+          <TimeSliderToolbox trips={trips} onClose={() => setAnalyticsTimeSliderVisible(false)} range={analyticsSelection.range} onRangeChange={range => {
+            replacePanelHistoryOnNextRender();
+            setAnalyticsSelection(value => ({ ...value, range, year: null }));
+          }} />
         </div>
       )}
       <div className={`pc-sidebar-toggle-trigger ${isSidebarCollapsed ? 'collapsed' : ''}`}

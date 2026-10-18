@@ -1,3 +1,4 @@
+import { getSegmentGeometry } from '../utils/segmentGeometry';
 import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -464,18 +465,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                    const pointsParams = seg.waypoints.map(wp => `point=${wp.coordinates[1]}%2C${wp.coordinates[0]}`).join('&');
                    window.open(`https://routing.openrailrouting.org/maps/?${pointsParams}&locale=en-GB&elevation=false&profile=all_tracks&use_miles=false&layer=OSM%20Carto`, '_blank');
                  }}
-                 style={{
-                   marginTop: '8px',
-                   padding: '6px 12px',
-                   backgroundColor: '#f0f0f0',
-                   border: '1px solid #ccc',
-                   borderRadius: '4px',
-                   cursor: 'pointer',
-                   fontSize: '0.85rem',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '6px'
-                 }}
+                 className="external-routing-button"
                  title="Open route in openrailrouting.org"
                >
                  <MaterialIcon name="open_in_new" size={16} /> Open in openrailrouting.org
@@ -485,18 +475,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                    const pointsParams = seg.waypoints.map(wp => `${wp.coordinates[1]},${wp.coordinates[0]}`).join(';');
                    window.open(`https://signal.eu.org/osm/#locs=${pointsParams}`, '_blank');
                  }}
-                 style={{
-                   marginTop: '8px',
-                   padding: '6px 12px',
-                   backgroundColor: '#f0f0f0',
-                   border: '1px solid #ccc',
-                   borderRadius: '4px',
-                   cursor: 'pointer',
-                   fontSize: '0.85rem',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '6px'
-                 }}
+                 className="external-routing-button"
                  title="Open route in signal.eu.org"
                >
                  <MaterialIcon name="open_in_new" size={16} /> Open in signal.eu.org
@@ -521,18 +500,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                     }));
                     window.open(`https://graphhopper.com/maps/?${pointsParams}&profile=car&custom_model=${customModel}`, '_blank');
                   }}
-                  style={{
-                    marginTop: '8px',
-                    padding: '6px 12px',
-                    backgroundColor: '#f0f0f0',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
+                  className="external-routing-button"
                 >
                   <MaterialIcon name="open_in_new" size={16} /> Open in GraphHopper Maps
                 </button>
@@ -670,8 +638,8 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                </span>
              </div>
            )}
-           {seg.geometry && seg.distanceStats?.hasElevation && (
-             <ElevationProfile geometry={seg.geometry} onHoverCoordinate={onHoverCoordinate} />
+           {getSegmentGeometry(seg) && seg.distanceStats?.hasElevation && (
+             <ElevationProfile geometry={getSegmentGeometry(seg)!} onHoverCoordinate={onHoverCoordinate} />
            )}
         </div>
 
