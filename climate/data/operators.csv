@@ -1,0 +1,10 @@
+operator,name,load_factor,source,year
+RYR,Ryanair,0.94,Ryanair Holdings plc Form 20-F FY ended 31 Mar 2026: booked passenger load factor 94% (SEC EDGAR 0001104659-26-076131) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+RUK,Ryanair UK,0.94,Same as RYR (group figure) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+LDM,Lauda Europe,0.94,Same as RYR (group figure) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+WZZ,Wizz Air,0.907,Wizz Air March 2026 Traffic and CO2 Emission Statistics: load factor 90.7% rolling 12 months to March 2026 — https://s204.q4cdn.com/169340705/files/doc_news/March-2026-Traffic-and-CO2-Emission-Statistics-2026.pdf,2026
+EZY,easyJet,0.898,easyJet FY25 Investor Presentation: seat load factor 89.8% (year to 30 Sep 2025) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+EJU,easyJet Europe,0.898,Same as EZY (group figure) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+EZS,easyJet Switzerland,0.898,Same as EZY (group figure) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+THY,Turkish Airlines,0.832,Total passenger load factor Jan-Nov 2025 as reported by Caspian Post from Turkish Airlines traffic data — https://caspianpost.com/economics/turkish-airlines-sees-boost-in-passengers-cargo-in-2025,2025
+AUA,Austrian Airlines,0.816,"Lufthansa Group Annual Report 2025, Austrian Airlines: passenger load factor 81.6% — https://report.lufthansagroup.com/2025/annual-report/en/combined-management-report/business-segments/passenger-airlines-business-segment/austrian-airlines/",2025

@@ -1,0 +1,33 @@
+operator,aircraft,economy,premium_economy,business,first,source,year
+RYR,B738,189,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+RYR,B38M,197,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+RYR,A320,180,0,0,0,Wikipedia Ryanair fleet table (Apr 2026); Lauda Europe aircraft — https://en.wikipedia.org/wiki/Ryanair,2026
+LDM,A320,180,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+WZZ,A320,180,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A20N,180,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025); table also shows a stray 186 — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A321,230,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A21N,239,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+EZY,A319,156,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EZY,A320,180,0,0,0,Wikipedia easyJet fleet table (Apr 2025); some aircraft have 186 — https://en.wikipedia.org/wiki/EasyJet,2025
+EZY,A20N,186,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EZY,A21N,235,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EJU,A319,156,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A320,180,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A20N,186,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A21N,235,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+THY,A321,158,0,20,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J20 Y158 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A21N,162,0,20,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J20 Y162 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A332,222,0,24,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J24 Y222 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A333,261,0,28,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J28 Y261 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A359,288,0,28,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J28 Y288 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B738,135,0,16,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J16 Y135 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B38M,135,0,16,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J16 Y135 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B77W,300,0,49,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J49 Y300 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B789,270,0,30,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J30 Y270 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+AUA,A320,174,0,0,0,"Wikipedia Austrian Airlines fleet table (May 2026): 174 total, cabin split not given (business is economy seats in Europe) — https://en.wikipedia.org/wiki/Austrian_Airlines",2026
+AUA,A20N,180,0,0,0,Wikipedia Austrian Airlines fleet table (May 2026): 180 total — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,A321,200,0,0,0,"Wikipedia Austrian Airlines fleet table (May 2026): A321-100, 200 total, layout varies — https://en.wikipedia.org/wiki/Austrian_Airlines",2026
+AUA,E195,120,0,0,0,Wikipedia Austrian Airlines fleet table (May 2026): 120 total — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B763,157,30,24,0,Wikipedia Austrian Airlines fleet table (May 2026): 24C/30W/157Y — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B772,258,40,32,0,Wikipedia Austrian Airlines fleet table (May 2026): 32C/40W/258Y (777-200ER) — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B789,247,21,26,0,Wikipedia Austrian Airlines fleet table (May 2026): 26C/21W/247Y — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
