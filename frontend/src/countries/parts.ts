@@ -68,6 +68,10 @@ export function resultFromParts(segment: Segment): CountryResult {
   const waypointCountries: Record<string, string> = {};
   for (const waypoint of segment.waypoints) {
     let closest = Infinity, country = UNASSIGNED;
+    if (!Array.isArray(waypoint.coordinates) || waypoint.coordinates.length < 2 || !waypoint.coordinates.slice(0, 2).every(Number.isFinite)) {
+      waypointCountries[waypoint.id] = country;
+      continue;
+    }
     for (const piece of pieces) {
       const distance = nearestPointOnLine(lineString(piece.coordinates), waypoint.coordinates).properties.dist;
       if (distance < closest - 1e-8) { closest = distance; country = piece.country; }

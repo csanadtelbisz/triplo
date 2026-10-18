@@ -99,6 +99,7 @@ self.onmessage = async (event: MessageEvent<{ trips: Trip[]; base: string }>) =>
     }
     publish(true);
   } catch (error) {
+    console.error('Country distance calculation failed:', error);
     publish?.(false);
     self.postMessage({ complete: true, error: error instanceof Error ? error.message : String(error) } satisfies CountryWorkerUpdate);
   } finally { clearInterval(timer); }

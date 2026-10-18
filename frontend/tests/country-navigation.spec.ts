@@ -201,6 +201,8 @@ test('country cropping keeps outside waypoint markers hidden after camera moveme
 });
 
 test('failed boundary downloads show retry instead of inventing Unassigned kilometres', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await context.route('**/countries/AA.json.gz*', route => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.goto('/tests/map-distance.html');
   await page.evaluate(async () => {
@@ -213,7 +215,8 @@ test('failed boundary downloads show retry instead of inventing Unassigned kilom
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
   await page.getByRole('button', { name: 'Group by country' }).click();
-  await expect(page.getByRole('alert')).toContainText('Cannot load boundaries');
+  await expect(page.getByRole('alert')).toHaveText('Could not calculate country distances. Retry');
+  await expect.poll(() => errors.some(error => error.includes('Country distance calculation failed:') && error.includes('Cannot load boundaries'))).toBe(true);
   await expect(page.getByRole('button', { name: /Unassigned/ })).toHaveCount(0);
   await context.route('**/countries/AA.json.gz*', route => route.fulfill({ contentType: 'application/gzip', body: countries[0].body }));
   await page.getByRole('button', { name: 'Retry', exact: true }).click();

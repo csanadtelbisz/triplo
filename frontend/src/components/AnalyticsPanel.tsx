@@ -637,7 +637,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
         {selection.countries && (
           <div className="country-list" aria-label="Countries">
             {countryLoading && <p role="status">{countryCurrentTrip ? `Calculating country distances for ${countryCurrentTrip}…` : 'Loading country distances…'}</p>}
-            {countryError && <p role="alert">{countryError} <button type="button" onClick={onRetryCountries}>Retry</button></p>}
+            {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
             <div className="trip-summary-table analytics-summary-table">
               <div className="analytics-summary-header">
                 <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED && row.distance > 0).length})</div><div className="analytics-summary-distance">Distance (km)</div>

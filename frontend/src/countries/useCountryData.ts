@@ -35,7 +35,9 @@ export function useCountryData(trips: Trip[], enabled: boolean, onUpdateTrips: (
       });
     };
     worker.onerror = event => {
-      if (active.current === job) setState(value => ({ ...value, trips: job.trips, complete: true, error: event.message || 'Country calculations failed' }));
+      if (active.current !== job) return;
+      console.error('Country distance worker failed:', event.error || event.message);
+      setState(value => ({ ...value, trips: job.trips, complete: true, error: event.message || 'Country calculations failed' }));
     };
     worker.postMessage({ trips, base: new URL(`${import.meta.env.BASE_URL}countries/`, location.origin).href });
   }, [trips, enabled, retry, onUpdateTrips]);

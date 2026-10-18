@@ -84,6 +84,16 @@ test('zero-distance coordinates and excluded teleport routes remain recoverable'
   expect(getSegmentGeometry(split(segment([[-1, 0], [-1, 0]])))!.coordinates).toEqual([[-1, 0], [-1, 0]]);
 });
 
+test('unfinished waypoints stay Unassigned without interrupting route attribution', () => {
+  const source = segment([[-1, 0], [1, 0]]);
+  source.waypoints.splice(1, 0, { id: 'unfinished', coordinates: [] as unknown as [number, number] });
+  const result = resultFromParts(split(source));
+  expect(result.waypointCountries).toEqual({ start: 'AA', unfinished: '__unassigned__', end: 'BB' });
+  expect(result.distanceKmByCountry.AA).toBeGreaterThan(0);
+  expect(result.distanceKmByCountry.BB).toBeGreaterThan(0);
+  expect(result.totalDistanceKm).toBeCloseTo(geometryDistance(getEffectiveGeometry(source)), 10);
+});
+
 test('dateline and flight parts preserve source geometry and render without connecting across the world', () => {
   for (const transportMode of ['hike', 'flight'] as const) {
     const source = segment([[179, 60, 100], [-179, 60, 200]], { transportMode, source: 'gpx', routingService: 'gpx' });
