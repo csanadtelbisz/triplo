@@ -1414,12 +1414,10 @@ export function TripEditor({
                                }}
                              />
                              {wpSearchState?.wpId === wp.id && (wpSearchResults.length > 0 || isWpSearching) && (
-                               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid var(--border-color, #ddd)', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                                 {isWpSearching && <div style={{ padding: '8px', fontSize: '0.85rem', color: '#666' }}>Searching...</div>}
+                               <div className="waypoint-search-results">
+                                 {isWpSearching && <div className="waypoint-search-status">Searching...</div>}
                                  {!isWpSearching && wpSearchResults.map(res => (
-                                   <div key={res.place_id} style={{ padding: '8px', fontSize: '0.85rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                   <div key={res.place_id} className="waypoint-search-result"
                                         onMouseDown={(e) => {
                                             e.preventDefault(); 
                                             const newSegments = trip.segments.map(s => ({
@@ -1446,7 +1444,7 @@ export function TripEditor({
                                             }, 50);
                                         }}>
                                      <strong>{res.name || res.display_name.split(',')[0]}</strong>
-                                     <div style={{ fontSize: '0.75rem', color: '#666' }}>{res.display_name}</div>
+                                     <div className="waypoint-search-description">{res.display_name}</div>
                                    </div>
                                  ))}
                                </div>
