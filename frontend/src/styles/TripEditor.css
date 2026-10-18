@@ -303,6 +303,64 @@ body.dark-mode .timeline-plus .triplo-icon {
   font-size: 1rem;
 }
 
+.waypoint-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.waypoint-search-status,
+.waypoint-search-result {
+  padding: 8px;
+  font-size: 0.85rem;
+}
+
+.waypoint-search-result {
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.waypoint-search-result:hover {
+  background: #f9f9f9;
+}
+
+.waypoint-search-status,
+.waypoint-search-description {
+  color: #666;
+}
+
+.waypoint-search-description {
+  font-size: 0.75rem;
+}
+
+body.dark-mode .waypoint-search-results {
+  background: #252a30;
+  border-color: #424951;
+  color: #e6e8eb;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+}
+
+body.dark-mode .waypoint-search-result {
+  border-color: #383d44;
+}
+
+body.dark-mode .waypoint-search-result:hover {
+  background: #383d44;
+}
+
+body.dark-mode .waypoint-search-status,
+body.dark-mode .waypoint-search-description {
+  color: #b7bfc8;
+}
+
 body.dark-mode .waypoint-card,
 body.dark-mode .trip-summary {
   background: #252a30;

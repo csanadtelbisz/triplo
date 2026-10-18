@@ -1,5 +1,8 @@
 import * as turf from '@turf/turf';
 import type { Waypoint, Trip } from '../../../shared/types';
+import { copyEffectiveGeometryCache, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
+import { compactCountryData } from '../countries/cache';
+import { countryPartStats, getSegmentGeometry } from './segmentGeometry';
 
 export interface DistanceStats {
   distanceKm: number;
@@ -300,64 +303,24 @@ function computeWaypointDistanceStats(waypoints: Waypoint[], geometry: GeoJSON.L
 }
 
 function getSegmentDistanceSummary(seg: Trip['segments'][0]) {
-  let totalDistance = 0;
   let elevationUp = 0;
   let elevationDown = 0;
   let hasElevation = false;
-
-  if (seg.routingService === 'gpx' && seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2 && seg.waypoints.length >= 2) {
-      const line = turf.feature(seg.geometry) as any;
-      const wpDistances = seg.waypoints.map(wp => {
-          if (wp.coordinates && wp.coordinates.length >= 2) {
-              const pt = turf.point(wp.coordinates as [number, number]);
-              const snapped = turf.nearestPointOnLine(line, pt);
-              return snapped.properties?.location as number ?? 0;
-          }
-          return 0;
-      });
-      
-      for (let i = 0; i < wpDistances.length - 1; i++) {
-          totalDistance += Math.abs(wpDistances[i+1] - wpDistances[i]);
-      }
-
-      // Assume elevation is calculated from the start to the end of the trimmed section
-      const coords = seg.geometry.coordinates;
-      for (let i = 1; i < coords.length; i++) {
-          if (coords[i - 1].length > 2 && coords[i].length > 2) {
-              hasElevation = true;
-              const diff = (coords[i][2] || 0) - (coords[i - 1][2] || 0);
-              if (diff > 0) elevationUp += diff;
-              else elevationDown -= diff;
-          }
-      }
-  } else if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length >= 2) {
-      totalDistance = turf.length(turf.feature(seg.geometry), { units: 'kilometers' });
-      const coords = seg.geometry.coordinates;
-      for (let i = 1; i < coords.length; i++) {
-          if (coords[i - 1].length > 2 && coords[i].length > 2) {
-              hasElevation = true;
-              const diff = coords[i][2] - coords[i - 1][2];
-              if (diff > 0) elevationUp += diff;
-              else elevationDown -= diff;
-          }
-      }
-  } else if (seg.geometry && seg.geometry.coordinates && seg.geometry.coordinates.length === 0) {
-      // default 0 values are good
-  } else if (seg.waypoints.length >= 2) {
-      for (let i = 0; i < seg.waypoints.length - 1; i++) {
-          const w1 = seg.waypoints[i];
-          const w2 = seg.waypoints[i+1];
-          if (w1.coordinates?.length >= 2 && w2.coordinates?.length >= 2) {
-              totalDistance += turf.distance(turf.point(w1.coordinates as [number, number]), turf.point(w2.coordinates as [number, number]), { units: 'kilometers' });
-          }
-      }
+  const effective = getEffectiveGeometry(seg);
+  const totalDistance = geometryDistance(effective);
+  for (const line of effective.coordinates) for (let i = 1; i < line.length; i++) {
+    if (line[i - 1].length > 2 && line[i].length > 2) {
+      hasElevation = true;
+      const difference = line[i][2] - line[i - 1][2];
+      elevationUp += Math.max(0, difference);
+      elevationDown += Math.max(0, -difference);
+    }
   }
-
   return { totalDistance, hasElevation, elevationUp, elevationDown };
 }
 
 export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Trip {
-  const newTrip = { ...trip };
+  const newTrip = { ...compactCountryData(trip) };
   
   let overallTotalDistance = 0;
   const distanceByMode: Record<string, number> = {};
@@ -372,10 +335,10 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
 
     if (needsComputation) {
       // Computing Segment stats
-      segDistStats = getSegmentDistanceSummary(seg);
+      segDistStats = !seg.geometry && seg.countryParts ? countryPartStats(seg)! : getSegmentDistanceSummary(seg);
 
       // Computing intermediate waypoint distances
-      wpStats = computeWaypointDistanceStats(seg.waypoints, seg.geometry as GeoJSON.LineString | undefined);
+      if (!wpStats || seg.geometry || !seg.countryParts) wpStats = computeWaypointDistanceStats(seg.waypoints, getSegmentGeometry(seg));
     }
 
     if (seg.routingProfile !== 'teleport' && segDistStats) {
@@ -384,11 +347,14 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
       distanceByMode[modeKey] = (distanceByMode[modeKey] || 0) + segDistStats.totalDistance;
     }
 
-    return {
+    if (seg.distanceStats === segDistStats && seg.waypointDistances === wpStats) return seg;
+    const updated = {
       ...seg,
       distanceStats: segDistStats,
       waypointDistances: wpStats
     };
+    copyEffectiveGeometryCache(seg, updated);
+    return updated;
   });
 
   newTrip.segments = newSegments;

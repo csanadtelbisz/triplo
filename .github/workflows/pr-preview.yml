@@ -1,0 +1,85 @@
+name: Pull request preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+
+  preview:
+    needs: validate
+    if: >-
+      always() && !cancelled() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (needs.validate.result == 'success' || github.event.action == 'closed')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      preview: true
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: read
+      pages: write
+      id-token: write
+
+  comment:
+    needs: preview
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment deployed preview link
+        uses: actions/github-script@v7
+        env:
+          PAGES_URL: ${{ needs.preview.outputs.page_url }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            if (pull.state !== 'open' || pull.head.sha !== context.payload.pull_request.head.sha) return;
+            const pagesUrl = process.env.PAGES_URL;
+            if (!pagesUrl) throw new Error('Successful deployment did not return a Pages URL');
+            const previewUrl = `${pagesUrl.replace(/\/$/, '')}/pr-preview/pr-${issue_number}/`;
+            const marker = '<!-- triplo-pr-preview -->';
+            const body = `${marker}\nPreview deployed: [Open Triplo preview](${previewUrl})\n\nCommit: ${pull.head.sha}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

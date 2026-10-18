@@ -97,6 +97,43 @@ body.dark-mode .iconButton:hover:not(:disabled) {
 }
 
 /* Buttons */
+.external-routing-button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.external-routing-button:hover {
+  background: #e6e6e6;
+}
+
+.external-routing-button:focus-visible {
+  outline: 2px solid #4285f4;
+  outline-offset: 2px;
+}
+
+body.dark-mode .external-routing-button {
+  background: #2a2e33;
+  border-color: #424951;
+  color: #e6e8eb;
+}
+
+body.dark-mode .external-routing-button:hover {
+  background: #383d44;
+}
+
+body.dark-mode .external-routing-button:focus-visible {
+  outline-color: #8ab4f8;
+}
+
 .toolbar-actions {
   display: flex;
   gap: 8px;

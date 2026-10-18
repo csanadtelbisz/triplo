@@ -31,7 +31,7 @@
       //             becomes
       // /triplo/share/abc123
       
-      const base = '/triplo/';
+      const base = '%BASE_URL%';
       const route = window.location.search.startsWith('?/')
         ? window.location.search.slice(1).split('&')[0]
         : null;
