@@ -767,7 +767,7 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   const providers = page.getByRole('region', { name: 'Other providers' });
   const logo = providers.getByRole('img', { name: 'Overture Maps logo' });
   await expect(logo).toBeVisible();
-  expect(await logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   await expect(providers.getByRole('link', { name: '© Overture Maps Foundation' })).toHaveAttribute('href', 'https://docs.overturemaps.org/attribution/');
   await expect(providers.getByRole('link', { name: 'ODbL 1.0' })).toBeVisible();
   await expect(providers).not.toContainText('OpenStreetMap');
