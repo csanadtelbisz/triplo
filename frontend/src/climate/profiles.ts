@@ -15,8 +15,13 @@ const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
 function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
-    ? Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))) : item);
+  return JSON.stringify(value, (_key, item) => {
+    // Summing saved country-part distances can differ from the original total
+    // by a few floating-point bits. Ignore that noise in cache keys only.
+    if (typeof item === 'number' && Number.isFinite(item)) return Number(item.toPrecision(12));
+    return item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined).sort(([a], [b]) => a.localeCompare(b))) : item;
+  });
 }
 
 export function getClimateProfiles(): NamedClimateProfile[] {

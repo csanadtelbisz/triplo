@@ -6,6 +6,7 @@ import { attachCountryParts, sameCountryInputs, tripForStorage, withSavedCountry
 import { serializeTrip } from '../src/utils/serializeTrip';
 import { computeTripCaches } from '../src/utils/distance';
 import { segmentKey } from '../src/countries/types';
+import { CountryPartitioner } from '../src/countries/partition';
 
 const settings: ClimateSettings = { profiles: [], builtIn: {}, custom: [] };
 const segment: Segment = { id: 'car', transportMode: 'car', routingService: 'manual', routingProfile: 'straight', source: 'manual',
@@ -84,4 +85,21 @@ test('distance-cache computation attaches climate results; errors and teleport r
   expect(teleport.segments[0].climateImpact?.error).toBeUndefined();
   const reference = { ...trip, metadata: { isSharedTripReference: true } };
   expect(withClimateCache(reference, settings)).toBe(reference);
+});
+
+test('cold reload reuses climate caches after multi-country and flight distance hydration', () => {
+  const polygon = (west: number, east: number): GeoJSON.Polygon => ({ type: 'Polygon', coordinates: [[[west, -2], [east, -2], [east, 2], [west, 2], [west, -2]]] });
+  const partitioner = new CountryPartitioner(['AA', 'BB'].map((code, i) => ({ code, territorial: polygon(i ? 0 : -2, i ? 2 : 0), land: polygon(i ? 0 : -2, i ? 2 : 0) })));
+  const route = (id: string, mode: Segment['transportMode'], coordinates: [number, number][]): Segment => ({ id, transportMode: mode, source: 'manual', routingProfile: 'straight', routingService: 'manual', geometry: { type: 'LineString', coordinates }, waypoints: coordinates.map((coordinates, i) => ({ id: `${id}-${i}`, coordinates })) });
+  const initial = computeTripCaches({ ...trip, segments: [route('drive', 'car', [[-1, 0], [1, 0], [-1, 0]]), route('flight', 'flight', [[-1, .1], [1, .1]])] });
+  const parts = Object.fromEntries(initial.segments.map(segment => {
+    const steps = partitioner.splitSegmentSteps(segment);
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return [segmentKey(trip.id, segment.id), step.value];
+  }));
+  const split = attachCountryParts([initial], parts)[0];
+  const stored: Trip = JSON.parse(serializeTrip(split));
+  const restored = computeTripCaches(stored);
+  expect(restored.segments.map(s => s.climateImpact?.inputKey)).toEqual(stored.segments.map(s => s.climateImpact?.inputKey));
 });
