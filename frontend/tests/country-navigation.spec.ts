@@ -327,9 +327,11 @@ test('saved distance maps need no boundaries until a cold browser crops a countr
 
 for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writes only country distance maps into segment JSON without an undo step`, async ({ page, context }) => {
   let saved: Trip | undefined;
+  let serialized = '';
   await context.route('https://api.github.com/repos/test/trips/contents/trips/**', async route => {
     if (route.request().method() === 'PUT') {
-      saved = JSON.parse(Buffer.from(route.request().postDataJSON().content, 'base64').toString('utf8'));
+      serialized = Buffer.from(route.request().postDataJSON().content, 'base64').toString('utf8');
+      saved = JSON.parse(serialized);
       await route.fulfill({ status: 200, json: { content: { sha: 'saved' } } });
     } else await route.fulfill({ status: 404, json: {} });
   });
@@ -343,6 +345,9 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
   }
   await page.getByTitle(saveAll ? 'Save All Unsaved Trips' : 'Save', { exact: true }).click();
   await expect.poll(() => saved?.segments.length).toBe(2);
+  const geometryLines = serialized.split('\n').filter(line => line.trimStart().startsWith('"geometry":'));
+  expect(geometryLines).toHaveLength(2);
+  for (const line of geometryLines) expect(line).toContain('"coordinates":[[');
   for (const segment of saved!.segments) {
     expect(Object.values(segment.countryDistances!).reduce((sum, distance) => sum + distance, 0)).toBeCloseTo(segment.distanceStats!.totalDistance, 8);
     expect(segment).not.toHaveProperty('countryCache');

@@ -59,7 +59,9 @@ Trip JSON stores only `segment.countryDistances`, a mapping from country code
 to kilometres, such as `{"HU": 5.6, "SI": 25.8}`. Clipped routes, waypoint
 assignments, derived shares, hashes, and version metadata stay in the browser.
 Save or Save All writes the compact maps through the configured storage
-providers. Computing new distances makes these save actions available
+providers. Trip files use two-space indentation with each geometry object on
+one compact line, including shared copies. Computing new distances makes these
+save actions available
 without adding an undo step or editing route data, including for owned trips
 shared with others. Browser-local results remain marked unsaved after refresh
 until Save or Save All writes them to connected storage. Computation does not

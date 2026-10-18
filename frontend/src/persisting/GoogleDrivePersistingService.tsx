@@ -4,6 +4,7 @@ import type { Trip } from '../../../shared/types';
 import type { PersistingService, ConnectionInstruction } from './PersistingService';
 import gdriveIcon from '../assets/icons/google_drive.png';
 import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
+import { serializeTrip } from '../utils/serializeTrip';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -286,7 +287,7 @@ export class GoogleDrivePersistingService implements PersistingService {
   async save(trip: any): Promise<void> {
     if (!this.getAccessToken()) throw new Error("Google Drive token not available");
 
-    const content = JSON.stringify(trip, null, 2);
+    const content = serializeTrip(trip);
     const fileName = `${trip.id}.triplo.json`;
     const folderId = await this.getOrCreateFolder();
 
