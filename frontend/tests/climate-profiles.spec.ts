@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { ClimateProfile, Segment, Trip } from '../../shared/types';
 import { calculate } from '../../climate/src/calculate';
-import { builtInClimateProfile, namedProfileChoice, resolveClimateProfile, routeCountryShares, segmentClimate, tripClimate } from '../src/climate/profiles';
+import { builtInClimateProfile, builtInClimateProfiles, namedProfileChoice, resolveClimateProfile, routeCountryShares, segmentClimate, tripClimate } from '../src/climate/profiles';
 import type { ClimateSettings } from '../src/climate/profiles';
 import { countryYearDistances, emptyAnalyticsSelection } from '../src/countries/analytics';
 import { serializeTrip } from '../src/utils/serializeTrip';
@@ -28,7 +28,11 @@ test('profile precedence and saved snapshots survive missing preferences and ser
 test('built-in and custom modes map correctly and zero routes remain zero', () => {
   for (const mode of ['walk', 'bike', 'run', 'hike', 'other']) expect(builtInClimateProfile(mode)).toEqual({ mode: 'none' });
   expect(builtInClimateProfile('taxi').mode).toBe('car');
-  expect(builtInClimateProfile('subway')).toEqual({ mode: 'rail', railType: 'subway' });
+  expect(builtInClimateProfiles.map(p => p.name)).toEqual(['Car [built-in]', 'Bus [built-in]', 'Rail [built-in]', 'Flight [built-in]', 'Ferry [built-in]', 'No emission']);
+  const builtInBus = { ...settings, builtIn: { car: { climateProfileId: 'builtin:bus' } } };
+  expect(resolveClimateProfile(trip, segment, builtInBus)).toEqual({ name: 'Bus [built-in]', profile: { mode: 'bus' } });
+  expect(resolveClimateProfile(trip, segment, { ...settings, builtIn: {} }).name).toBe('Car [built-in]');
+  expect(builtInClimateProfile('subway')).toEqual({ mode: 'rail' });
   const other = { ...segment, transportMode: 'other' as const, customIcon: 'motorcycle' };
   const configured = { ...settings, custom: [{ icon: 'motorcycle', name: 'Motorbike', color: '', routingProfile: '', climateProfileId: 'own-car' }] };
   expect(resolveClimateProfile(trip, other, configured).profile).toEqual(profile.profile);
@@ -36,14 +40,15 @@ test('built-in and custom modes map correctly and zero routes remain zero', () =
   expect(segmentClimate(trip, { ...segment, distanceStats: { ...segment.distanceStats!, totalDistance: 0 } }, settings).result?.co2eKg).toBe(0);
 });
 
-test('route countries convert to ISO3 and drive electric profiles unless explicitly overridden', () => {
+test('route countries convert to ISO3 and always drive electric profiles, including legacy overrides', () => {
   const electric = { ...segment, countryDistances: { HU: 75, DE: 25 }, climateProfile: { mode: 'car' as const, fuelType: 'bev' as const } };
   expect(routeCountryShares(electric)).toEqual({ HUN: .75, DEU: .25 });
   const expected = calculate({ mode: 'car', fuelType: 'bev', date: '2026-06-01', distanceKm: 100, gridShares: { HUN: .75, DEU: .25 } });
   expect(segmentClimate(trip, electric, settings).result?.co2eKg).toBeCloseTo(expected.co2eKg);
   const override = { ...electric, climateProfile: { ...electric.climateProfile, gridShares: { FRA: 1 } } };
-  const france = calculate({ mode: 'car', fuelType: 'bev', date: '2026-06-01', distanceKm: 100, gridShares: { FRA: 1 } });
-  expect(segmentClimate(trip, override, settings).result?.co2eKg).toBeCloseTo(france.co2eKg);
+  expect(segmentClimate(trip, override, settings).result?.co2eKg).toBeCloseTo(expected.co2eKg);
+  const rail = { ...electric, climateProfile: { mode: 'rail' as const, countryShares: { FRA: 1 } } };
+  expect(segmentClimate(trip, rail, settings).result?.co2eKg).toBeCloseTo(calculate({ mode: 'rail', date: '2026-06-01', distanceKm: 100, countryShares: { HUN: .75, DEU: .25 } }).co2eKg);
   expect(routeCountryShares({ ...segment, countryDistances: { HU: 25, __unassigned__: 75 } })).toEqual({ HUN: .25, _WORLD: .75 });
   expect(calculate({ mode: 'car', fuelType: 'bev', date: '2026-06-01', distanceKm: 100, gridShares: { _WORLD: 1 } }).factorSets.grid?.level).toBe('world');
 });

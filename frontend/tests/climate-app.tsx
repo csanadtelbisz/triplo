@@ -25,6 +25,7 @@ export default function ClimateApp() {
   const [panel, setPanel] = useState('preferences');
   const [readOnly, setReadOnly] = useState(false);
   const [selection, setSelection] = useState(emptyAnalyticsSelection);
+  const [additionalTrips] = useState<Trip[]>(() => JSON.parse(localStorage.getItem('climate-test-additional-trips') || '[]'));
   const [trip, setTrip] = useState<Trip>(() => JSON.parse(localStorage.getItem('climate-test-trip') || 'null') || fixture);
   const update = (next: Trip) => { setTrip(next); localStorage.setItem('climate-test-trip', JSON.stringify(next)); };
   return <div className="sidebar" style={{ width: 390, height: '100vh', maxWidth: '100%' }}>
@@ -32,7 +33,7 @@ export default function ClimateApp() {
     {panel === 'preferences' && <PreferencesPanel onGoBack={() => {}} onSetHome={() => {}} onZoomHome={() => {}} editingConfigId={null} onEditingConfigChange={() => {}} />}
     {panel === 'segment' && <SegmentInfo trip={trip} segmentId="car" isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} />}
     {panel === 'trip' && <TripEditor trip={trip} isReadOnly={readOnly} onGoBack={() => {}} onSelectSegment={() => setPanel('segment')} onSelectWaypoint={() => {}} onZoomToTrip={() => {}} onZoomToSegment={() => {}} onJumpToWaypoint={() => {}} onUndo={() => {}} onRedo={() => {}} canUndo={false} canRedo={false} onSave={() => {}} canSave={false} onUpdateTrip={update} onWaitingForCoords={() => {}} />}
-    {panel === 'analytics' && <AnalyticsPanel trips={[trip]} isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} onOpenSegmentInfo={() => setPanel('segment')} onFocusSegment={() => {}} timeSliderVisible={false} onToggleTimeSlider={() => {}} selection={selection} onSelectionChange={setSelection} countryLoading={false} onRetryCountries={() => {}} />}
+    {panel === 'analytics' && <AnalyticsPanel trips={[trip, ...additionalTrips]} isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} onOpenSegmentInfo={() => setPanel('segment')} onFocusSegment={() => {}} timeSliderVisible={false} onToggleTimeSlider={() => {}} selection={selection} onSelectionChange={setSelection} countryLoading={false} onRetryCountries={() => {}} />}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<ClimateApp />);

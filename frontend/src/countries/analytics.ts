@@ -5,6 +5,8 @@ import type { CountryData } from './types';
 
 export interface AnalyticsSelection {
   climate?: boolean;
+  climateView?: 'trips' | 'modes';
+  distanceSelection?: Pick<AnalyticsSelection, 'countries' | 'country' | 'mode'>;
   countries: boolean;
   country: string | null;
   mode: string | null;

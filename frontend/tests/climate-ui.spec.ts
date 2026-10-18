@@ -66,11 +66,20 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Climate Impact per Year (kg CO₂e)', exact: true })).toBeVisible();
   await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
+  await expect(page.getByRole('button', { name: 'Group by country', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Trip climate impacts', { exact: true })).toContainText('Climate trip');
+  await page.getByRole('button', { name: 'Group by transport mode', exact: true }).click();
+  await expect(page.locator('.analytics-summary-rows')).toContainText('car');
+  await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
+  await page.getByRole('button', { name: 'Show distance', exact: true }).click();
+  await expect(page.locator('.analytics-summary-rows')).toContainText('100.0');
   await page.getByRole('button', { name: 'Group by country', exact: true }).click();
-  await expect(page.locator('.country-row').filter({ hasText: 'HU' })).toContainText('3.5');
   await page.locator('.country-row').filter({ hasText: 'HU' }).click();
-  await expect(page.locator('.analytics-summary-rows').last()).toContainText('3.5');
+  await expect(page.locator('.analytics-summary-rows').last()).toContainText('75.0');
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await expect(page.locator('.country-row')).toHaveCount(0);
+  await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
+  await page.getByRole('button', { name: 'Show distance', exact: true }).click();
   await expect(page.locator('.analytics-summary-rows').last()).toContainText('75.0');
   await expect(page.getByRole('heading', { name: 'Distance per Year', exact: true })).toBeVisible();
 });
@@ -84,10 +93,10 @@ test('shared editor exposes every algorithm and Copy preserves the profile name'
   await editor.getByRole('button', { name: 'Copy', exact: true }).click();
   await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('New profile');
   await editor.getByLabel('Fuel type', { exact: true }).selectOption('bev');
-  await editor.getByLabel('Electricity source', { exact: true }).selectOption('custom');
-  await editor.getByLabel('Electricity country', { exact: true }).selectOption('HUN');
+  await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('rail');
-  await expect(editor.getByLabel('Rail type', { exact: true })).toBeVisible();
+  await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
+  expect(await editor.getByLabel('Rail type', { exact: true }).locator('option').allTextContents()).toEqual(['High speed', 'Inter city', 'Light rail', 'Subway']);
   await expect(editor.getByLabel('Traction', { exact: true })).toBeVisible();
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
   await editor.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A20N');
@@ -125,4 +134,94 @@ test('cloud preferences restore named profiles and custom-mode associations', as
   await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('button', { name: 'segment', exact: true }).click();
   await expect(climateCard(page)).toContainText('Use transport mode default: Renamed electric car');
+});
+
+test('profile table reorders persistently and transport defaults share form styling in both themes', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('climateProfiles')) localStorage.setItem('climateProfiles', JSON.stringify([
+      { id: 'own-car', name: 'My car', profile: { mode: 'car' } },
+      { id: 'train', name: 'Fast train', profile: { mode: 'rail', railType: 'high_speed' } },
+    ]));
+  });
+  await open(page);
+  const table = page.locator('.climate-profiles-table');
+  await expect(table.getByRole('button', { name: 'Move My car up', exact: true })).toBeDisabled();
+  await table.getByRole('button', { name: 'Move My car down', exact: true }).click();
+  expect((await table.locator('tr > td:first-child').allTextContents()).slice(0, -1)).toEqual(['Fast train', 'My car']);
+  await page.reload();
+  await expect(table.locator('tr').first()).toContainText('Fast train');
+  await table.getByRole('button', { name: 'Delete Fast train', exact: true }).click();
+  await expect(table.locator('tr')).toHaveCount(2);
+  expect(await page.locator('.climate-preferences').evaluate(element => element.firstElementChild?.tagName)).toBe('DETAILS');
+
+  const car = page.getByLabel('car default climate profile', { exact: true });
+  await expect(car).toHaveValue('builtin:car');
+  await expect(page.getByLabel('walk default climate profile', { exact: true })).toHaveValue('builtin:none');
+  await expect(page.getByLabel('subway default climate profile', { exact: true })).toHaveValue('builtin:rail');
+  expect(await car.locator('option').allTextContents()).toEqual(['Car [built-in]', 'Bus [built-in]', 'Rail [built-in]', 'Flight [built-in]', 'Ferry [built-in]', 'No emission', 'My car']);
+  const row = car.locator('xpath=ancestor::tr');
+  const name = row.getByTitle('Override Name', { exact: true });
+  const icon = row.getByTitle('System Icon (Cannot be changed)', { exact: true });
+  for (const dark of [false, true]) {
+    await page.evaluate(dark => document.body.classList.toggle('dark-mode', dark), dark);
+    const border = await car.evaluate(element => getComputedStyle(element).borderColor);
+    await expect(name).toHaveCSS('border-color', border);
+    await expect(icon).toHaveCSS('border-color', border);
+    await expect(row.getByTitle('Override Default Routing Profile', { exact: true })).toHaveCSS('background-color', await car.evaluate(element => getComputedStyle(element).backgroundColor));
+    await expect(name).toHaveCSS('font-size', await car.evaluate(element => getComputedStyle(element).fontSize));
+    await expect(icon).toHaveCSS('background-color', dark ? 'rgb(37, 42, 48)' : 'rgb(245, 245, 245)');
+  }
+  await car.selectOption('builtin:bus');
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await expect(card).toContainText('Use transport mode default: Bus [built-in]');
+  await expect(card).toContainText('4.6 kg CO₂e');
+  await card.getByText('Calculation details', { exact: true }).click();
+  await expect(card.getByLabel('About direct emissions', { exact: true })).toBeVisible();
+  await expect(card.getByLabel('About upstream emissions', { exact: true })).toBeVisible();
+  await expect(card.locator('.climate-details')).toHaveCSS('font-size', await card.locator('.climate-attribution').evaluate(element => getComputedStyle(element).fontSize));
+  await expect(card.locator('.climate-result')).not.toContainText('per traveller');
+});
+
+test('climate analytics sort trips, omit zero-impact modes, and use neutral metric icons', async ({ page }) => {
+  await page.addInitScript(() => {
+    const makeTrip = (id: string, name: string, mode: 'bus' | 'walk' | 'other', km: number) => ({
+      id, name, startDate: '2026-05-01', endDate: '2026-05-01', createdAt: '2026-05-01', updatedAt: '',
+      tripDistanceSummary: { totalDistance: km, distanceByMode: { [mode === 'other' ? 'other:airport_shuttle' : mode]: km } },
+      segments: [{ id, name, transportMode: mode, customIcon: mode === 'other' ? 'airport_shuttle' : undefined,
+        climateProfile: mode === 'other' ? { mode: 'bus' } : undefined,
+        routingProfile: 'straight_line', routingService: 'Straight Line Router', source: 'manual', waypoints: [],
+        distanceStats: { totalDistance: km, hasElevation: false, elevationUp: 0, elevationDown: 0 },
+      }],
+    });
+    localStorage.setItem('climate-test-additional-trips', JSON.stringify([
+      makeTrip('bus', 'Bus journey', 'bus', 300), makeTrip('walk', 'Walking holiday', 'walk', 100), makeTrip('tiny', 'Tiny shuttle', 'other', .01),
+    ]));
+  });
+  await open(page, true);
+  await page.getByRole('button', { name: 'analytics', exact: true }).click();
+  const distanceIcon = page.getByRole('button', { name: 'Show climate impact', exact: true });
+  await expect(distanceIcon).toHaveText('straighten');
+  const color = await distanceIcon.evaluate(element => getComputedStyle(element).color);
+  await distanceIcon.click();
+  await page.getByRole('heading', { name: 'Analytics', exact: true }).hover();
+  const climateIcon = page.getByRole('button', { name: 'Show distance', exact: true });
+  await expect(climateIcon).toHaveText('eco');
+  await expect(climateIcon).toHaveCSS('color', color);
+  await expect(climateIcon).not.toHaveClass(/active/);
+  const rows = page.getByLabel('Trip climate impacts', { exact: true }).locator('.analytics-summary-row');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).toContainText('Bus journey');
+  await expect(rows.nth(1)).toContainText('Climate trip');
+  await expect(page.getByRole('button', { name: 'Group by transport mode', exact: true })).toHaveText('route');
+  await page.getByRole('button', { name: 'Group by transport mode', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Group by trip', exact: true })).toHaveText('commute');
+  await expect(page.locator('.analytics-summary-row')).toHaveCount(2);
+  await expect(page.locator('.analytics-summary-rows')).not.toContainText('Walk');
+  await expect(page.locator('.analytics-summary-rows')).not.toContainText('airport_shuttle');
+  await page.locator('.analytics-summary-row').filter({ hasText: /bus/i }).click();
+  await expect(page.getByRole('heading', { name: 'bus Segments', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Group by trip', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'bus Segments', exact: true })).toHaveCount(0);
+  await expect(rows).toHaveCount(4);
 });

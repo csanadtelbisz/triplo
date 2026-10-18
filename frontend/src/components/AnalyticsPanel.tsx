@@ -468,15 +468,21 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
   }, [trips, selection.climate, climateSettings]);
   const unavailableClimateCount = [...climateValues.values()].filter(value => value === undefined).length;
   const metric = useCallback((trip: Trip, segment: Segment, country: string | null, data?: CountryData) => {
-    const distance = selectedDistance(trip, segment, country, data);
-    if (!selection.climate) return distance;
-    const kg = climateValues.get(segmentKey(trip.id, segment.id)) || 0;
-    if (!country) return kg;
-    const fullDistance = selectedDistance(trip, segment, null, data) || data?.results[segmentKey(trip.id, segment.id)]?.totalDistanceKm || Object.values(countryDistances(segment)).reduce((a, b) => a + b, 0);
-    return fullDistance > 0 ? kg * Math.min(1, distance / fullDistance) : 0;
+    if (!selection.climate) return selectedDistance(trip, segment, country, data);
+    return climateValues.get(segmentKey(trip.id, segment.id)) || 0;
   }, [selection.climate, climateValues]);
+  const climateTrips = !!selection.climate && selection.climateView !== 'modes';
+  const tripRows = useMemo(() => !climateTrips ? [] : trips.filter(trip => tripIntersects(trip, selection.range)).map(trip => ({
+    trip,
+    impact: trip.segments.reduce((sum, segment) => sum + metric(trip, segment, null), 0) * tripFraction(trip, selection.range),
+  })).sort((a, b) => b.impact - a.impact || a.trip.name.localeCompare(b.trip.name)), [trips, selection.range, metric, climateTrips]);
+  const toggleMetric = () => {
+    if (selection.climate) onSelectionChange({ ...selection, ...selection.distanceSelection, climate: false }, true);
+    else onSelectionChange({ ...selection, climate: true, countries: false, country: null, mode: null,
+      distanceSelection: { countries: selection.countries, country: selection.country, mode: selection.mode } }, true);
+  };
   const metricLabel = selection.climate ? 'Climate impact (kg CO₂e)' : 'Distance (km)';
-  const selectedModeKey = selection.mode;
+  const selectedModeKey = climateTrips ? null : selection.mode;
   const onSelectedModeKeyChange = (mode: string | null) => onSelectionChange({ ...selection, mode });
   const selectedYear = selection.year;
   const timeRange = selection.range;
@@ -537,6 +543,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
     const entries = Object.entries(globalDistanceByMode);
     if (selectedModeKey && !entries.some(([key]) => key === selectedModeKey)) entries.push([selectedModeKey, 0]);
     return entries
+      .filter(([, value]) => !selection.climate || Number(value.toFixed(1)) > 0)
       .sort(([, a], [, b]) => b - a)
       .map(([modeKey, distance]) => {
         const isOther = modeKey.startsWith('other:');
@@ -564,7 +571,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           segmentEntries
         };
       });
-  }, [customModes, globalDistanceByMode, segmentsByMode, selectedModeKey]);
+  }, [customModes, globalDistanceByMode, segmentsByMode, selectedModeKey, selection.climate]);
 
   const selectedSegments = useMemo(() => {
     if (!selectedModeKey) return [] as SegmentEntry[];
@@ -650,10 +657,12 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Analytics</h2>
-        <button className={`iconButton ${selection.climate ? 'active' : ''}`} aria-label="Show climate impact" aria-pressed={!!selection.climate} title="Show climate impact" onClick={() => onSelectionChange({ ...selection, climate: !selection.climate }, true)}><MaterialIcon name="eco" size={20} /></button>
-        <button className={`iconButton ${selection.countries ? 'active' : ''}`} aria-label="Group by country" aria-pressed={selection.countries} onClick={() => onSelectionChange({ ...selection, countries: !selection.countries, country: null, mode: null })} title="Group by country">
+        <button className="iconButton" aria-label={selection.climate ? 'Show distance' : 'Show climate impact'} aria-pressed={!!selection.climate} title={selection.climate ? 'Climate impact — switch to distance' : 'Distance — switch to climate impact'} onClick={toggleMetric}><MaterialIcon name={selection.climate ? 'eco' : 'straighten'} size={20} /></button>
+        {selection.climate ? <button className="iconButton" aria-label={climateTrips ? 'Group by transport mode' : 'Group by trip'} title={climateTrips ? 'Trips — switch to transport modes' : 'Transport modes — switch to trips'} onClick={() => onSelectionChange({ ...selection, climateView: climateTrips ? 'modes' : 'trips', mode: null }, true)}>
+          <MaterialIcon name={climateTrips ? 'route' : 'commute'} size={20} />
+        </button> : <button className={`iconButton ${selection.countries ? 'active' : ''}`} aria-label="Group by country" aria-pressed={selection.countries} onClick={() => onSelectionChange({ ...selection, countries: !selection.countries, country: null, mode: null })} title="Group by country">
           <MaterialIcon name="public" size={20} />
-        </button>
+        </button>}
         <button className={`iconButton ${timeSliderVisible ? 'active' : ''}`} onClick={onToggleTimeSlider} title="Toggle time filter">
           <MaterialIcon name="line_end_circle" size={20} />
         </button>
@@ -661,7 +670,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
 
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
         {unavailableClimateCount > 0 && <p role="status">Climate totals exclude {unavailableClimateCount} unavailable segment estimates. Open their Climate Impact cards for details.</p>}
-        {selection.countries && (
+        {!selection.climate && selection.countries && (
           <div className="country-list" aria-label="Countries">
             {countryLoading && countryCurrentTrip && <p role="status">Calculating country distances for {countryCurrentTrip}…</p>}
             {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
@@ -682,7 +691,14 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
         )}
         {(
           <>
-            {(!selection.countries || selection.country) && (
+            {climateTrips && <div className="trip-summary-table analytics-summary-table" aria-label="Trip climate impacts">
+              <div className="analytics-summary-header"><div>Trip</div><div className="analytics-summary-distance">{metricLabel}</div></div>
+              <div className="analytics-summary-rows">{tripRows.map(({ trip, impact }) => <div className="trip-summary-row analytics-summary-row climate-trip-analytics-row" key={trip.id}>
+                <div className="trip-summary-td analytics-summary-cell">{trip.name || 'Untitled trip'}</div>
+                <div className="trip-summary-td right analytics-summary-cell">{impact.toFixed(1)}</div>
+              </div>)}</div>
+            </div>}
+            {!climateTrips && (!selection.countries || selection.country) && (
             <div className="trip-summary-table analytics-summary-table">
               <div className="analytics-summary-header">
                 <div>Mode</div>

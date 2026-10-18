@@ -10,7 +10,7 @@ import { climateCountryCodes } from './countryCodes';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 1;
+const CLIMATE_CALCULATION_VERSION = 2;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -38,16 +38,21 @@ export function getClimateSettings() {
 }
 export type ClimateSettings = ReturnType<typeof getClimateSettings>;
 
+export const builtInClimateProfiles: NamedClimateProfile[] = [
+  { id: 'builtin:car', name: 'Car [built-in]', profile: { mode: 'car' } },
+  { id: 'builtin:bus', name: 'Bus [built-in]', profile: { mode: 'bus' } },
+  { id: 'builtin:rail', name: 'Rail [built-in]', profile: { mode: 'rail' } },
+  { id: 'builtin:flight', name: 'Flight [built-in]', profile: { mode: 'flight' } },
+  { id: 'builtin:ferry', name: 'Ferry [built-in]', profile: { mode: 'ferry' } },
+  { id: 'builtin:none', name: 'No emission', profile: { mode: 'none' } },
+];
+export function defaultClimateProfileId(mode: string): string {
+  const algorithm = mode === 'taxi' ? 'car' : mode === 'subway' ? 'rail' : mode;
+  const id = `builtin:${algorithm}`;
+  return builtInClimateProfiles.some(p => p.id === id) ? id : 'builtin:none';
+}
 export function builtInClimateProfile(mode: string): ClimateProfile {
-  switch (mode) {
-    case 'car': case 'taxi': return { mode: 'car' };
-    case 'bus': return { mode: 'bus' };
-    case 'rail': return { mode: 'rail', railType: 'inter_city' };
-    case 'subway': return { mode: 'rail', railType: 'subway' };
-    case 'flight': return { mode: 'flight' };
-    case 'ferry': return { mode: 'ferry' };
-    default: return { mode: 'none' };
-  }
+  return { ...builtInClimateProfiles.find(p => p.id === defaultClimateProfileId(mode))!.profile };
 }
 export function climateModeLabel(segment: Segment, settings: ClimateSettings): string {
   return segment.transportMode === 'other'
@@ -63,12 +68,13 @@ export function resolveClimateProfile(trip: Trip, segment: Segment, settings: Cl
   const tripChoice = trip.climateProfiles?.[modeKey(segment)];
   if (tripChoice) {
     if ('custom' in tripChoice) return { profile: tripChoice.custom, name: `${modeName} (trip default)` };
-    const saved = settings.profiles.find(p => p.id === tripChoice.profileId);
+    const saved = [...builtInClimateProfiles, ...settings.profiles].find(p => p.id === tripChoice.profileId);
     return { profile: saved?.profile || tripChoice.profile, name: saved?.name || tripChoice.name };
   }
   const id = segment.transportMode === 'other' ? settings.custom.find(m => m.icon === segment.customIcon)?.climateProfileId : settings.builtIn[segment.transportMode]?.climateProfileId;
-  const preferred = settings.profiles.find(p => p.id === id);
-  return preferred ? { profile: preferred.profile, name: preferred.name } : { profile: builtInClimateProfile(segment.transportMode), name: `${modeName} (built-in)` };
+  const available = [...builtInClimateProfiles, ...settings.profiles];
+  const preferred = available.find(p => p.id === id) || available.find(p => p.id === defaultClimateProfileId(segment.transportMode))!;
+  return { profile: preferred.profile, name: preferred.name };
 }
 
 /** Unknown country pieces retain their weight and use the calculator's world fallback. */
@@ -97,8 +103,8 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
   const dated = date?.slice(0, 10) || `${new Date().getFullYear()}-01-01`;
   const shares = routeCountryShares(segment);
   let options = profile;
-  if (options.mode === 'car') options = { ...options, gridShares: options.gridShares || shares };
-  if (options.mode === 'rail') options = { ...options, countryShares: options.countryShares || shares };
+  if (options.mode === 'car') options = { ...options, gridShares: shares };
+  if (options.mode === 'rail') options = { ...options, countryShares: shares };
   if (options.mode === 'flight') options = { ...options, geometry: options.geometry || (segment.source === 'gpx' ? 'exact' : 'great_circle') };
   return { input: { ...options, date: dated, distanceKm: km }, undated: !date };
 }

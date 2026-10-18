@@ -338,15 +338,15 @@ export interface FerryInput extends CommonInput {
 
 ### Implemented profile integration
 
-Triplo stores reusable named profiles in synced preferences. A profile contains the calculator's algorithm and algorithm-specific options; date and distance come from the segment and trip. Built-in and custom transport modes can reference a preference profile. Segment custom options override trip defaults, which override transport-mode preferences, which override built-in algorithms. Walk, hike, run, bike and unconfigured other modes use the zero-emission algorithm. Teleport segments always contribute zero.
+Triplo stores reusable named profiles in synced preferences. A profile contains the calculator's algorithm and algorithm-specific options; date and distance come from the segment and trip. Built-in and custom transport modes can select Car [built-in], Bus [built-in], Rail [built-in], Flight [built-in], Ferry [built-in], No emission, or a named preference profile. Built-in profiles use the base algorithm's default options. The reorderable preferences table supports editing, deleting and adding named profiles. Segment custom options override trip defaults, which override transport-mode preferences, which override built-in algorithms. Walk, hike, run, bike and unconfigured other modes use the zero-emission algorithm. Teleport segments always contribute zero.
 
 `Segment.climateProfile` stores inline custom options. `Trip.climateProfiles` is keyed by transport mode (or `other:<icon>`) and stores either custom options or a named preference reference with an embedded fallback snapshot. Explicit trip references remain usable when the originating preferences are unavailable. Clearing a trip choice restores the transport-mode default. Editing a named preference updates references while it is available; Copy creates independent options and preserves the destination profile's name.
 
-The shared profile editor supports named dialogs, unnamed trip dialogs and unnamed inline segment editing. It exposes all public algorithm options, including flight seating/load overrides and country electricity shares. Rail country shares and electric-car grid shares use route-country distances by default, converted from alpha-2 to alpha-3 codes. Unassigned pieces retain their weight using world electricity. Explicit profile shares override this automatic source. Imported GPX flight tracks default to exact flown distance; other flight routes default to great-circle distance, with an explicit profile override available.
+The shared profile editor supports named dialogs, unnamed trip dialogs and unnamed inline segment editing. It exposes algorithm-specific options, including flight seating/load overrides. Rail country shares and electric-car grid shares always use cached route-country distances, converted from alpha-2 to alpha-3 codes; there is no manual electricity-source input. Legacy profile shares are ignored by the adapter. Unassigned pieces retain their weight using world electricity. Imported GPX flight tracks default to exact flown distance; other flight routes default to great-circle distance, with an explicit profile override available.
 
 The calculation date is the first dated segment waypoint, then the trip start/end date, then its creation date. Undated records use the current year and show this assumption. Zero-distance routes produce zero; invalid estimates are isolated from other segments and shown as unavailable in the segment card. Each segment persists a `climateImpact` cache containing the full calculator result (total, direct/upstream breakdown, factors, assumptions and warnings) or an isolated calculation error. Its canonical `inputKey` includes the resolved profile, date, distance, automatic country shares, flight geometry mode, adapter/calculator rule version and generated SHA-256 data revision. Valid results survive JSON reloads and are reused. Distance-cache computation, route-country updates and preference changes refresh invalid entries; undo/redo restores a cache valid for the current preferences. Cache-only changes create no undo entry and are excluded from provider content conflict comparisons, but remain visible in the normal unsaved/save state and are written into segment JSON, including compact country-part segments. Factor-table updates regenerate the data revision automatically; calculator/adapter rule changes must bump `CLIMATE_CALCULATION_VERSION`.
 
-Trip summaries show total and per-mode kg CO₂e. The analytics eco toggle switches tables and annual charts between distance and kg CO₂e while retaining selection. Climate totals are allocated to route countries in proportion to distance and to years/date filters in proportion to inclusive trip days, consistently with distance analytics. This is an allocation of the segment estimate, not a country-by-country rerun of a flight or vehicle model. The full annual chart remains context when a date range is selected.
+Trip summaries show total and per-mode kg CO₂e. The analytics metric button switches between straighten (distance) and eco (kg CO₂e), with neutral styling. Climate mode has a route/commute toggle: route lists trips sorted by descending climate impact; commute lists transport modes and omits totals that round to 0.0. Country grouping is available only for distance, and its country/mode selections are restored when switching back. Climate totals are allocated to years/date filters in proportion to inclusive trip days, consistently with distance analytics. The full annual chart remains context when a date range is selected.
 
 Data attribution and calculation assumptions are available in the profile preferences and segment Climate Impact cards.
 
@@ -364,11 +364,10 @@ export function calculateMany(inputs: TravelInput[]): BatchItem[];     // BatchI
 | walk, hike, run, bike | `{ mode: "none" }` |
 | car, taxi | `{ mode: "car", ... }` (taxi: user's occupancy) |
 | bus | `{ mode: "bus" }` |
-| rail | `{ mode: "rail", railType: "inter_city" }` |
-| subway | `{ mode: "rail", railType: "subway" }` |
+| rail, subway | `{ mode: "rail" }` (algorithm defaults; subway can be configured in a custom profile) |
 | flight | `{ mode: "flight", ... }` |
 | ferry | `{ mode: "ferry" }` |
-| other | whatever the user configured; if nothing: Triplo's own decision (no result) |
+| other | whatever the user configured; if nothing: `{ mode: "none" }` |
 
 ---
 

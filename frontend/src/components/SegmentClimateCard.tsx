@@ -21,13 +21,14 @@ export function SegmentClimateCard({ trip, segment, isReadOnly, onUpdateTrip }: 
   };
   return <div className="trip-summary" style={{ marginTop: 16 }}>
     <h3 className="trip-summary-title"><MaterialIcon name="eco" size={18} aria-hidden="true" />Climate Impact</h3>
-    <div className="climate-result"><strong>{result ? `${result.co2eKg.toFixed(1)} kg CO₂e` : 'Unavailable'}</strong><small> per traveller</small></div>
+    <div className="climate-result"><strong>{result ? `${result.co2eKg.toFixed(1)} kg CO₂e` : 'Unavailable'}</strong></div>
     <label className="climate-radio"><input type="radio" name={id} checked={!segment.climateProfile} disabled={isReadOnly} onChange={() => update()} />Use transport mode default: {inherited.name}</label>
     <label className="climate-radio"><input type="radio" name={id} checked={!!segment.climateProfile} disabled={isReadOnly} onChange={() => update(segment.transportMode === 'other' ? structuredClone(inherited.profile) : builtInClimateProfile(segment.transportMode))} />Custom</label>
     {segment.climateProfile && <ClimateProfileEditor value={segment.climateProfile} onChange={update} profiles={settings.profiles} disabled={isReadOnly} />}
     {error && <p role="alert">Climate impact could not be calculated: {error}</p>}
-    {result && <details><summary>Calculation details</summary>
-      <p>Direct: {result.directKg.toFixed(2)} kg; upstream: {result.upstreamKg.toFixed(2)} kg CO₂e.</p>
+    {result && <details className="climate-details"><summary>Calculation details</summary>
+      <p>Direct: {result.directKg.toFixed(2)} kg CO₂e <MaterialIcon name="info_outline" size={14} title="Emissions from operating the vehicle, including fuel combustion. Flights also include radiative forcing." aria-label="About direct emissions" /></p>
+      <p>Upstream: {result.upstreamKg.toFixed(2)} kg CO₂e <MaterialIcon name="info_outline" size={14} title="Emissions from producing and distributing fuel, and generating and supplying electricity." aria-label="About upstream emissions" /></p>
       {result.factorSets.defra && <p>DEFRA factors: {result.factorSets.defra.yearUsed}</p>}
       {result.factorSets.grid && <p>Electricity: {result.factorSets.grid.yearUsed} ({result.factorSets.grid.level})</p>}
       {result.factorSets.aircraft && <p>Aircraft table: {result.factorSets.aircraft.tableVersion}</p>}

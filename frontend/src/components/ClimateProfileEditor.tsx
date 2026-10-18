@@ -1,49 +1,13 @@
 import { useId, useState } from 'react';
 import type { ClimateProfile, NamedClimateProfile } from '../../../shared/types';
-import type { CountryShares, SeatClass } from '../../../climate/src/types';
+import type { SeatClass } from '../../../climate/src/types';
 import { defaultData } from '../../../climate/src/generated/data';
 import { CAR_SIZE_EXAMPLES } from '../../../climate/src/examples';
-import { climateCountryCodes } from '../climate/countryCodes';
 import { Dialog } from './Dialog';
-import { MaterialIcon } from './MaterialIcon';
 import '../styles/Climate.css';
 
 const text = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 const classes: SeatClass[] = ['economy', 'premium_economy', 'business', 'first'];
-const countryNames = new Intl.DisplayNames(['en'], { type: 'region' });
-const countryOptions = Object.entries(climateCountryCodes).map(([iso2, iso3]) => ({ iso3, name: countryNames.of(iso2) || iso3 })).sort((a, b) => a.name.localeCompare(b.name));
-
-function CountrySharesEditor({ value, onChange }: { value?: CountryShares; onChange: (shares?: CountryShares) => void }) {
-  return <div className="climate-shares">
-    <label>Electricity source
-      <select aria-label="Electricity source" value={value ? 'custom' : 'auto'} onChange={e => onChange(e.target.value === 'auto' ? undefined : { _WORLD: 1 })}>
-        <option value="auto">Route countries (automatic)</option><option value="custom">Custom country shares</option>
-      </select>
-    </label>
-    {value && <>
-      {Object.entries(value).map(([country, share]) => <div className="climate-share-row" key={country}>
-        <select aria-label="Electricity country" value={country} onChange={e => {
-          const next = { ...value }; delete next[country]; next[e.target.value] = share; onChange(next);
-        }}>
-          {(country === '_WORLD' || !('_WORLD' in value)) && <option value="_WORLD">World average</option>}
-          {countryOptions.filter(c => c.iso3 === country || !(c.iso3 in value)).map(c => <option key={c.iso3} value={c.iso3}>{c.name}</option>)}
-        </select>
-        <label>Share (%)<input type="number" min="0" max="100" step="any" value={share * 100} onChange={e => {
-          if (e.target.validity.valid) onChange({ ...value, [country]: Number(e.target.value) / 100 });
-        }} /></label>
-        <button type="button" className="iconButton" aria-label="Remove electricity country" onClick={() => {
-          const next = { ...value }; delete next[country]; onChange(Object.keys(next).length ? next : undefined);
-        }}><MaterialIcon name="delete" size={18} /></button>
-      </div>)}
-      <button type="button" className="dialog-btn dialog-btn-secondary" onClick={() => {
-        const next = countryOptions.find(c => !(c.iso3 in value));
-        if (next) onChange({ ...value, [next.iso3]: 1 });
-      }}>Add country</button>
-      <small>Shares are normalized. Unassigned routes use world average electricity.</small>
-    </>}
-  </div>;
-}
-
 export function ClimateProfileEditor({ value, onChange, profiles, name, onNameChange, disabled = false }: {
   value: ClimateProfile; onChange: (profile: ClimateProfile) => void; profiles: NamedClimateProfile[];
   name?: string; onNameChange?: (name: string) => void; disabled?: boolean;
@@ -77,20 +41,18 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
     <label>Base algorithm<select aria-label="Base algorithm" value={value.mode} onChange={e => onChange({ mode: e.target.value } as ClimateProfile)}>
       <option value="none">No emissions</option><option value="car">Car / taxi</option><option value="bus">Bus</option><option value="rail">Rail / subway</option><option value="flight">Flight</option><option value="ferry">Ferry</option>
     </select></label>
-    {value.mode === 'none' && <small>Zero transport emissions per traveller.</small>}
+    {value.mode === 'none' && <small>Zero transport emissions.</small>}
     {value.mode === 'car' && <>
       {select('Fuel type', 'fuelType', value.fuelType || 'average', ['average', 'petrol', 'diesel', 'hybrid', 'phev', 'bev', 'cng', 'lpg'], ['Average', 'Petrol', 'Diesel', 'Hybrid (petrol)', 'Plug-in hybrid', 'Electric (BEV)', 'CNG', 'LPG'])}
       {select('Car size', 'engineSize', value.engineSize || 'average', ['average', 'small', 'medium', 'large'])}
       {value.engineSize && value.engineSize !== 'average' && <small>Examples: {CAR_SIZE_EXAMPLES[value.engineSize][value.fuelType === 'bev' ? 'electric' : 'fuelBased'].join(', ')}</small>}
       {number('Occupancy (people)', 'occupancy', value.occupancy, 1, 9, 1, '1.5')}
       {['petrol', 'diesel', 'hybrid', 'lpg'].includes(value.fuelType || '') && number('Fuel consumption (L/100 km)', 'exactFuelLPer100Km', value.exactFuelLPer100Km, 0)}
-      {(value.fuelType === 'bev' || value.fuelType === 'phev') && <CountrySharesEditor value={value.gridShares} onChange={gridShares => patch({ gridShares })} />}
     </>}
     {value.mode === 'bus' && select('Bus type', 'busType', value.busType || 'coach', ['coach', 'local'])}
     {value.mode === 'rail' && <>
-      {select('Rail type', 'railType', value.railType || 'inter_city', ['inter_city', 'high_speed', 'light_rail', 'subway'])}
+      {select('Rail type', 'railType', value.railType || 'inter_city', ['high_speed', 'inter_city', 'light_rail', 'subway'])}
       {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', value.traction || 'unknown', ['unknown', 'electric', 'diesel'])}
-      <CountrySharesEditor value={value.countryShares} onChange={countryShares => patch({ countryShares })} />
       {value.traction === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
     </>}
     {value.mode === 'ferry' && <label className="climate-check"><input type="checkbox" checked={value.withVehicle || false} onChange={e => patch({ withVehicle: e.target.checked })} />Travelling with a car</label>}
@@ -129,7 +91,7 @@ export function ClimateProfileDialog({ initial, profiles, named = false, initial
 
 export function ClimateAttribution() {
   return <details className="climate-attribution"><summary>Climate data and methodology</summary>
-    <p>Estimates are well-to-wheel, per traveller, in kg CO₂e. Flights include radiative forcing. Vehicle manufacture is excluded.</p>
+    <p>Electricity uses the cached route country shares automatically. Estimates are well-to-wheel, per traveller, in kg CO₂e. Flights include radiative forcing. Vehicle manufacture is excluded.</p>
     <p>UK Government GHG Conversion Factors for Company Reporting 2015–2026, DESNZ and DEFRA; processed into derived tables. Contains public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noreferrer">Open Government Licence v3.0</a>.</p>
     <p>Ember (2026) and other sources – with major processing by Our World in Data. Data: Ember, Energy Institute; processed by <a href="https://ourworldindata.org/energy" target="_blank" rel="noreferrer">Our World in Data</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>); filtered to country, year and electricity intensity.</p>
   </details>;

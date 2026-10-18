@@ -5,7 +5,7 @@ import { useClimateSettings } from '../climate/useClimateSettings';
 import { modeKey } from '../countries/analytics';
 import { ClimateProfileDialog } from './ClimateProfileEditor';
 import { Dialog } from './Dialog';
-import { MaterialIcon } from './MaterialIcon';
+import { MaterialIcon, getModeIcon } from './MaterialIcon';
 
 export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onSave: (profiles: Trip['climateProfiles']) => void; onClose: () => void }) {
   const settings = useClimateSettings();
@@ -21,12 +21,14 @@ export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onS
       <button className="dialog-btn dialog-btn-cancel" onClick={onClose}>Cancel</button>
       <button className="dialog-btn dialog-btn-primary" onClick={() => onSave(Object.keys(profiles).length ? profiles : undefined)}>Save</button>
     </>}>
-      {[...modes].map(([key, segment]) => {
+      <table className="climate-trip-table"><tbody>{[...modes].map(([key, segment]) => {
         const choice = profiles[key];
         const selection = choice ? 'custom' in choice ? 'custom' : choice.profileId : '';
-        return <div className="climate-trip-mode" key={key}>
-          <label htmlFor={`climate-mode-${key}`}>{climateModeLabel(segment, settings)}</label>
-          <div className="climate-choice-row">
+        const modeName = climateModeLabel(segment, settings).replace(/^./, c => c.toUpperCase());
+        return <tr key={key}>
+          <td>{segment.transportMode === 'other' && segment.customIcon ? <MaterialIcon name={segment.customIcon} size={20} /> : getModeIcon(segment.transportMode, 20)}</td>
+          <td><label htmlFor={`climate-mode-${key}`}>{modeName}</label></td>
+          <td>
             <select id={`climate-mode-${key}`} className="climate-default-select" value={selection} onChange={e => {
               const selected = e.target.value;
               if (!selected) setChoice(key);
@@ -45,10 +47,11 @@ export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onS
               {settings.profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               <option value="custom">Custom</option>
             </select>
-            {choice && 'custom' in choice && <button className="iconButton" aria-label={`Edit ${climateModeLabel(segment, settings)} climate profile`} title={`Edit ${climateModeLabel(segment, settings)} climate profile`} onClick={() => setEditing({ key, profile: choice.custom })}><MaterialIcon name="edit" size={20} /></button>}
-          </div>
-        </div>;
-      })}
+          </td>
+          <td className="climate-trip-edit">{choice && 'custom' in choice && <button className="iconButton" aria-label={`Edit ${climateModeLabel(segment, settings)} climate profile`} title={`Edit ${climateModeLabel(segment, settings)} climate profile`} onClick={() => setEditing({ key, profile: choice.custom })}><MaterialIcon name="edit" size={20} /></button>}
+          </td>
+        </tr>;
+      })}</tbody></table>
       {modes.size === 0 && <p>Add a segment to set trip climate defaults.</p>}
     </Dialog>
     {editing && <ClimateProfileDialog key={editing.key} initial={editing.profile} profiles={settings.profiles} onClose={() => setEditing(null)} onSave={profile => {

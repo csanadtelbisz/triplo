@@ -793,3 +793,28 @@ test('country labels use Overture English names including synthetic territory co
   await expect(page.locator('.country-list')).not.toContainText('Österreich');
   await expect(page.locator('.country-list')).not.toContainText('Хабомаи');
 });
+
+test('climate grouping clears country cropping and restores distance selections in the real app', async ({ page }) => {
+  await page.getByRole('button', { name: 'Group by country', exact: true }).click();
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await expect(page.getByLabel('Trip climate impacts', { exact: true })).toContainText('Cross-year crossing');
+  await expect(page.getByRole('button', { name: 'Group by country', exact: true })).toHaveCount(0);
+  // The normal overview style hides flights; the unfiltered drive must cross both countries.
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive']);
+  await expect.poll(async () => (await routes(page)).flatMap(f => (f.geometry as GeoJSON.MultiLineString).coordinates.flat()).some(point => point[0] > 0)).toBe(true);
+  await page.getByRole('button', { name: 'Group by transport mode', exact: true }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'flight' }).click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['flight']);
+  await page.getByRole('button', { name: 'Group by trip', exact: true }).click();
+  await expect(page.getByLabel('Trip climate impacts', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive']);
+  await page.getByRole('button', { name: 'Show distance', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive']);
+  const features = await routes(page);
+  for (const line of (features[0].geometry as GeoJSON.MultiLineString).coordinates) for (const point of line) expect(point[0]).toBeLessThanOrEqual(0);
+});
