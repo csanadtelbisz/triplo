@@ -1,0 +1,21 @@
+.climate-editor { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.climate-editor label, .climate-shares > label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; }
+.climate-editor input:not([type=checkbox]), .climate-editor select, .climate-default-select { width: 100%; min-width: 0; box-sizing: border-box; padding: 6px 8px; font: inherit; color: inherit; background: var(--input-bg, transparent); border: 1px solid var(--border-color, #aaa); border-radius: 4px; }
+.climate-editor small, .climate-attribution { font-size: .75rem; line-height: 1.5; opacity: .85; }
+.climate-copy-row, .climate-share-row, .climate-choice-row, .climate-profile-row { display: flex; gap: 8px; align-items: center; }
+.climate-copy-row { align-items: flex-end; }
+.climate-copy-row > label, .climate-share-row > select, .climate-choice-row > select, .climate-profile-row > span { flex: 1; min-width: 0; }
+.climate-share-row > label { width: 80px; flex-shrink: 0; }
+.climate-editor .climate-check { flex-direction: row; align-items: center; }
+.climate-shares, .climate-profile-list { display: flex; flex-direction: column; gap: 10px; }
+.climate-preferences { padding: 0 8px 12px; }
+.climate-radio { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: .85rem; }
+.climate-radio input, .climate-check input { margin: 0; width: auto; }
+.climate-trip-mode { margin-bottom: 16px; }
+.climate-trip-mode > label { display: block; margin-bottom: 6px; }
+.climate-result { margin: 12px 0; }
+.climate-attribution { margin-top: 16px; }
+.climate-attribution summary { cursor: pointer; }
+.climate-attribution a { text-decoration: underline; color: inherit; }
+.trip-summary-title .climate-settings-button { margin-left: auto; }
+.climate-dialog .dialog-actions { margin-top: 20px; }

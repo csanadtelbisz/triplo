@@ -1,12 +1,13 @@
 import { greatCircle, lineString, nearestPointOnLine, distance } from '@turf/turf';
 import type { Segment } from '../../../shared/types';
-import { getSegmentGeometry, samePosition } from './segmentGeometry';
+import { copySegmentGeometryIdentity, getSegmentGeometry, samePosition } from './segmentGeometry';
 
 export const GEOMETRY_VERSION = 2;
 export type RouteGeometry = GeoJSON.MultiLineString;
 const cache = new WeakMap<Segment, RouteGeometry>();
 
 export function copyEffectiveGeometryCache(source: Segment, target: Segment): void {
+  copySegmentGeometryIdentity(source, target);
   const geometry = cache.get(source);
   if (geometry) cache.set(target, geometry);
 }

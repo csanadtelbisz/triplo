@@ -4,6 +4,7 @@ import { segmentKey } from './types';
 import type { CountryData } from './types';
 
 export interface AnalyticsSelection {
+  climate?: boolean;
   countries: boolean;
   country: string | null;
   mode: string | null;
@@ -37,12 +38,12 @@ export function selectedDistance(trip: Trip, segment: Segment, country: string |
   if (segment.routingProfile === 'teleport') return 0;
   return country ? (data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry || countryDistances(segment))?.[country] || 0 : segment.distanceStats?.totalDistance || 0;
 }
-export function countryYearDistances(trips: Trip[], selection: AnalyticsSelection, data?: CountryData) {
+export function countryYearDistances(trips: Trip[], selection: AnalyticsSelection, data?: CountryData, metric: typeof selectedDistance = selectedDistance) {
   const years = new Map<number, number>();
   for (const trip of trips) {
     if (!trip.startDate) continue;
     const start = new Date(trip.startDate).getFullYear(), end = new Date(trip.endDate || trip.startDate).getFullYear();
-    const total = trip.segments.reduce((sum, segment) => sum + (!selection.mode || modeKey(segment) === selection.mode ? selectedDistance(trip, segment, selection.country, data) : 0), 0);
+    const total = trip.segments.reduce((sum, segment) => sum + (!selection.mode || modeKey(segment) === selection.mode ? metric(trip, segment, selection.country, data) : 0), 0);
     for (let year = start; year <= end; year++) {
       const range: [number, number] = [new Date(year, 0, 1).getTime(), new Date(year, 11, 31).getTime()];
       years.set(year, (years.get(year) || 0) + total * tripFraction(trip, range));

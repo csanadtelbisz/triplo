@@ -42,6 +42,7 @@ import { useCountryData } from './countries/useCountryData';
 import { getEffectiveGeometry } from './utils/effectiveGeometry';
 import { comparisonGeometry, getSegmentGeometry } from './utils/segmentGeometry';
 import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryTripInputs, tripForStorage, withSavedCountryParts } from './countries/cache';
+import { getClimateSettings, withClimateCache } from './climate/profiles';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -64,7 +65,10 @@ function stripMeta(trip: Trip, includeCaches = true): string {
   const { metadata: _metadata, ...copy } = trip;
   if (!includeCaches) {
     const { updatedAt: _updatedAt, tripDistanceSummary: _summary, countryDataRevision: _revision, ...content } = copy;
-    return JSON.stringify({ ...content, segments: compactCountryData(trip).segments.map(({ countryDistances: _country, countryParts: _parts, distanceStats: _distance, waypointDistances: _waypoints, geometry: _geometry, ...segment }, index) => ({ ...segment, geometry: segment.transportMode === 'flight' ? getEffectiveGeometry(trip.segments[index]) : comparisonGeometry(getSegmentGeometry(trip.segments[index])) })) });
+    return JSON.stringify({ ...content, segments: compactCountryData(trip).segments.map(({ countryDistances: _country, countryParts: _parts, distanceStats: _distance, waypointDistances: _waypoints, geometry: _geometry, ...segment }, index) => {
+      delete segment.climateImpact;
+      return { ...segment, geometry: segment.transportMode === 'flight' ? getEffectiveGeometry(trip.segments[index]) : comparisonGeometry(getSegmentGeometry(trip.segments[index])) };
+    }) });
   }
   const serialized = JSON.stringify(tripForStorage({ ...trip, metadata: undefined }));
   serializedTrips.set(trip, serialized);
@@ -162,6 +166,28 @@ export default function App() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [histories, setHistories] = useState<Record<string, { past: Trip[], future: Trip[], lastSavedStr: string }>>({});
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  useEffect(() => {
+    const refreshClimate = () => {
+      const settings = getClimateSettings();
+      const refreshed = new globalThis.Map<Trip, Trip>();
+      const refresh = (trip: Trip) => {
+        let next = refreshed.get(trip);
+        if (!next) { next = withClimateCache(trip, settings); refreshed.set(trip, next); }
+        return next;
+      };
+      setTrips(current => {
+        const next = current.map(refresh);
+        return next.some((trip, i) => trip !== current[i]) ? next : current;
+      });
+      setSelectedTrip(current => current ? refresh(current) : current);
+    };
+    window.addEventListener('preferences-updated', refreshClimate);
+    window.addEventListener('storage', refreshClimate);
+    return () => {
+      window.removeEventListener('preferences-updated', refreshClimate);
+      window.removeEventListener('storage', refreshClimate);
+    };
+  }, []);
   const [tripConflicts, setTripConflicts] = useState<Record<string, Trip[]>>({});
   const conflictedTripIds = new Set(Object.keys(tripConflicts));
   const [preferenceConflicts, setPreferenceConflicts] = useState<PreferenceVersion[]>([]);
@@ -425,7 +451,7 @@ export default function App() {
       if (trips.length === 0) {
           const localCache = await getTripCache();
           if (localCache.length > 0) {
-              setTrips(localCache);
+              setTrips(localCache.map(trip => withClimateCache(trip)));
           }
       }
 
@@ -551,10 +577,10 @@ export default function App() {
           const freshMetadata = { ...(trip.metadata || {}) };
           delete (freshMetadata as any)._isCached;
           if (existing && existing.updatedAt === trip.updatedAt && existing.tripDistanceSummary && existing.segments.every(s => s.distanceStats)) {
-             cachedTrips.push(compactCountryData({
+             cachedTrips.push(withClimateCache(compactCountryData({
                 ...existing,
                 metadata: { ...existing.metadata, ...freshMetadata, _isCached: false }
-             }));
+             })));
           } else {
              const newlyComputed = computeTripCaches(trip);
              newlyComputed.metadata = { ...newlyComputed.metadata, ...freshMetadata, _isCached: false };
@@ -708,7 +734,7 @@ export default function App() {
     const h = histories[selectedTrip.id];
     if (!h || h.past.length === 0) return;
 
-    const previousTrip = h.past[h.past.length - 1];
+    const previousTrip = withClimateCache(h.past[h.past.length - 1]);
     setTrips(prev => prev.map(t => t.id === selectedTrip.id ? previousTrip : t));
     setSelectedTrip(previousTrip);
 
@@ -730,7 +756,7 @@ export default function App() {
     const h = histories[selectedTrip.id];
     if (!h || h.future.length === 0) return;
 
-    const nextTrip = h.future[0];
+    const nextTrip = withClimateCache(h.future[0]);
     setTrips(prev => prev.map(t => t.id === selectedTrip.id ? nextTrip : t));
     setSelectedTrip(nextTrip);
 
@@ -751,7 +777,7 @@ export default function App() {
     if (!selectedTrip) return false;
     
     try {
-      const tripToSave = { ...selectedTrip, updatedAt: new Date().toISOString() };
+      const tripToSave = withClimateCache({ ...selectedTrip, updatedAt: new Date().toISOString() });
       
       const isNew = tripToSave.id.startsWith('temp_trip_');
       const oldId = tripToSave.id;
@@ -814,7 +840,7 @@ export default function App() {
     if (unsavedTrips.length === 0) return;
 
     try {
-      const updatingTrips = unsavedTrips.map(u => ({ ...u, updatedAt: new Date().toISOString() }));
+      const updatingTrips = unsavedTrips.map(u => withClimateCache({ ...u, updatedAt: new Date().toISOString() }));
       
       if (persistingManager.getAvailableServices().length > 0) {
         await persistingManager.saveAll(updatingTrips);

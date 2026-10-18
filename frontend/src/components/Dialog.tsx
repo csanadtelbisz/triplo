@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import '../styles/Dialog.css';
 
@@ -19,10 +19,14 @@ export function Dialog({
   onClose,
   className
 }: DialogProps) {
+  const overlay = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      // Only close the top dialog when one dialog opens another editor.
+      const dialogs = document.querySelectorAll('.dialog-overlay');
+      if (dialogs[dialogs.length - 1] === overlay.current) onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -31,7 +35,7 @@ export function Dialog({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="dialog-overlay" onClick={onClose}>
+    <div className="dialog-overlay" ref={overlay} onClick={onClose}>
       <div className={`dialog-content${className ? ` ${className}` : ''}`} onClick={(e) => e.stopPropagation()}>
         <h3 className="dialog-title">{title}</h3>
         <div className="dialog-message" style={{ marginBottom: actions ? '24px' : '0' }}>

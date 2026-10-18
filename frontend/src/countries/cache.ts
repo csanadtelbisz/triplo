@@ -1,20 +1,22 @@
 import type { CountryPart, Segment, Trip } from '../../../shared/types';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
-import { countryPartStats, getSegmentGeometry, samePosition } from '../utils/segmentGeometry';
+import { countryPartStats, getSegmentGeometry, samePosition, sameSegmentGeometryIdentity } from '../utils/segmentGeometry';
 import { segmentKey } from './types';
 import type { CountryData } from './types';
+import { getClimateSettings, withClimateCache } from '../climate/profiles';
 
 export const canPersistCountryParts = (trip: Trip) => !trip.metadata?.isSharedTripReference;
-const routeIdentities = new WeakMap<Segment, object>();
 
 export function withSavedCountryParts(working: Trip, saved: Trip): Trip {
+  // Compare save state against persisted geometry and climate caches, so new
+  // background calculations remain saveable without creating undo entries.
   const originals = new Map(saved.segments.map(segment => [segment.id, segment]));
   const segments = working.segments.map(segment => {
     const original = originals.get(segment.id);
     if (!original) return segment;
-    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances])) return segment;
+    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances, segment.climateImpact]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances, original.climateImpact])) return segment;
     const content = { ...segment };
-    for (const field of ['geometry', 'countryParts', 'countryDistances'] as const) {
+    for (const field of ['geometry', 'countryParts', 'countryDistances', 'climateImpact'] as const) {
       delete content[field];
       if (original[field] !== undefined) Object.assign(content, { [field]: original[field] });
     }
@@ -60,6 +62,7 @@ export function tripForStorage(trip: Trip): Trip {
 }
 
 export function attachCountryParts(trips: Trip[], parts: Record<string, CountryPart[]>, revisions: Record<string, string> = {}): Trip[] {
+  const climateSettings = getClimateSettings();
   let changed = false;
   const next = trips.map(trip => {
     if (!canPersistCountryParts(trip)) return trip;
@@ -73,21 +76,18 @@ export function attachCountryParts(trips: Trip[], parts: Record<string, CountryP
       delete updated.countryDistances;
       updated.distanceStats ||= countryPartStats(updated);
       copyEffectiveGeometryCache(segment, updated);
-      const identity = routeIdentities.get(segment) || {};
-      routeIdentities.set(segment, identity);
-      routeIdentities.set(updated, identity);
       return updated;
     });
     const revision = revisions[trip.id];
     if (revision && trip.countryDataRevision !== revision) changed = tripChanged = true;
-    return tripChanged ? { ...trip, segments, ...(revision ? { countryDataRevision: revision } : {}) } : trip;
+    return tripChanged ? withClimateCache({ ...trip, segments, ...(revision ? { countryDataRevision: revision } : {}) }, climateSettings) : trip;
   });
   return changed ? next : trips;
 }
 
 export function sameCountryInputs(a: Segment, b: Segment): boolean {
   if (a === b) return true;
-  const sameGeometry = (routeIdentities.has(a) && routeIdentities.get(a) === routeIdentities.get(b)) ||
+  const sameGeometry = sameSegmentGeometryIdentity(a, b) ||
     (!!a.countryParts && a.countryParts === b.countryParts && !a.geometry && !b.geometry) || (() => {
     const left = getSegmentGeometry(a), right = getSegmentGeometry(b);
     return left === right || !!left && !!right && left.coordinates.length === right.coordinates.length && left.coordinates.every((coordinate, i) => samePosition(coordinate, right.coordinates[i]));

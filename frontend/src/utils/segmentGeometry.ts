@@ -1,6 +1,17 @@
 import type { Segment, SegmentDistanceStats } from '../../../shared/types';
 
 const geometries = new WeakMap<Segment, GeoJSON.LineString>();
+const routeIdentities = new WeakMap<Segment, object>();
+
+/** Preserve a route's identity through representation and derived-cache changes. */
+export function copySegmentGeometryIdentity(source: Segment, target: Segment): void {
+  const identity = routeIdentities.get(source) || {};
+  routeIdentities.set(source, identity);
+  routeIdentities.set(target, identity);
+}
+export function sameSegmentGeometryIdentity(a: Segment, b: Segment): boolean {
+  return routeIdentities.has(a) && routeIdentities.get(a) === routeIdentities.get(b);
+}
 export const samePosition = (a: GeoJSON.Position, b: GeoJSON.Position) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 export function getSegmentGeometry(segment: Segment): GeoJSON.LineString | undefined {

@@ -1,3 +1,4 @@
+import { SegmentClimateCard } from './SegmentClimateCard';
 import { getSegmentGeometry } from '../utils/segmentGeometry';
 import { useState, useEffect } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types';
@@ -642,6 +643,8 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
              <ElevationProfile geometry={getSegmentGeometry(seg)!} onHoverCoordinate={onHoverCoordinate} />
            )}
         </div>
+
+        <SegmentClimateCard key={seg.id} trip={trip} segment={seg} isReadOnly={isReadOnly} onUpdateTrip={onUpdateTrip} />
 
         {/* <div className="form-group" style={{ marginTop: 24 }}>
           <label className="form-label">ID (Read-only)</label>

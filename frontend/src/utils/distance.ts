@@ -3,6 +3,7 @@ import type { Waypoint, Trip } from '../../../shared/types';
 import { copyEffectiveGeometryCache, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
 import { compactCountryData } from '../countries/cache';
 import { countryPartStats, getSegmentGeometry } from './segmentGeometry';
+import { withClimateCache } from '../climate/profiles';
 
 export interface DistanceStats {
   distanceKm: number;
@@ -363,5 +364,5 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
     distanceByMode
   };
 
-  return newTrip;
+  return withClimateCache(newTrip);
 }

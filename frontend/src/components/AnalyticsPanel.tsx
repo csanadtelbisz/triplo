@@ -1,5 +1,7 @@
+import { segmentClimate } from '../climate/profiles';
+import { useClimateSettings } from '../climate/useClimateSettings';
 import { countryDistances } from '../countries/parts';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getCustomOtherModes, getModeAndIconColor } from '../utils/customModesPreferences';
@@ -210,7 +212,7 @@ function getDistancePerYear(trips: Trip[], selectedModeKey: string | null): Year
     .map(year => ({ year, distance: distanceByYear[year] || 0 }));
 }
 
-function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYear, onSelectedYearChange, interactive }: { yearDistances: YearDistance[]; maxDistance: number; modeColor?: string; selectedYear: number | null; onSelectedYearChange: (year: number | null) => void; interactive: boolean }) {
+function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYear, onSelectedYearChange, interactive, climate = false }: { climate?: boolean; yearDistances: YearDistance[]; maxDistance: number; modeColor?: string; selectedYear: number | null; onSelectedYearChange: (year: number | null) => void; interactive: boolean }) {
   const [hoveredYear, setHoveredYear] = useState<number | null>(null);
   const [tooltipXPosition, setTooltipXPosition] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -302,7 +304,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'inherit' }}>Distance per Year</h3>
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'inherit' }}>{climate ? 'Climate Impact per Year (kg CO₂e)' : 'Distance per Year'}</h3>
       {yearDistances.length === 0 ? (
         <div 
           style={{ 
@@ -317,7 +319,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
             fontSize: '0.9rem'
           }}
         >
-          No dated distance data.
+          {climate ? 'No dated climate data.' : 'No dated distance data.'}
         </div>
       ) : (
       <div className="analytics-chart" 
@@ -446,7 +448,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
             }}
           >
             <div style={{ fontWeight: 'bold', lineHeight: '1.4' }}>{hoveredYear}</div>
-            <div style={{ lineHeight: '1.4' }}>{hoveredData.distance.toFixed(1)} km</div>
+            <div style={{ lineHeight: '1.4' }}>{hoveredData.distance.toFixed(1)} {climate ? 'kg CO₂e' : 'km'}</div>
           </div>
         )}
       </div>
@@ -456,30 +458,52 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
 }
 
 export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selection, onSelectionChange, countryData, countryLoading, countryCurrentTrip, countryError, onRetryCountries }: AnalyticsPanelProps) {
+  const climateSettings = useClimateSettings();
+  const climateValues = useMemo(() => {
+    const values = new Map<string, number | undefined>();
+    if (selection.climate) for (const trip of trips) for (const segment of trip.segments) {
+      values.set(segmentKey(trip.id, segment.id), segmentClimate(trip, segment, climateSettings).result?.co2eKg);
+    }
+    return values;
+  }, [trips, selection.climate, climateSettings]);
+  const unavailableClimateCount = [...climateValues.values()].filter(value => value === undefined).length;
+  const metric = useCallback((trip: Trip, segment: Segment, country: string | null, data?: CountryData) => {
+    const distance = selectedDistance(trip, segment, country, data);
+    if (!selection.climate) return distance;
+    const kg = climateValues.get(segmentKey(trip.id, segment.id)) || 0;
+    if (!country) return kg;
+    const fullDistance = selectedDistance(trip, segment, null, data) || data?.results[segmentKey(trip.id, segment.id)]?.totalDistanceKm || Object.values(countryDistances(segment)).reduce((a, b) => a + b, 0);
+    return fullDistance > 0 ? kg * Math.min(1, distance / fullDistance) : 0;
+  }, [selection.climate, climateValues]);
+  const metricLabel = selection.climate ? 'Climate impact (kg CO₂e)' : 'Distance (km)';
   const selectedModeKey = selection.mode;
   const onSelectedModeKeyChange = (mode: string | null) => onSelectionChange({ ...selection, mode });
   const selectedYear = selection.year;
   const timeRange = selection.range;
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const yearlyDistances = useMemo(() => selection.countries ? countryYearDistances(trips, selection, countryData) : getDistancePerYear(trips, selectedModeKey), [trips, selection, countryData, selectedModeKey]);
+  const yearlyDistances = useMemo(() => selection.countries || selection.climate ? countryYearDistances(trips, selection, countryData, metric) : getDistancePerYear(trips, selectedModeKey), [trips, selection, countryData, selectedModeKey, metric]);
   const maxYearlyDistance = Math.max(1, ...yearlyDistances.map(d => d.distance));
   const countryRows = useMemo(() => {
     const totals: Record<string, number> = {};
+    const visited = new Set<string>();
     for (const trip of trips) {
       if (!tripIntersects(trip, timeRange)) continue;
       for (const segment of trip.segments) {
         const result = countryData?.results[segmentKey(trip.id, segment.id)];
         for (const [code, distance] of Object.entries(result?.distanceKmByCountry || countryDistances(segment))) {
-          if (distance > 0) totals[code] = (totals[code] || 0) + distance * tripFraction(trip, timeRange);
+          if (distance > 0) {
+            visited.add(code);
+            totals[code] = (totals[code] || 0) + metric(trip, segment, code, countryData) * tripFraction(trip, timeRange);
+          }
         }
       }
     }
     if (selection.country && !totals[selection.country]) totals[selection.country] = 0;
     return Object.entries(totals).sort(([a, distanceA], [b, distanceB]) => a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : distanceB - distanceA).map(([code, distance]) => {
       const country = countryData?.index.countries.find(c => c.code === code);
-      return { code, distance, name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
+      return { code, distance, visited: visited.has(code), name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
     });
-  }, [trips, countryData, timeRange, selection.country]);
+  }, [trips, countryData, timeRange, selection.country, metric]);
 
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
     const distanceByMode: Record<string, number> = {};
@@ -487,7 +511,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
 
     trips.forEach(trip => {
       const summary = trip.tripDistanceSummary;
-      if (!selection.countries && summary?.distanceByMode) {
+      if (!selection.countries && !selection.climate && summary?.distanceByMode) {
         for (const [mode, dist] of Object.entries(summary.distanceByMode)) {
            distanceByMode[mode] = (distanceByMode[mode] || 0) + (dist as number);
         }
@@ -497,7 +521,8 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
         if (segment.routingProfile === 'teleport') return;
         if (selection.countries && (!tripIntersects(trip, timeRange) || !selectedDistance(trip, segment, selection.country, countryData))) return;
         const key = getModeKeyForSegment(segment);
-        if (selection.countries) distanceByMode[key] = (distanceByMode[key] || 0) + selectedDistance(trip, segment, selection.country, countryData) * tripFraction(trip, timeRange);
+        if (selection.climate && !tripIntersects(trip, timeRange)) return;
+        if (selection.countries || selection.climate) distanceByMode[key] = (distanceByMode[key] || 0) + metric(trip, segment, selection.country, countryData) * tripFraction(trip, timeRange);
         if (!segmentsByModeLocal[key]) {
           segmentsByModeLocal[key] = [];
         }
@@ -506,7 +531,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
     });
 
     return { globalDistanceByMode: distanceByMode, segmentsByMode: segmentsByModeLocal };
-  }, [trips, selection.countries, selection.country, timeRange, countryData]);
+  }, [trips, selection.countries, selection.climate, selection.country, timeRange, countryData, metric]);
 
   const modeRows = useMemo(() => {
     const entries = Object.entries(globalDistanceByMode);
@@ -625,6 +650,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Analytics</h2>
+        <button className={`iconButton ${selection.climate ? 'active' : ''}`} aria-label="Show climate impact" aria-pressed={!!selection.climate} title="Show climate impact" onClick={() => onSelectionChange({ ...selection, climate: !selection.climate }, true)}><MaterialIcon name="eco" size={20} /></button>
         <button className={`iconButton ${selection.countries ? 'active' : ''}`} aria-label="Group by country" aria-pressed={selection.countries} onClick={() => onSelectionChange({ ...selection, countries: !selection.countries, country: null, mode: null })} title="Group by country">
           <MaterialIcon name="public" size={20} />
         </button>
@@ -634,13 +660,14 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       </div>
 
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
+        {unavailableClimateCount > 0 && <p role="status">Climate totals exclude {unavailableClimateCount} unavailable segment estimates. Open their Climate Impact cards for details.</p>}
         {selection.countries && (
           <div className="country-list" aria-label="Countries">
             {countryLoading && countryCurrentTrip && <p role="status">Calculating country distances for {countryCurrentTrip}…</p>}
             {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
             <div className="trip-summary-table analytics-summary-table">
               <div className="analytics-summary-header">
-                <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED && row.distance > 0).length})</div><div className="analytics-summary-distance">Distance (km)</div>
+                <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED && row.visited).length})</div><div className="analytics-summary-distance">{metricLabel}</div>
               </div>
               <div className="analytics-summary-rows">
                 {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
@@ -659,7 +686,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
             <div className="trip-summary-table analytics-summary-table">
               <div className="analytics-summary-header">
                 <div>Mode</div>
-                <div className="analytics-summary-distance">Distance (km)</div>
+                <div className="analytics-summary-distance">{metricLabel}</div>
               </div>
               <div className="analytics-summary-rows">
                 {modeRows.map(row => {
@@ -687,7 +714,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
             </div>
             )}
 
-            <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
+            <YearlyDistanceChart climate={selection.climate} yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
               const range: [number, number] | null = year === null ? null : [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
               onSelectionChange({ ...selection, year, range }, true);
             }} interactive />

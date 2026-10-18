@@ -33,7 +33,12 @@ export class Run {
   gridYears: number[] = [];
   gridLevels = new Set<string>();
   private warned = new Set<string>();
-  constructor(readonly data: DataBundle, readonly year: number) {}
+  readonly data: DataBundle;
+  readonly year: number;
+  constructor(data: DataBundle, year: number) {
+    this.data = data;
+    this.year = year;
+  }
 
   warn(code: string, message: string): void {
     if (this.warned.has(code + message)) return;
@@ -81,7 +86,7 @@ export class Run {
     for (const [iso, w] of entries) {
       const code = iso.toUpperCase();
       let g: number;
-      if (this.data.grid[code]) g = this.gridOne(code, "country");
+      if (this.data.grid[code]) g = this.gridOne(code, code === "_WORLD" ? "world" : code.startsWith("_") ? "continent" : "country");
       else {
         const cont = this.data.regions[code];
         const ck = cont ? CONTINENT_KEY[cont] : undefined;

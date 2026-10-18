@@ -17,7 +17,8 @@ there is no application backend to run.
 - Import GPX or GeoJSON tracks into segments and export trips or segments as GPX.
 - Search for places and points of interest, switch base maps, and customize
   transport icons, route styling, and light/dark appearance.
-- View distance analytics by year and transport mode, and filter trips by date.
+- View distance and climate-impact analytics by year, country and transport mode, and filter trips by date.
+- Define reusable climate profiles, choose transport-mode and trip defaults, and customize segment estimates in kg CO₂e per traveller.
 - Save trips and preferences to Google Drive or GitHub, resolve sync conflicts,
   and share read-only trip links.
 

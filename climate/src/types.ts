@@ -1,4 +1,4 @@
-/** Public types of the climate-impact module. See CLIMATE_IMPACT_CALCULATION_v3.md. */
+/** Public types of the climate-impact module. See CLIMATE_IMPACT_CALCULATION.md. */
 
 export type Iso3 = string;
 /** Weights in the 0..1 range per country (ISO 3166 alpha-3). Normalised internally when the sum is not 1. */

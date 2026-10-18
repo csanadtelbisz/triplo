@@ -1,4 +1,22 @@
 // shared/types.ts
+import type { ClimateResult, TravelInput } from '../climate/src/types';
+
+type ProfileOptions<T> = T extends TravelInput ? Omit<T, 'date' | 'distanceKm'> : never;
+export type ClimateProfile = ProfileOptions<TravelInput>;
+export interface NamedClimateProfile {
+  id: string;
+  name: string;
+  profile: ClimateProfile;
+}
+/** Keep a snapshot so saved/shared trips remain usable without the original preferences. */
+export type ClimateProfileChoice = { profileId: string; name: string; profile: ClimateProfile } | { custom: ClimateProfile };
+
+export interface SegmentClimateImpact {
+  /** Canonical calculation inputs, including the calculator/data revision. */
+  inputKey: string;
+  result?: ClimateResult;
+  error?: string;
+}
 
 export type TransportMode = 'walk' | 'hike' | 'run' | 'bike' | 'car' | 'taxi' | 'bus' | 'rail' | 'subway' | 'flight' | 'ferry' | 'other';
 
@@ -41,6 +59,8 @@ export interface CountryPart {
 }
 
 export interface Segment {
+  climateProfile?: ClimateProfile;
+  climateImpact?: SegmentClimateImpact;
   id: string; // UUID
   transportMode: TransportMode;
   routingProfile: string;
@@ -64,6 +84,7 @@ export interface Segment {
 }
 
 export interface Trip {
+  climateProfiles?: Record<string, ClimateProfileChoice>;
   id: string;
   name: string;
   description?: string;

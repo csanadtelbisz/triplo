@@ -1,6 +1,6 @@
 # Triplo climate-impact calculation: specification v3.1 (draft for review)
 
-Status: **draft, no code written yet.** Replaces the Climatiq-based plan. Everything is computed locally from versioned open data tables.
+Status: **implemented in `climate/src` and integrated through `frontend/src/climate`.** This document records the calculation design; the public types in `climate/src/types.ts` are the authoritative input interface. Everything is computed locally from versioned open data tables.
 Items marked **[OPEN]** still need a decision (collected in section 12). Decisions you already made are written as settled.
 
 ---
@@ -335,6 +335,20 @@ export interface FerryInput extends CommonInput {
 ---
 
 ## 9. Dispatcher, batch and Triplo integration
+
+### Implemented profile integration
+
+Triplo stores reusable named profiles in synced preferences. A profile contains the calculator's algorithm and algorithm-specific options; date and distance come from the segment and trip. Built-in and custom transport modes can reference a preference profile. Segment custom options override trip defaults, which override transport-mode preferences, which override built-in algorithms. Walk, hike, run, bike and unconfigured other modes use the zero-emission algorithm. Teleport segments always contribute zero.
+
+`Segment.climateProfile` stores inline custom options. `Trip.climateProfiles` is keyed by transport mode (or `other:<icon>`) and stores either custom options or a named preference reference with an embedded fallback snapshot. Explicit trip references remain usable when the originating preferences are unavailable. Clearing a trip choice restores the transport-mode default. Editing a named preference updates references while it is available; Copy creates independent options and preserves the destination profile's name.
+
+The shared profile editor supports named dialogs, unnamed trip dialogs and unnamed inline segment editing. It exposes all public algorithm options, including flight seating/load overrides and country electricity shares. Rail country shares and electric-car grid shares use route-country distances by default, converted from alpha-2 to alpha-3 codes. Unassigned pieces retain their weight using world electricity. Explicit profile shares override this automatic source. Imported GPX flight tracks default to exact flown distance; other flight routes default to great-circle distance, with an explicit profile override available.
+
+The calculation date is the first dated segment waypoint, then the trip start/end date, then its creation date. Undated records use the current year and show this assumption. Zero-distance routes produce zero; invalid estimates are isolated from other segments and shown as unavailable in the segment card. Each segment persists a `climateImpact` cache containing the full calculator result (total, direct/upstream breakdown, factors, assumptions and warnings) or an isolated calculation error. Its canonical `inputKey` includes the resolved profile, date, distance, automatic country shares, flight geometry mode, adapter/calculator rule version and generated SHA-256 data revision. Valid results survive JSON reloads and are reused. Distance-cache computation, route-country updates and preference changes refresh invalid entries; undo/redo restores a cache valid for the current preferences. Cache-only changes create no undo entry and are excluded from provider content conflict comparisons, but remain visible in the normal unsaved/save state and are written into segment JSON, including compact country-part segments. Factor-table updates regenerate the data revision automatically; calculator/adapter rule changes must bump `CLIMATE_CALCULATION_VERSION`.
+
+Trip summaries show total and per-mode kg CO₂e. The analytics eco toggle switches tables and annual charts between distance and kg CO₂e while retaining selection. Climate totals are allocated to route countries in proportion to distance and to years/date filters in proportion to inclusive trip days, consistently with distance analytics. This is an allocation of the segment estimate, not a country-by-country rerun of a flight or vehicle model. The full annual chart remains context when a date range is selected.
+
+Data attribution and calculation assumptions are available in the profile preferences and segment Climate Impact cards.
 
 ```ts
 export type TravelInput = NoEmissionInput | FlightInput | CarInput | BusInput | RailInput | FerryInput;

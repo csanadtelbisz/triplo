@@ -1,3 +1,4 @@
+import { ClimatePreferences, DefaultClimateProfileSelect } from './ClimatePreferences';
 import React, { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/StatusPanel.css';
@@ -139,6 +140,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const handleUpdateCustomModes = (newModes: CustomOtherMode[]) => {
     setCustomModes(newModes);
     saveCustomOtherModes(newModes);
+    window.dispatchEvent(new Event('preferences-updated'));
     syncPreferencesToCloud();
   };
 
@@ -158,6 +160,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
 
     setBuiltInOverrides(newOverrides);
     saveBuiltInModeOverrides(newOverrides);
+    window.dispatchEvent(new Event('preferences-updated'));
     syncPreferencesToCloud();
   };
 
@@ -420,6 +423,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           </table>
         </div>
 
+        <ClimatePreferences />
+
         <h3 className="status-panel-section-title">Built-in Transport Modes</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
@@ -452,6 +457,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                             ))
                           )}
                         </select>
+                        <DefaultClimateProfileSelect label={`${mode} default climate profile`} value={ovr.climateProfileId} onChange={climateProfileId => handleUpdateBuiltInMode(mode, { climateProfileId })} />
                       </div>
                     </td>
                   </tr>
@@ -502,6 +508,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                           ))
                         )}
                       </select>
+                      <DefaultClimateProfileSelect label={`${mode.name || 'Custom mode'} default climate profile`} value={mode.climateProfileId} onChange={climateProfileId => handleUpdateCustomMode(idx, { climateProfileId })} />
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#555', cursor: 'pointer', marginTop: '2px' }}>
                         <input 
                           type="checkbox" 

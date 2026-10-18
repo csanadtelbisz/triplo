@@ -1,6 +1,6 @@
 # Triplo climate-impact module
 
-Pure TypeScript calculator (no runtime dependencies). Specification: `../CLIMATE_IMPACT_CALCULATION_v3.md`.
+Pure TypeScript calculator (no runtime dependencies). Specification: `../CLIMATE_IMPACT_CALCULATION.md`. Triplo's profile adapter lives in `../frontend/src/climate`; the calculator remains independent of app transport modes and React.
 
 ```ts
 import { calculate } from "./src";
@@ -8,7 +8,7 @@ calculate({ mode: "car", date: "2026-06-01", distanceKm: 100, fuelType: "bev", g
 ```
 
 ## Data and yearly update
-All numbers come from `data/*` and are compiled into `src/generated/data.ts`.
+All numbers come from `data/*` and are compiled into `src/generated/data.ts`, including a content revision used to invalidate persisted segment climate caches when the data changes.
 
 ```
 python3 -I scripts/build-defra.py data/defra-factors.csv 2025=<flat file> 2026=<flat file> ...   # any years, .xls or .xlsx (needs openpyxl + xlrd)
