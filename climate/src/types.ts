@@ -51,12 +51,12 @@ export interface CarInput extends CommonInput {
 
 export interface BusInput extends CommonInput {
   mode: "bus";
-  /** Default "coach" (long distance). */
+  /** Omit for automatic selection: local below 10 km, coach otherwise. */
   busType?: "local" | "coach";
 }
 
 export type RailType = "inter_city" | "high_speed" | "light_rail" | "subway";
-export type Traction = "electric" | "diesel" | "unknown";
+export type Traction = "electric" | "diesel";
 
 export interface RailInput extends CommonInput {
   mode: "rail";

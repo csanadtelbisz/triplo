@@ -3,6 +3,11 @@ import { Run, requireDistance } from "./run";
 
 const ROW: Record<RailType, string> = { inter_city: "national", high_speed: "international", light_rail: "light", subway: "underground" };
 
+/** Older saved profiles used "unknown" for the same approximation as diesel. */
+export function resolveRailTraction(traction?: string): Traction {
+  return traction === "diesel" || traction === "unknown" ? "diesel" : "electric";
+}
+
 export function calcRail(run: Run, input: RailInput): ClimateResult {
   requireDistance(input.distanceKm);
   const km = input.distanceKm;
@@ -11,7 +16,7 @@ export function calcRail(run: Run, input: RailInput): ClimateResult {
     run.warn("RAIL_TYPE_UNKNOWN", `Unknown rail type "${type}"; inter_city used.`);
     type = "inter_city";
   }
-  let traction: Traction = input.traction ?? "electric";
+  let traction = resolveRailTraction(input.traction);
   const row = ROW[type];
 
   // light rail, subway and high speed are electric by nature
@@ -22,9 +27,8 @@ export function calcRail(run: Run, input: RailInput): ClimateResult {
   const electric = type !== "inter_city" || traction === "electric";
 
   if (!electric) {
-    // inter_city, unknown or diesel traction: DEFRA national rail factor (UK diesel/electric mix) as is
-    if (traction === "diesel") run.warn("RAIL_DIESEL_APPROXIMATED", "No diesel-only rail factor available; UK national rail mix used.");
-    else run.assume("DEFRA national rail factor (UK diesel/electric mix)");
+    // DEFRA has no diesel-only factor; use its national diesel/electric mix.
+    run.warn("RAIL_DIESEL_APPROXIMATED", "No diesel-only rail factor available; UK national rail mix used.");
     return run.finish({
       directKg: km * run.factor(`rail.${row}.ttw`),
       upstreamKg: km * run.factor(`rail.${row}.wtt`),

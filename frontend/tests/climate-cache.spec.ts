@@ -60,6 +60,26 @@ test('transport defaults and trip defaults refresh the cache after preference ch
   expect(withClimateCache(scoped, settings).segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(4.604);
 });
 
+test('automatic bus caches refresh across 10 km and replace estimates from the old default rules', () => {
+  const bus: Segment = { ...segment, climateProfile: { mode: 'bus' }, distanceStats: { ...segment.distanceStats!, totalDistance: 9.999 } };
+  const local = withClimateCache({ ...trip, segments: [bus] }, settings);
+  const entry = local.segments[0].climateImpact!;
+  expect(entry.result?.co2eKg).toBeCloseTo(1.57244274, 10);
+  const key = JSON.parse(entry.inputKey);
+  key.revision = key.revision.replace(/^\d+:/, '5:');
+  const old = { ...local, segments: [{ ...local.segments[0], climateImpact: { inputKey: JSON.stringify(key), result: { ...entry.result!, co2eKg: .46035396 } } }] };
+  expect(withClimateCache(old, settings).segments[0].climateImpact?.result).toEqual(entry.result);
+  // The cache rounds insignificant distance noise; crossing the bus threshold must still change its key.
+  const nearlyTen = withClimateCache({ ...local, segments: [{ ...local.segments[0], distanceStats: { ...bus.distanceStats!, totalDistance: 9.999999999999998 } }] }, settings);
+  expect(nearlyTen.segments[0].climateImpact?.result?.factorKeys).toEqual(['bus.local.ttw', 'bus.local.wtt']);
+  const longer = withClimateCache({ ...nearlyTen, segments: [{ ...nearlyTen.segments[0], distanceStats: { ...bus.distanceStats!, totalDistance: 10 } }] }, settings);
+  expect(longer.segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(.4604, 10);
+  expect(longer.segments[0].climateImpact?.result?.factorKeys).toEqual(['bus.coach.ttw', 'bus.coach.wtt']);
+  const restored = withClimateCache(JSON.parse(serializeTrip(longer)), settings);
+  expect(restored.segments[0].climateImpact?.result).toEqual(longer.segments[0].climateImpact?.result);
+  expect(withClimateCache(restored, settings)).toBe(restored);
+});
+
 test('old electric rail estimates refresh and benchmark metadata survives compact persistence', () => {
   for (const railType of ['inter_city', 'high_speed'] as const) {
     const train: Segment = { ...segment, climateProfile: { mode: 'rail', railType, traction: 'electric' }, countryDistances: { HU: 75, DE: 25 } };

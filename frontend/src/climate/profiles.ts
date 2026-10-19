@@ -1,4 +1,6 @@
 import { calculate } from '../../../climate/src/calculate';
+import { defaultBusType } from '../../../climate/src/bus';
+import { resolveRailTraction } from '../../../climate/src/rail';
 import type { ClimateResult, CountryShares, TravelInput } from '../../../climate/src/types';
 import { climateDataRevision } from '../../../climate/src/generated/data';
 import type { ClimateProfile, ClimateProfileChoice, NamedClimateProfile, Segment, SegmentClimateImpact, Trip } from '../../../shared/types';
@@ -11,7 +13,7 @@ import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 import { noEmissionResult, restoreClimateImpact } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 5;
+const CLIMATE_CALCULATION_VERSION = 6;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -104,8 +106,10 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
   const dated = date?.slice(0, 10) || `${new Date().getFullYear()}-01-01`;
   const shares = routeCountryShares(segment);
   let options = profile;
+  // Keep the resolved bus type in the cache key even when distance rounding crosses 10 km.
+  if (options.mode === 'bus') options = { ...options, busType: options.busType ?? defaultBusType(km) };
   if (options.mode === 'car') options = { ...options, gridShares: shares };
-  if (options.mode === 'rail') options = { ...options, countryShares: shares };
+  if (options.mode === 'rail') options = { ...options, traction: resolveRailTraction(options.traction), countryShares: shares };
   if (options.mode === 'flight') options = { ...options, geometry: options.geometry || (segment.source === 'gpx' ? 'exact' : 'great_circle') };
   return { input: { ...options, date: dated, distanceKm: km }, undated: !date };
 }

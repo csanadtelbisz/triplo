@@ -15,12 +15,26 @@ test("none mode is zero", () => {
   assert.equal(r.status, "ok");
 });
 
-test("bus: coach default, 100 km = 100 x (0.03948 + 0.00656)", () => {
+test("bus: long routes default to coach, 100 km = 100 x (0.03948 + 0.00656)", () => {
   const r = calculate({ mode: "bus", date: D, distanceKm: 100 });
   near(r.co2eKg, 4.604);
   near(r.directKg, 3.948);
   assert.deepEqual(r.warnings, []);
   assert.equal(r.factorSets.defra?.yearUsed, 2026);
+});
+
+test("bus: automatic selection uses local strictly below 10 km and coach from 10 km", () => {
+  for (const [distanceKm, type, factor] of [[9.999, "local", .15726], [10, "coach", .04604], [10.001, "coach", .04604]] as const) {
+    const result = calculate({ mode: "bus", date: D, distanceKm });
+    near(result.co2eKg, distanceKm * factor, 1e-12);
+    assert.deepEqual(result.factorKeys, [`bus.${type}.ttw`, `bus.${type}.wtt`]);
+    assert.deepEqual(result.warnings, []);
+  }
+});
+
+test("bus: explicit local and coach choices override distance-based selection", () => {
+  near(calculate({ mode: "bus", date: D, distanceKm: 5, busType: "coach" }).co2eKg, .2302, 1e-12);
+  near(calculate({ mode: "bus", date: D, distanceKm: 20, busType: "local" }).co2eKg, 3.1452, 1e-12);
 });
 
 test("bus: unknown type falls back to coach with a warning", () => {
@@ -169,10 +183,11 @@ test("electric rail retains route-country weighting, distance scaling and trip-y
   }
 });
 
-test("rail: explicitly unknown traction uses DEFRA national factor as is", () => {
-  const r = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "unknown", countryShares: { FRA: 1 } });
+test("rail: legacy unknown traction is interpreted as diesel, with the same approximation warning", () => {
+  const input = { mode: "rail", date: D, distanceKm: 100, countryShares: { FRA: 1 } } as const;
+  const r = calculate({ ...input, traction: "unknown" as never });
   near(r.co2eKg, 3.989);
-  assert.deepEqual(r.warnings, []);
+  assert.deepEqual(r, calculate({ ...input, traction: "diesel" }));
 });
 
 test("rail: diesel keeps the approximation warning", () => {
@@ -275,8 +290,8 @@ test("factor year: closest year, a warning beyond 10 years", () => {
 
 test("historic DEFRA years are used: UK rail gets cleaner as the grid decarbonises", () => {
   // Compare the UK national mix explicitly; the default now models electric traction.
-  const old = calculate({ mode: "rail", railType: "inter_city", traction: "unknown", date: "2016-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
-  const now = calculate({ mode: "rail", railType: "inter_city", traction: "unknown", date: "2025-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
+  const old = calculate({ mode: "rail", railType: "inter_city", traction: "diesel", date: "2016-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
+  const now = calculate({ mode: "rail", railType: "inter_city", traction: "diesel", date: "2025-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
   assert.equal(old.factorSets.defra?.yearUsed, 2016);
   assert.ok(old.co2eKg > now.co2eKg);
 });

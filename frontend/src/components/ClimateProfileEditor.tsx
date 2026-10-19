@@ -4,6 +4,8 @@ import type { SeatClass } from '../../../climate/src/types';
 import { defaultData } from '../../../climate/src/generated/data';
 import { DEFAULT_OCCUPANCY } from '../../../climate/src/car';
 import { getFlightDefaults } from '../../../climate/src/flight';
+import { defaultBusType } from '../../../climate/src/bus';
+import { resolveRailTraction } from '../../../climate/src/rail';
 import { CAR_SIZE_EXAMPLES } from '../../../climate/src/examples';
 import { Dialog } from './Dialog';
 import '../styles/Climate.css';
@@ -22,7 +24,7 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
   const patch = (options: object) => {
     const next = { ...value, ...options } as ClimateProfile;
     if (next.mode === 'car' && !['petrol', 'diesel', 'hybrid', 'lpg'].includes(next.fuelType || '')) delete next.exactFuelLPer100Km;
-    if (next.mode === 'rail' && next.railType && next.railType !== 'inter_city') next.traction = 'electric';
+    if (next.mode === 'rail') next.traction = next.railType && next.railType !== 'inter_city' ? 'electric' : resolveRailTraction(next.traction);
     onChange(next);
   };
   const select = (label: string, key: string, current: string, values: string[], labels?: string[]) => <label>{label}
@@ -48,11 +50,11 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
       {number('Occupancy (people)', 'occupancy', value.occupancy, 1, 9, 1, DEFAULT_OCCUPANCY)}
       {['petrol', 'diesel', 'hybrid', 'lpg'].includes(value.fuelType || '') && number('Fuel consumption (L/100 km)', 'exactFuelLPer100Km', value.exactFuelLPer100Km, 0)}
     </>}
-    {value.mode === 'bus' && select('Bus type', 'busType', value.busType || 'coach', ['coach', 'local'])}
+    {value.mode === 'bus' && select('Bus type', 'busType', value.busType || '', ['', 'local', 'coach'], [distanceKm === undefined ? 'Automatic (Local below 10 km, Coach otherwise)' : automatic(text(defaultBusType(distanceKm))), 'Local', 'Coach'])}
     {value.mode === 'rail' && <>
       {select('Rail type', 'railType', value.railType || 'inter_city', ['high_speed', 'inter_city', 'light_rail', 'subway'])}
-      {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', value.traction || 'electric', ['unknown', 'electric', 'diesel'])}
-      {value.traction === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
+      {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', resolveRailTraction(value.traction), ['electric', 'diesel'])}
+      {resolveRailTraction(value.traction) === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
     </>}
     {value.mode === 'ferry' && <label className="climate-check"><input type="checkbox" checked={value.withVehicle || false} onChange={e => patch({ withVehicle: e.target.checked })} />Travelling with a car</label>}
     {value.mode === 'flight' && <>
@@ -78,7 +80,11 @@ export function ClimateProfileDialog({ initial, named = false, initialName = '',
   onSave: (profile: ClimateProfile, name: string) => void; onClose: () => void;
 }) {
   // The dialog mounts per editing session, so Cancel always discards the draft.
-  const [profile, setProfile] = useState(() => structuredClone(initial));
+  const [profile, setProfile] = useState(() => {
+    const draft = structuredClone(initial);
+    if (draft.mode === 'rail') draft.traction = resolveRailTraction(draft.traction);
+    return draft;
+  });
   const [name, setName] = useState(initialName);
   return <Dialog isOpen title={named ? 'Climate profile' : 'Custom climate profile'} onClose={onClose} className="climate-dialog">
     <form onSubmit={e => { e.preventDefault(); if (!named || name.trim()) onSave(profile, name.trim()); }}>

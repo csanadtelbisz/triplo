@@ -264,17 +264,17 @@ export const CAR_SIZE_EXAMPLES: Record<Exclude<CarSize, "average">, { fuelBased:
 ```ts
 export interface BusInput extends CommonInput {
   mode: "bus";
-  busType?: "local" | "coach";   // default "coach" (long distance)
+  busType?: "local" | "coach";   // omit: local below 10 km, coach at 10 km or above
 }
 ```
 
-DEFRA per-passenger-km factors, 2026: coach 0.0395 kg (TTW), local bus **"Local bus (not London)"** 0.1255 (the London and "average" rows are not used; the "average local bus" row 0.1015 includes London, which you excluded as too specific). Fuel and Euro standard are not part of DEFRA, so they are dropped. Unknown `busType` -> coach with a warning.
+DEFRA per-passenger-km factors, 2026: coach 0.0395 kg (TTW), local bus **"Local bus (not London)"** 0.1255 (the London and "average" rows are not used; the "average local bus" row 0.1015 includes London, which you excluded as too specific). Fuel and Euro standard are not part of DEFRA, so they are dropped. With no explicit `busType`, select local for segment distance < 10 km and coach otherwise (including exactly 10 km). The editor defaults to Automatic, displays the resolved choice when segment distance is available, and permits explicit Local/Coach overrides. Invalid `busType` -> coach with a warning. Changes to distance or these rules invalidate cached estimates.
 
 ### 6.3 Rail (including subway)
 
 ```ts
 export type RailType = "inter_city" | "high_speed" | "light_rail" | "subway";
-export type Traction = "electric" | "diesel" | "unknown";
+export type Traction = "electric" | "diesel";
 
 export interface RailInput extends CommonInput {
   mode: "rail";
@@ -296,7 +296,7 @@ Passenger averages account for empty running. These are dated regulatory benchma
 Calculation:
 - Electric `inter_city` (the default) and `high_speed`: `upstreamKg = distanceKm × kWhPerPkm × gridIntensity(countryShares) / 1000 × (1 + TD_UPLIFT)`, `directKg = 0`. Route-country grid intensity and DEFRA's grid-loss uplift use the closest available year to the trip. The UK mixed-traction national rail and Eurostar CO2 factors are **not** used to infer energy for these electric models.
 - `light_rail` and `subway` retain their existing electric model: implied energy = DEFRA light rail/tram or London Underground TTW factor / (UK generation + UK T&D factor of the same year), then the same route-grid calculation as above.
-- Explicitly selected legacy `inter_city` with `traction: "unknown"` retains DEFRA's national diesel/electric mix without country scaling. `traction: "diesel"` retains that approximation with warning `RAIL_DIESEL_APPROXIMATED`. Neither affects the electric defaults.
+- `inter_city` with `traction: "diesel"` uses DEFRA's national diesel/electric mix without country scaling, with warning `RAIL_DIESEL_APPROXIMATED`. Unknown was removed from the available traction options because it used the same emission factors. Older profiles with `traction: "unknown"` are interpreted as Diesel, including the approximation warning; editing and saving a profile replaces the legacy value. This does not affect the electric defaults.
 - High-speed, light rail and subway are always electric; requesting diesel for them produces `INVALID_COMBINATION` and uses electricity.
 
 The benchmark data participates in the generated data revision. Changes to the energy defaults or calculation rules invalidate persisted segment climate estimates; compact serialization preserves the benchmark metadata.

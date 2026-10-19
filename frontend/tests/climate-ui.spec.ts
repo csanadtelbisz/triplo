@@ -11,6 +11,55 @@ async function open(page: Page, seed = false) {
 const dialog = (page: Page) => page.locator('.climate-dialog').last();
 const climateCard = (page: Page) => page.locator('.trip-summary').filter({ has: page.getByRole('heading', { name: 'Climate Impact', exact: true }) });
 
+test('automatic bus profiles show resolved defaults and change at the 10 km boundary', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem('climate-test-trip')) return;
+    localStorage.setItem('climate-test-trip', JSON.stringify({ id: 'bus', name: 'Bus trip', startDate: '2026-05-01', createdAt: '', updatedAt: '',
+      segments: [{ id: 'car', transportMode: 'bus', routingProfile: 'straight', source: 'manual', waypoints: [],
+        distanceStats: { totalDistance: 9.999, elevationUp: 0, elevationDown: 0, hasElevation: false }, countryDistances: { HU: 9.999 } }],
+    }));
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  const busType = card.getByLabel('Bus type', { exact: true });
+  await expect(busType).toBeDisabled();
+  await expect(busType.locator('option:checked')).toHaveText('Automatic (Local)');
+  await expect(card.locator('.climate-result')).toHaveText('1.6 kg CO₂e');
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await busType.selectOption('coach');
+  await expect(card.locator('.climate-result')).toHaveText('0.5 kg CO₂e');
+  await busType.selectOption('');
+  await expect(card.locator('.climate-result')).toHaveText('1.6 kg CO₂e');
+  await page.evaluate(() => {
+    const trip = JSON.parse(localStorage.getItem('climate-test-trip')!);
+    trip.segments[0].distanceStats.totalDistance = 10;
+    trip.segments[0].countryDistances = { HU: 10 };
+    localStorage.setItem('climate-test-trip', JSON.stringify(trip));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  await expect(busType.locator('option:checked')).toHaveText('Automatic (Coach)');
+  await expect(card.locator('.climate-result')).toHaveText('0.5 kg CO₂e');
+  await busType.selectOption('local');
+  await expect(card.locator('.climate-result')).toHaveText('1.6 kg CO₂e');
+  await busType.selectOption('');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[0].climateProfile)).toEqual({ mode: 'bus' });
+});
+
+test('legacy unknown traction is shown as diesel and saved without the removed option', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('climateProfiles', JSON.stringify([
+    { id: 'old-train', name: 'Old train', profile: { mode: 'rail', traction: 'unknown' } },
+  ])));
+  await open(page);
+  await page.getByRole('button', { name: 'Edit Old train', exact: true }).click();
+  const traction = dialog(page).getByLabel('Traction', { exact: true });
+  await expect(traction).toHaveValue('diesel');
+  expect(await traction.locator('option').allTextContents()).toEqual(['Electric', 'Diesel']);
+  await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climateProfiles')!)[0].profile.traction)).toBe('diesel');
+});
+
 test('electric rail types show distinct estimates and dated benchmark provenance', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'segment', exact: true }).click();
@@ -119,6 +168,9 @@ test('shared editor exposes every algorithm without copying controls', async ({ 
   await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
   expect(await editor.getByLabel('Rail type', { exact: true }).locator('option').allTextContents()).toEqual(['High speed', 'Inter city', 'Light rail', 'Subway']);
   await expect(editor.getByLabel('Traction', { exact: true })).toBeVisible();
+  expect(await editor.getByLabel('Traction', { exact: true }).locator('option').allTextContents()).toEqual(['Electric', 'Diesel']);
+  await editor.getByLabel('Base algorithm', { exact: true }).selectOption('bus');
+  await expect(editor.getByLabel('Bus type', { exact: true }).locator('option:checked')).toHaveText('Automatic (Local below 10 km, Coach otherwise)');
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
   await editor.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A20N');
   await editor.getByLabel('Airline (ICAO)', { exact: true }).fill('RYR');

@@ -74,6 +74,13 @@ test('both electric rail types use the calculator benchmarks with cached route-c
   expect(results[0] / results[1]).toBeCloseTo(285 / 188, 12);
 });
 
+test('legacy unknown traction profiles resolve identically to diesel profiles', () => {
+  const legacy: Segment = JSON.parse(JSON.stringify({ ...segment, climateProfile: { mode: 'rail', traction: 'unknown' } }));
+  const diesel: Segment = { ...legacy, climateProfile: { mode: 'rail', traction: 'diesel' } };
+  expect(segmentClimate(trip, legacy, settings)).toEqual(segmentClimate(trip, diesel, settings));
+  expect(segmentClimate(trip, legacy, settings).result?.warnings[0].code).toBe('RAIL_DIESEL_APPROXIMATED');
+});
+
 test('invalid segments are isolated, totals sum valid estimates, and annual allocation is proportional', () => {
   const bad = { ...segment, id: 'bad', distanceStats: { ...segment.distanceStats!, totalDistance: -1 } };
   const result = tripClimate({ ...trip, segments: [segment, bad] }, settings);
