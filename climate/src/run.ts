@@ -113,7 +113,7 @@ export class Run {
     return v;
   }
 
-  finish(r: { directKg: number; upstreamKg: number; method: ClimateResult["method"]; includesRadiativeForcing: boolean; distanceKmUsed: number; aircraftTable?: boolean }): ClimateResult {
+  finish(r: { directKg: number; upstreamKg: number; method: ClimateResult["method"]; includesRadiativeForcing: boolean; distanceKmUsed: number; aircraftTable?: boolean; railEnergy?: boolean }): ClimateResult {
     const factorSets: ClimateResult["factorSets"] = {};
     if (this.defraYears.size) factorSets.defra = { yearUsed: Math.max(...this.defraYears) };
     if (this.gridYears.length) {
@@ -121,6 +121,7 @@ export class Run {
       factorSets.grid = { yearUsed: Math.max(...this.gridYears), level, source: "OWID/Ember" };
     }
     if (r.aircraftTable) factorSets.aircraft = { tableVersion: String(this.data.flight.year) };
+    if (r.railEnergy) factorSets.railEnergy = { yearUsed: this.data.railEnergy.year, source: this.data.railEnergy.source };
     return {
       co2eKg: r.directKg + r.upstreamKg,
       directKg: r.directKg,

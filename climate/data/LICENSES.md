@@ -15,6 +15,10 @@ Note: the citation above is for the electricity-mix page. Our file is OWID's ene
 Open Government Licence v3.0 (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 Required: "Contains public sector information licensed under the Open Government Licence v3.0." Add: "UK Government GHG Conversion Factors for Company Reporting <year>, DESNZ and DEFRA", and state that the data was processed.
 
+## Electric rail energy benchmarks (rail-energy.json)
+Numerical facts from the French transport-reporting order of 10 April 2012, Annex II, version in force from 1 June 2017 (amended 26 April 2017), passenger rail Level 1 defaults: https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253.
+Electric grandes lignes (inter-city): 20 kWh/train-km and 188 average passengers. High-speed electric: 20 kWh/train-km and 285 average passengers. Passenger averages account for empty running. Only numerical facts are reproduced; kWh/passenger-km values are derived by division. These are dated benchmark defaults, not current fleet measurements. Attribute and link the source in the app's methodology.
+
 ## Operator profiles (operators.csv, operator-layouts.csv)
 Facts (load factors, seat counts) with their source per row: Ryanair Form 20-F (SEC), Wizz Air traffic statistics, easyJet results presentation and website, Lufthansa Group Annual Report, Caspian Post (Turkish Airlines traffic); seat counts partly from Wikipedia fleet tables (check against airline sites before relying on them; Wikipedia text is CC BY-SA, we copy only facts).
 

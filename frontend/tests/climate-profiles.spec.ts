@@ -61,6 +61,19 @@ test('GPX flights use exact distances and explicit distance settings override au
   expect(segmentClimate(trip, { ...flight, climateProfile: { mode: 'flight', geometry: 'great_circle' } }, clean).result?.distanceKmUsed).toBe(108);
 });
 
+test('both electric rail types use the calculator benchmarks with cached route-country shares', () => {
+  const results = (['inter_city', 'high_speed'] as const).map(railType => {
+    const train: Segment = { ...segment, transportMode: 'rail', countryDistances: { HU: 75, DE: 25 }, climateProfile: { mode: 'rail', railType, traction: 'electric' } };
+    const actual = segmentClimate(trip, train, settings).result!;
+    const expected = calculate({ mode: 'rail', railType, traction: 'electric', date: '2026-06-01', distanceKm: 100, countryShares: { HUN: .75, DEU: .25 } });
+    expect(actual).toEqual(expected);
+    expect(actual.directKg).toBe(0);
+    expect(actual.factorSets.railEnergy?.yearUsed).toBe(2017);
+    return actual.co2eKg;
+  });
+  expect(results[0] / results[1]).toBeCloseTo(285 / 188, 12);
+});
+
 test('invalid segments are isolated, totals sum valid estimates, and annual allocation is proportional', () => {
   const bad = { ...segment, id: 'bad', distanceStats: { ...segment.distanceStats!, totalDistance: -1 } };
   const result = tripClimate({ ...trip, segments: [segment, bad] }, settings);

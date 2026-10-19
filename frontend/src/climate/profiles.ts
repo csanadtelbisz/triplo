@@ -11,7 +11,7 @@ import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 import { noEmissionResult, restoreClimateImpact } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 4;
+const CLIMATE_CALCULATION_VERSION = 5;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 

@@ -1,4 +1,4 @@
-import type { AircraftRow, FlightParams, SeatClass } from "./types";
+import type { AircraftRow, FlightParams, RailEnergyParams, SeatClass } from "./types";
 
 /** All numeric data the calculator needs; generated from data/*.csv by scripts/build-json.py. Tests can pass their own. */
 export interface DataBundle {
@@ -13,4 +13,5 @@ export interface DataBundle {
   operators: Record<string, { name: string; loadFactor: number }>;
   layouts: { operator: string; aircraft: string; seats: Record<SeatClass, number> }[];
   flight: FlightParams;
+  railEnergy: RailEnergyParams;
 }

@@ -120,6 +120,55 @@ test("rail: inter_city default assumes electric traction", () => {
   assert.deepEqual(r.warnings, []);
 });
 
+test("electric inter-city and high-speed use separate energy benchmarks, not mixed-traction CO2 factors", () => {
+  const factors = { ...defaultData.factors,
+    "elec.uk.generation": [[2026, .2]] as [number, number][],
+    "elec.uk.td": [[2026, .02]] as [number, number][],
+  };
+  // Neither the national diesel/electric mix nor the Eurostar CO2 row may feed these electric models.
+  delete factors["rail.national.ttw"];
+  delete factors["rail.international.ttw"];
+  const c = makeCalculator({ ...defaultData, factors, grid: { TST: [[2026, 400]] } });
+  const input = { mode: "rail", date: D, distanceKm: 100, countryShares: { TST: 1 } } as const;
+  const ic = c.calculate({ ...input, railType: "inter_city" });
+  const hs = c.calculate({ ...input, railType: "high_speed" });
+  // Independent golden values: 100 km × (20/188 or 20/285) kWh/pkm × 0.4 kg/kWh × 1.1 losses.
+  near(ic.co2eKg, 4.680851063829787, 1e-12);
+  near(hs.co2eKg, 3.087719298245614, 1e-12);
+  near(ic.co2eKg / hs.co2eKg, 285 / 188, 1e-12);
+  for (const r of [ic, hs]) {
+    assert.equal(r.directKg, 0);
+    assert.equal(r.upstreamKg, r.co2eKg);
+    assert.equal(r.method, "grid_kwh");
+    assert.deepEqual(r.factorSets.railEnergy, { yearUsed: 2017, source: "French transport reporting" });
+    assert.equal(r.factorSets.grid?.yearUsed, 2026);
+    assert.equal(r.factorSets.defra?.yearUsed, 2026);
+    assert.deepEqual(r.warnings, []);
+    assert.ok(!r.factorKeys.some(k => k.startsWith("rail.national") || k.startsWith("rail.international")));
+  }
+  assert.ok(ic.factorKeys.includes("rail.energy.inter_city.kwh_per_pkm"));
+  assert.ok(hs.factorKeys.includes("rail.energy.high_speed.kwh_per_pkm"));
+});
+
+test("electric rail retains route-country weighting, distance scaling and trip-year grid selection", () => {
+  const c = makeCalculator({ ...defaultData,
+    grid: { AAA: [[2020, 100], [2026, 200]], BBB: [[2020, 300], [2026, 600]] },
+    factors: { ...defaultData.factors, "elec.uk.generation": [[2020, .2], [2026, .2]], "elec.uk.td": [[2020, .02], [2026, .02]] },
+  });
+  for (const railType of ["inter_city", "high_speed"] as const) {
+    const input = { mode: "rail", date: D, distanceKm: 100, railType } as const;
+    const a = c.calculate({ ...input, countryShares: { AAA: 1 } });
+    const b = c.calculate({ ...input, countryShares: { BBB: 1 } });
+    const weighted = c.calculate({ ...input, countryShares: { AAA: 3, BBB: 1 } });
+    near(weighted.co2eKg, a.co2eKg * .75 + b.co2eKg * .25, 1e-12);
+    near(c.calculate({ ...input, distanceKm: 200, countryShares: { AAA: 1 } }).co2eKg, 2 * a.co2eKg, 1e-12);
+    const old = c.calculate({ ...input, date: "2020-05-01", countryShares: { AAA: 1 } });
+    near(old.co2eKg, a.co2eKg / 2, 1e-12);
+    assert.equal(old.factorSets.grid?.yearUsed, 2020);
+    assert.equal(old.factorSets.railEnergy?.yearUsed, 2017);
+  }
+});
+
 test("rail: explicitly unknown traction uses DEFRA national factor as is", () => {
   const r = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "unknown", countryShares: { FRA: 1 } });
   near(r.co2eKg, 3.989);

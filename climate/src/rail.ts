@@ -34,13 +34,22 @@ export function calcRail(run: Run, input: RailInput): ClimateResult {
     });
   }
 
-  // electric: implied energy use from DEFRA's UK factor, repriced with the grid of the travelled countries
-  const gen = run.factor("elec.uk.generation");
-  const td = run.factor("elec.uk.td");
-  const kwhPerPkm = run.factor(`rail.${row}.ttw`) / (gen + td); // DEFRA: generation plus T&D
+  let kwhPerPkm: number;
+  const benchmark = type === "inter_city" || type === "high_speed";
+  if (type === "inter_city" || type === "high_speed") {
+    // Matched electric-only energy defaults, independent of UK mixed-traction/Eurostar CO2 factors.
+    const energy = run.data.railEnergy[type];
+    kwhPerPkm = energy.kwhPerTrainKm / energy.passengers;
+    run.keys.add(`rail.energy.${type}.kwh_per_pkm`);
+    run.assume(`Electric ${type === "inter_city" ? "inter-city" : "high-speed"} benchmark: ${kwhPerPkm.toFixed(3)} kWh per passenger-km (${energy.kwhPerTrainKm} kWh per train-km / ${energy.passengers} average passengers, including empty running)`);
+  } else {
+    // Light rail/subway retain DEFRA's implied electric energy use.
+    const gen = run.factor("elec.uk.generation");
+    const td = run.factor("elec.uk.td");
+    kwhPerPkm = run.factor(`rail.${row}.ttw`) / (gen + td);
+    run.assume(`Implied energy use ${kwhPerPkm.toFixed(3)} kWh per passenger-km (DEFRA UK factor divided by UK generation plus T&D factor)`);
+  }
   const g = run.grid(input.countryShares, false);
-  const upstream = km * kwhPerPkm * (g / 1000) * (1 + td / gen);
-  run.assume(`Implied energy use ${kwhPerPkm.toFixed(3)} kWh per passenger-km (DEFRA UK factor divided by UK generation plus T&D factor)`);
-  if (type === "inter_city") run.assume("Electric inter-city: national rail factor treated as all-electric (overestimates energy)");
-  return run.finish({ directKg: 0, upstreamKg: upstream, method: "grid_kwh", includesRadiativeForcing: false, distanceKmUsed: km });
+  const upstream = km * kwhPerPkm * (g / 1000) * (1 + run.tdUplift());
+  return run.finish({ directKg: 0, upstreamKg: upstream, method: "grid_kwh", includesRadiativeForcing: false, distanceKmUsed: km, railEnergy: benchmark });
 }

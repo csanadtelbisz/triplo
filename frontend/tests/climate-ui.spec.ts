@@ -11,6 +11,24 @@ async function open(page: Page, seed = false) {
 const dialog = (page: Page) => page.locator('.climate-dialog').last();
 const climateCard = (page: Page) => page.locator('.trip-summary').filter({ has: page.getByRole('heading', { name: 'Climate Impact', exact: true }) });
 
+test('electric rail types show distinct estimates and dated benchmark provenance', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('rail');
+  await expect(card.locator('.climate-result')).toHaveText('2.4 kg CO₂e');
+  await card.getByText('Calculation details', { exact: true }).click();
+  await expect(card.getByText('Rail energy benchmark: 2017 (French transport reporting)', { exact: true })).toBeVisible();
+  await expect(card.getByText(/Electric inter-city benchmark: 0.106 kWh/)).toBeVisible();
+  await card.getByLabel('Rail type', { exact: true }).selectOption('high_speed');
+  await expect(card.locator('.climate-result')).toHaveText('1.6 kg CO₂e');
+  await expect(card.getByText(/Electric high-speed benchmark: 0.070 kWh/)).toBeVisible();
+  await expect(card.getByText(/Direct: 0.00 kg CO₂e/)).toBeVisible();
+  await card.getByText('Climate data and methodology', { exact: true }).click();
+  await expect(card.getByRole('link', { name: 'French transport-reporting benchmarks (2017)' })).toHaveAttribute('href', 'https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253');
+});
+
 test('named profiles, mode defaults, inherited values and overrides persist', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Add climate profile', exact: true }).click();

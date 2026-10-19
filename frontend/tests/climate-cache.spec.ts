@@ -60,6 +60,25 @@ test('transport defaults and trip defaults refresh the cache after preference ch
   expect(withClimateCache(scoped, settings).segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(4.604);
 });
 
+test('old electric rail estimates refresh and benchmark metadata survives compact persistence', () => {
+  for (const railType of ['inter_city', 'high_speed'] as const) {
+    const train: Segment = { ...segment, climateProfile: { mode: 'rail', railType, traction: 'electric' }, countryDistances: { HU: 75, DE: 25 } };
+    const current = withClimateCache({ ...trip, segments: [train] }, settings);
+    const entry = current.segments[0].climateImpact!;
+    const key = JSON.parse(entry.inputKey);
+    key.revision = '4:3b8b06da5efff08942007e96fedbfccc93a24ad0bb5045d0b54974826b08ab3c';
+    const old = { ...current, segments: [{ ...current.segments[0], climateImpact: { inputKey: JSON.stringify(key), result: { ...entry.result!, co2eKg: 999 } } }] };
+    const refreshed = withClimateCache(old, settings);
+    expect(refreshed.segments[0].climateImpact?.result).toEqual(entry.result);
+    expect(refreshed.segments[0].climateImpact?.inputKey).toBe(entry.inputKey);
+    const stored: Trip = JSON.parse(serializeTrip(refreshed));
+    expect(stored.segments[0].climateImpact?.result?.factorSets.railEnergy).toEqual({ yearUsed: 2017, source: 'French transport reporting' });
+    const hydrated = withClimateCache(stored, settings);
+    expect(hydrated.segments[0].climateImpact?.result).toEqual(entry.result);
+    expect(withClimateCache(hydrated, settings)).toBe(hydrated);
+  }
+});
+
 test('country-part arrival updates electric caches and saved compact segments retain their climate result', () => {
   const electric = { ...trip, segments: [{ ...segment, climateProfile: { mode: 'car' as const, fuelType: 'bev' as const } }] };
   const cached = withClimateCache(electric, settings);

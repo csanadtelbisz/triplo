@@ -96,6 +96,7 @@ export interface ClimateResult {
     defra?: { yearUsed: number };
     grid?: { yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember" };
     aircraft?: { tableVersion: string };
+    railEnergy?: { yearUsed: number; source: string };
   };
   factorKeys: string[];         // stable keys used (auditing)
   assumptions: string[];        // short human-readable lines
@@ -283,22 +284,22 @@ export interface RailInput extends CommonInput {
 }
 ```
 
-Internal mapping to the four DEFRA rail rows (your suggestion; the DEFRA row names are in brackets):
+Electric inter-city and high-speed rail use a matched pair of electric-only energy benchmarks from the [French transport-reporting order, Annex II](https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253), version in force from 1 June 2017. These Level 1 defaults are stored with their source in `climate/data/rail-energy.json`:
 
-| `railType` | DEFRA row | 2026 TTW (kg/pkm) |
-|---|---|---|
-| `inter_city` | National rail | 0.0309 |
-| `high_speed` | International rail (Eurostar) | 0.0114 |
-| `light_rail` | Light rail and tram | 0.0212 |
-| `subway` | London Underground | 0.0155 |
+| `railType` | kWh/train-km | Average passengers | Derived kWh/passenger-km |
+|---|---|---|---|
+| `inter_city` (electric grandes lignes) | 20 | 188 | 20 / 188 ≈ 0.10638 |
+| `high_speed` (electric) | 20 | 285 | 20 / 285 ≈ 0.07018 |
 
-Your reading is right: DEFRA has no TGV/Shinkansen-style row, and the Eurostar-based "International rail" row is the only high-speed one, so `high_speed` uses it for national routes too.
+Passenger averages account for empty running. These are dated regulatory benchmarks, not measured consumption for every train. Their difference reflects average passenger counts; on the same route and electricity mix, inter-city emissions are about **1.52 times** high-speed emissions. The benchmark year stays 2017 regardless of the trip date and is recorded separately in `factorSets.railEnergy` and the segment's calculation details.
 
 Calculation:
-- `light_rail`, `subway`, `high_speed` are electric by nature, and `inter_city` with `traction: "electric"`: implied energy `kWhPerPkm = DEFRA row / (UK generation + UK T&D factor of the same year)`, then `upstream = kWhPerPkm x gridIntensity(countryShares) x (1 + TD_UPLIFT)`, `direct = 0`. (Generation plus T&D, as you decided.)
-- `inter_city` with `traction: "unknown"`: the DEFRA national rail factor as is (it is a UK diesel/electric mix), no country scaling, **no warning**.
-- `inter_city` with `traction: "diesel"`: **can we do better than the UK mix? Not from these sources.** DEFRA publishes no diesel-only passenger rail factor, and no fuel consumption per passenger-km. So the national mix is used, with warning `RAIL_DIESEL_APPROXIMATED` (kept, as you decided). For `inter_city` + `electric`, the national rail row is also all treated as electric energy, which overestimates the kWh because the mix includes diesel; accepted as imprecise.
-- No other rail warnings (non-UK is the normal case). Rail is accepted as imprecise.
+- Electric `inter_city` (the default) and `high_speed`: `upstreamKg = distanceKm × kWhPerPkm × gridIntensity(countryShares) / 1000 × (1 + TD_UPLIFT)`, `directKg = 0`. Route-country grid intensity and DEFRA's grid-loss uplift use the closest available year to the trip. The UK mixed-traction national rail and Eurostar CO2 factors are **not** used to infer energy for these electric models.
+- `light_rail` and `subway` retain their existing electric model: implied energy = DEFRA light rail/tram or London Underground TTW factor / (UK generation + UK T&D factor of the same year), then the same route-grid calculation as above.
+- Explicitly selected legacy `inter_city` with `traction: "unknown"` retains DEFRA's national diesel/electric mix without country scaling. `traction: "diesel"` retains that approximation with warning `RAIL_DIESEL_APPROXIMATED`. Neither affects the electric defaults.
+- High-speed, light rail and subway are always electric; requesting diesel for them produces `INVALID_COMBINATION` and uses electricity.
+
+The benchmark data participates in the generated data revision. Changes to the energy defaults or calculation rules invalidate persisted segment climate estimates; compact serialization preserves the benchmark metadata.
 
 ---
 
@@ -406,7 +407,7 @@ No attribution is needed for values we compute ourselves, but derived tables inh
 
 ## 12. Decisions log and remaining points
 
-All earlier open points are settled: DEFRA flat files 2015-2026; Tier 2 flights use short-haul (up to 3 700 km) and long-haul rows; rail energy = DEFRA factor / (UK generation + T&D); RF 1.7 on the CO2 component only; the 8% uplift is already inside DEFRA's per-pkm factors; ferry without occupancy scaling; car size limits verified; **aircraft data from DEFRA Table 33** (the EEA/EUROCONTROL data is not used); **class weights from DEFRA Table 37**.
+All earlier open points are settled: DEFRA flat files 2015-2026; Tier 2 flights use short-haul (up to 3 700 km) and long-haul rows; electric inter-city/high-speed rail use distinct French 2017 energy benchmarks (section 6.3), while light rail/subway retain DEFRA-implied energy; RF 1.7 on the CO2 component only; the 8% uplift is already inside DEFRA's per-pkm factors; ferry without occupancy scaling; car size limits verified; **aircraft data from DEFRA Table 33** (the EEA/EUROCONTROL data is not used); **class weights from DEFRA Table 37**.
 
 Remaining (non-blocking, handled during implementation):
 - Seat-class shares per aircraft when no operator layout exists: DEFRA's band shares (Table 37).

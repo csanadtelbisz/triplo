@@ -35,6 +35,7 @@ export function SegmentClimateCard({ trip, segment, isReadOnly, onUpdateTrip }: 
       <p>Upstream: {result.upstreamKg.toFixed(2)} kg CO₂e <MaterialIcon name="info_outline" size={14} title="Emissions from producing and distributing fuel, and generating and supplying electricity." aria-label="About upstream emissions" /></p>
       {result.factorSets.defra && <p>DEFRA factors: {result.factorSets.defra.yearUsed}</p>}
       {result.factorSets.grid && <p>Electricity: {result.factorSets.grid.yearUsed} ({result.factorSets.grid.level})</p>}
+      {result.factorSets.railEnergy && <p>Rail energy benchmark: {result.factorSets.railEnergy.yearUsed} ({result.factorSets.railEnergy.source})</p>}
       {result.factorSets.aircraft && <p>Aircraft table: {/^\d{4}$/.test(result.factorSets.aircraft.tableVersion) ? result.factorSets.aircraft.tableVersion : defaultData.flight.year}</p>}
       {result.assumptions.map((a, i) => <p key={`a${i}`}>{a}</p>)}
       {result.warnings.map((w, i) => <p key={`w${i}`}>{w.message}</p>)}

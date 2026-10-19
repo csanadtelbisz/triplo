@@ -94,6 +94,7 @@ export interface ClimateResult {
     defra?: { yearUsed: number };
     grid?: { yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember" };
     aircraft?: { tableVersion: string };
+    railEnergy?: { yearUsed: number; source: string };
   };
   factorKeys: string[];
   assumptions: string[];
@@ -102,6 +103,14 @@ export interface ClimateResult {
 }
 
 export type BatchItem = { ok: true; result: ClimateResult } | { ok: false; error: string };
+
+/** Electric-only Level 1 benchmarks; passenger averages include empty running. */
+export interface RailEnergyParams {
+  year: number;
+  source: string;
+  inter_city: { kwhPerTrainKm: number; passengers: number };
+  high_speed: { kwhPerTrainKm: number; passengers: number };
+}
 
 export interface AircraftRow {
   model: string;
