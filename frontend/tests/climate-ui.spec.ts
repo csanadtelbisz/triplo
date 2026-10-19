@@ -46,7 +46,7 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await open(page, true);
   await page.getByRole('button', { name: 'trip', exact: true }).click();
   await expect(page.getByText('Total Climate Impact:', { exact: true }).locator('..')).toContainText('8.0 kg CO₂e');
-  await page.getByRole('button', { name: 'Trip climate defaults', exact: true }).click();
+  await page.getByRole('button', { name: 'Trip climate profile defaults', exact: true }).click();
   await dialog(page).getByLabel('Car', { exact: true }).selectOption('custom');
   await expect(dialog(page).getByLabel('Name', { exact: true })).toHaveCount(0);
   await dialog(page).getByLabel('Base algorithm', { exact: true }).selectOption('bus');
@@ -54,7 +54,7 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await dialog(page).getByRole('button', { name: 'Edit Car climate profile', exact: true }).click();
   await dialog(page).getByLabel('Bus type', { exact: true }).selectOption('local');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('heading', { name: 'Trip climate defaults', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trip climate profile defaults', exact: true })).toBeVisible();
   await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Total Climate Impact:', { exact: true }).locator('..')).toContainText('4.6 kg CO₂e');
   await expect(page.getByRole('columnheader', { name: 'Climate impact', exact: true })).toHaveAttribute('title', 'Kilograms CO₂e per traveller');

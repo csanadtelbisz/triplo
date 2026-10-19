@@ -10,7 +10,7 @@ import { climateCountryCodes } from './countryCodes';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 2;
+const CLIMATE_CALCULATION_VERSION = 3;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -41,7 +41,7 @@ export type ClimateSettings = ReturnType<typeof getClimateSettings>;
 export const builtInClimateProfiles: NamedClimateProfile[] = [
   { id: 'builtin:car', name: 'Car [built-in]', profile: { mode: 'car' } },
   { id: 'builtin:bus', name: 'Bus [built-in]', profile: { mode: 'bus' } },
-  { id: 'builtin:rail', name: 'Rail [built-in]', profile: { mode: 'rail' } },
+  { id: 'builtin:rail', name: 'Rail [built-in]', profile: { mode: 'rail', railType: 'inter_city', traction: 'electric' } },
   { id: 'builtin:flight', name: 'Flight [built-in]', profile: { mode: 'flight' } },
   { id: 'builtin:ferry', name: 'Ferry [built-in]', profile: { mode: 'ferry' } },
   { id: 'builtin:none', name: 'No emission', profile: { mode: 'none' } },

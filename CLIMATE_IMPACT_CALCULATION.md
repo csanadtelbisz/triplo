@@ -278,7 +278,7 @@ export type Traction = "electric" | "diesel" | "unknown";
 export interface RailInput extends CommonInput {
   mode: "rail";
   railType?: RailType;            // default "inter_city"
-  traction?: Traction;            // default "unknown"
+  traction?: Traction;            // default "electric"
   countryShares?: CountryShares;  // share of the distance per country (0..1 weights); default: world
 }
 ```
@@ -296,7 +296,7 @@ Your reading is right: DEFRA has no TGV/Shinkansen-style row, and the Eurostar-b
 
 Calculation:
 - `light_rail`, `subway`, `high_speed` are electric by nature, and `inter_city` with `traction: "electric"`: implied energy `kWhPerPkm = DEFRA row / (UK generation + UK T&D factor of the same year)`, then `upstream = kWhPerPkm x gridIntensity(countryShares) x (1 + TD_UPLIFT)`, `direct = 0`. (Generation plus T&D, as you decided.)
-- `inter_city` with `traction: "unknown"` (default): the DEFRA national rail factor as is (it is a UK diesel/electric mix), no country scaling, **no warning**.
+- `inter_city` with `traction: "unknown"`: the DEFRA national rail factor as is (it is a UK diesel/electric mix), no country scaling, **no warning**.
 - `inter_city` with `traction: "diesel"`: **can we do better than the UK mix? Not from these sources.** DEFRA publishes no diesel-only passenger rail factor, and no fuel consumption per passenger-km. So the national mix is used, with warning `RAIL_DIESEL_APPROXIMATED` (kept, as you decided). For `inter_city` + `electric`, the national rail row is also all treated as electric energy, which overestimates the kWh because the mix includes diesel; accepted as imprecise.
 - No other rail warnings (non-UK is the normal case). Rail is accepted as imprecise.
 
@@ -364,7 +364,7 @@ export function calculateMany(inputs: TravelInput[]): BatchItem[];     // BatchI
 | walk, hike, run, bike | `{ mode: "none" }` |
 | car, taxi | `{ mode: "car", ... }` (taxi: user's occupancy) |
 | bus | `{ mode: "bus" }` |
-| rail, subway | `{ mode: "rail" }` (algorithm defaults; subway can be configured in a custom profile) |
+| rail, subway | `{ mode: "rail", railType: "inter_city", traction: "electric" }` (built-in default; subway can be configured in a custom profile) |
 | flight | `{ mode: "flight", ... }` |
 | ferry | `{ mode: "ferry" }` |
 | other | whatever the user configured; if nothing: `{ mode: "none" }` |

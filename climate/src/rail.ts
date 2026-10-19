@@ -11,7 +11,7 @@ export function calcRail(run: Run, input: RailInput): ClimateResult {
     run.warn("RAIL_TYPE_UNKNOWN", `Unknown rail type "${type}"; inter_city used.`);
     type = "inter_city";
   }
-  let traction: Traction = input.traction ?? "unknown";
+  let traction: Traction = input.traction ?? "electric";
   const row = ROW[type];
 
   // light rail, subway and high speed are electric by nature

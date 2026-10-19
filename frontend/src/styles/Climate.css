@@ -20,9 +20,9 @@
 .climate-profiles-table td { padding: 6px 4px; }
 .climate-profile-actions { width: 120px; }
 .climate-profile-actions > div { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
-.climate-profile-actions .iconButton { padding: 2px; }
-.climate-profile-actions .climate-edit, .climate-add-profile { color: #1976d2; }
-.climate-profile-actions .climate-delete { color: #d32f2f; }
+.climate-profile-actions .iconButton { padding: 4px; }
+.climate-profile-actions .climate-edit, .climate-add-profile { color: #1976d2 !important; }
+.climate-profile-actions .climate-delete { color: #d32f2f !important; }
 .climate-add-profile { background: none; border: none; display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 0; font-size: .85rem; }
 .climate-preferences > .climate-attribution { margin: 0 0 12px; }
 .climate-details { font-size: .75rem; line-height: 1.5; opacity: .85; }
@@ -34,7 +34,6 @@
 .transport-mode-preferences .climate-default-select { padding: 4px 6px; font-size: .8rem; }
 .transport-mode-preferences input:disabled { background: #f5f5f5; color: #888; }
 .transport-mode-preferences input[aria-invalid=true] { border-color: red; background: #ffebee; }
-body.dark-mode .transport-mode-preferences input:not([type=checkbox]):not([type=color]), body.dark-mode .transport-mode-preferences select, body.dark-mode .transport-mode-preferences .iconButton { border-color: #aaa; }
 body.dark-mode .transport-mode-preferences select { background: #2a2e33; }
 body.dark-mode .transport-mode-preferences input[type=text]:disabled { background: #252a30; color: #999 !important; }
 .climate-trip-table { width: 100%; border-collapse: collapse; font-size: .85rem; }

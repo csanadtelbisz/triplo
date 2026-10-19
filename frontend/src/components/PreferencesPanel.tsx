@@ -384,9 +384,9 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     <td style={{ padding: '6px 4px' }}>{langName}</td>
                     <td style={{ padding: '6px 4px', width: '90px' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <button className="iconButton" style={{ padding: '2px' }} onClick={() => moveUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
-                        <button className="iconButton" style={{ padding: '2px' }} onClick={() => moveDown(idx)} disabled={idx === langPrefs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
-                        <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => deleteLang(idx)}><MaterialIcon name="delete" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px' }} onClick={() => moveUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px' }} onClick={() => moveDown(idx)} disabled={idx === langPrefs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px', color: '#d32f2f' }} onClick={() => deleteLang(idx)}><MaterialIcon name="delete" size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -406,8 +406,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                           <option key={l.code} value={l.code}>{l.name}</option>
                         ))}
                       </select>
-                      <button className="iconButton" style={{ padding: '2px', color: '#2e7d32' }} onClick={handleAddSubmit} disabled={!selectedNewLang}><MaterialIcon name="check" size={18} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => { setAddingLang(false); setSelectedNewLang(''); }}><MaterialIcon name="close" size={18} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#2e7d32' }} onClick={handleAddSubmit} disabled={!selectedNewLang}><MaterialIcon name="check" size={18} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#d32f2f' }} onClick={() => { setAddingLang(false); setSelectedNewLang(''); }}><MaterialIcon name="close" size={18} /></button>
                     </div>
                   ) : (
                     <button 
@@ -521,7 +521,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     </div>
                   </td>
                   <td style={{ padding: '6px 4px', textAlign: 'right', verticalAlign: 'middle', width: '30px' }}>
-                    <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => handleDeleteCustomMode(idx)} title="Delete mode"><MaterialIcon name="delete" size={20} /></button>
+                    <button className="iconButton" style={{ padding: '2px', color: '#d32f2f', border: 'none' }} onClick={() => handleDeleteCustomMode(idx)} title="Delete mode"><MaterialIcon name="delete" size={20} /></button>
                   </td>
                 </tr>
               ))}
@@ -553,10 +553,10 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                   </td>
                   <td style={{ padding: '6px 4px', width: '120px' }}>
                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigDown(idx)} disabled={idx === styleConfigs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); onEditingConfigChange(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#d32f2f', visibility: config.readonly ? 'hidden' : 'visible' }} onClick={() => handleDeleteStyleConfig(idx)} title="Delete" disabled={config.readonly}><MaterialIcon name="delete" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px' }} onClick={() => handleMoveStyleConfigUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px' }} onClick={() => handleMoveStyleConfigDown(idx)} disabled={idx === styleConfigs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); onEditingConfigChange(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#d32f2f', visibility: config.readonly ? 'hidden' : 'visible' }} onClick={() => handleDeleteStyleConfig(idx)} title="Delete" disabled={config.readonly}><MaterialIcon name="delete" size={16} /></button>
                     </div>
                   </td>
                 </tr>

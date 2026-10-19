@@ -113,8 +113,15 @@ test("grid year: closest year, ties to the later year, >10 years warns", () => {
   assert.equal(gridWarnings(at(2020)).length, 0); // exactly 10 years: no warning
 });
 
-test("rail: inter_city default uses DEFRA national factor as is, no warnings", () => {
+test("rail: inter_city default assumes electric traction", () => {
   const r = calculate({ mode: "rail", date: D, distanceKm: 100, countryShares: { FRA: 1 } });
+  const explicit = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "electric", countryShares: { FRA: 1 } });
+  near(r.co2eKg, explicit.co2eKg);
+  assert.deepEqual(r.warnings, []);
+});
+
+test("rail: explicitly unknown traction uses DEFRA national factor as is", () => {
+  const r = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "unknown", countryShares: { FRA: 1 } });
   near(r.co2eKg, 3.989);
   assert.deepEqual(r.warnings, []);
 });

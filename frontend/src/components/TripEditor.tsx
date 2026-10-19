@@ -1,4 +1,4 @@
-import { tripClimate } from '../climate/profiles';
+﻿import { tripClimate } from '../climate/profiles';
 import { useClimateSettings } from '../climate/useClimateSettings';
 import { TripClimateSettings } from './TripClimateSettings';
 import { useEffect, Fragment, useRef, useCallback, useState, useMemo } from 'react';
@@ -1508,7 +1508,7 @@ export function TripEditor({
          <div className="trip-summary">
            <h3 className="trip-summary-title">
              <MaterialIcon name="finance" size={18} /> Trip Summary
-             <button className="iconButton climate-settings-button" aria-label="Trip climate defaults" title="Trip climate defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
+             <button className="iconButton climate-settings-button" aria-label="Trip climate profile defaults" title="Trip climate profile defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
            </h3>
            <div className="trip-summary-total">
              <strong>Total Distance:</strong> {tripSummary.totalDistance.toFixed(1)} km

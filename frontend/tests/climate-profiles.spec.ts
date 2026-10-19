@@ -32,7 +32,7 @@ test('built-in and custom modes map correctly and zero routes remain zero', () =
   const builtInBus = { ...settings, builtIn: { car: { climateProfileId: 'builtin:bus' } } };
   expect(resolveClimateProfile(trip, segment, builtInBus)).toEqual({ name: 'Bus [built-in]', profile: { mode: 'bus' } });
   expect(resolveClimateProfile(trip, segment, { ...settings, builtIn: {} }).name).toBe('Car [built-in]');
-  expect(builtInClimateProfile('subway')).toEqual({ mode: 'rail' });
+  expect(builtInClimateProfile('subway')).toEqual({ mode: 'rail', railType: 'inter_city', traction: 'electric' });
   const other = { ...segment, transportMode: 'other' as const, customIcon: 'motorcycle' };
   const configured = { ...settings, custom: [{ icon: 'motorcycle', name: 'Motorbike', color: '', routingProfile: '', climateProfileId: 'own-car' }] };
   expect(resolveClimateProfile(trip, other, configured).profile).toEqual(profile.profile);

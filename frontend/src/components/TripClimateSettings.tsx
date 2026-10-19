@@ -17,7 +17,7 @@ export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onS
     const next = { ...current }; if (choice) next[key] = choice; else delete next[key]; return next;
   });
   return <>
-    <Dialog isOpen title="Trip climate defaults" onClose={onClose} className="climate-dialog" actions={<>
+    <Dialog isOpen title="Trip climate profile defaults" onClose={onClose} className="climate-dialog" actions={<>
       <button className="dialog-btn dialog-btn-cancel" onClick={onClose}>Cancel</button>
       <button className="dialog-btn dialog-btn-primary" onClick={() => onSave(Object.keys(profiles).length ? profiles : undefined)}>Save</button>
     </>}>
@@ -52,7 +52,7 @@ export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onS
           </td>
         </tr>;
       })}</tbody></table>
-      {modes.size === 0 && <p>Add a segment to set trip climate defaults.</p>}
+      {modes.size === 0 && <p>Add a segment to set trip climate profile defaults.</p>}
     </Dialog>
     {editing && <ClimateProfileDialog key={editing.key} initial={editing.profile} profiles={settings.profiles} onClose={() => setEditing(null)} onSave={profile => {
       setChoice(editing.key, { custom: profile }); setEditing(null);

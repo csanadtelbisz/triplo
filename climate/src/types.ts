@@ -61,6 +61,7 @@ export type Traction = "electric" | "diesel" | "unknown";
 export interface RailInput extends CommonInput {
   mode: "rail";
   railType?: RailType;
+  /** Default "electric" for inter-city rail. */
   traction?: Traction;
   countryShares?: CountryShares;
 }

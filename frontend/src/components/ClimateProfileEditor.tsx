@@ -52,7 +52,7 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
     {value.mode === 'bus' && select('Bus type', 'busType', value.busType || 'coach', ['coach', 'local'])}
     {value.mode === 'rail' && <>
       {select('Rail type', 'railType', value.railType || 'inter_city', ['high_speed', 'inter_city', 'light_rail', 'subway'])}
-      {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', value.traction || 'unknown', ['unknown', 'electric', 'diesel'])}
+      {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', value.traction || 'electric', ['unknown', 'electric', 'diesel'])}
       {value.traction === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
     </>}
     {value.mode === 'ferry' && <label className="climate-check"><input type="checkbox" checked={value.withVehicle || false} onChange={e => patch({ withVehicle: e.target.checked })} />Travelling with a car</label>}
@@ -69,7 +69,7 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
         if (e.target.validity.valid) patch({ seats: { ...value.seats, [c]: Number(e.target.value) } });
       }} /></label>)}
       {value.seats && !Object.values(value.seats).some(n => n && n > 0) && <small role="alert">Enter at least one seat; otherwise average flight factors will be used.</small>}
-      <small>Seat and load overrides apply when an aircraft type is recognized. Flight estimates always include radiative forcing.</small>
+      <small>Seat and load overrides apply when an aircraft type is recognized.</small>
     </>}
   </fieldset>;
 }
@@ -91,7 +91,7 @@ export function ClimateProfileDialog({ initial, profiles, named = false, initial
 
 export function ClimateAttribution() {
   return <details className="climate-attribution"><summary>Climate data and methodology</summary>
-    <p>Electricity uses the cached route country shares automatically. Estimates are well-to-wheel, per traveller, in kg CO₂e. Flights include radiative forcing. Vehicle manufacture is excluded.</p>
+    <p>Estimates are well-to-wheel, per traveller, in kg CO₂e. Flights include radiative forcing. Vehicle manufacture is excluded. The electricity source factors are computed based on crossed countries.</p>
     <p>UK Government GHG Conversion Factors for Company Reporting 2015–2026, DESNZ and DEFRA; processed into derived tables. Contains public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noreferrer">Open Government Licence v3.0</a>.</p>
     <p>Ember (2026) and other sources – with major processing by Our World in Data. Data: Ember, Energy Institute; processed by <a href="https://ourworldindata.org/energy" target="_blank" rel="noreferrer">Our World in Data</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>); filtered to country, year and electricity intensity.</p>
   </details>;
