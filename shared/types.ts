@@ -12,7 +12,7 @@ export interface NamedClimateProfile {
 export type ClimateProfileChoice = { profileId: string; name: string; profile: ClimateProfile } | { custom: ClimateProfile };
 
 export interface SegmentClimateImpact {
-  /** Canonical calculation inputs, including the calculator/data revision. */
+  /** Canonical inputs and calculator/data revision; "none" represents a zero-emission result. */
   inputKey: string;
   result?: ClimateResult;
   error?: string;

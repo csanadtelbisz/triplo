@@ -54,7 +54,7 @@ export function TripClimateSettings({ trip, onSave, onClose }: { trip: Trip; onS
       })}</tbody></table>
       {modes.size === 0 && <p>Add a segment to set trip climate profile defaults.</p>}
     </Dialog>
-    {editing && <ClimateProfileDialog key={editing.key} initial={editing.profile} profiles={settings.profiles} onClose={() => setEditing(null)} onSave={profile => {
+    {editing && <ClimateProfileDialog key={editing.key} initial={editing.profile} onClose={() => setEditing(null)} onSave={profile => {
       setChoice(editing.key, { custom: profile }); setEditing(null);
     }} />}
   </>;

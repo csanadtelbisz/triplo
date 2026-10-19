@@ -120,7 +120,7 @@ export class Run {
       const level = this.gridLevels.size > 1 ? "mixed" : ([...this.gridLevels][0] as "country" | "continent" | "world");
       factorSets.grid = { yearUsed: Math.max(...this.gridYears), level, source: "OWID/Ember" };
     }
-    if (r.aircraftTable) factorSets.aircraft = { tableVersion: this.data.version };
+    if (r.aircraftTable) factorSets.aircraft = { tableVersion: String(this.data.flight.year) };
     return {
       co2eKg: r.directKg + r.upstreamKg,
       directKg: r.directKg,

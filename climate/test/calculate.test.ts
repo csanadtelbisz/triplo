@@ -170,7 +170,7 @@ test("flight tier 1: A320neo 1000 km average passenger", () => {
   assert.equal(r.method, "aircraft_model");
   near(r.co2eKg, 156.78, 2e-3);
   near(r.distanceKmUsed, 1080);
-  assert.equal(r.factorSets.aircraft?.tableVersion, defaultData.version);
+  assert.equal(r.factorSets.aircraft?.tableVersion, String(defaultData.flight.year));
 });
 
 test("flight tier 1: economy passenger of the same aircraft", () => {
@@ -225,8 +225,9 @@ test("factor year: closest year, a warning beyond 10 years", () => {
 });
 
 test("historic DEFRA years are used: UK rail gets cleaner as the grid decarbonises", () => {
-  const old = calculate({ mode: "rail", railType: "inter_city", date: "2016-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
-  const now = calculate({ mode: "rail", railType: "inter_city", date: "2025-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
+  // Compare the UK national mix explicitly; the default now models electric traction.
+  const old = calculate({ mode: "rail", railType: "inter_city", traction: "unknown", date: "2016-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
+  const now = calculate({ mode: "rail", railType: "inter_city", traction: "unknown", date: "2025-05-01", distanceKm: 100, countryShares: { GBR: 1 } });
   assert.equal(old.factorSets.defra?.yearUsed, 2016);
   assert.ok(old.co2eKg > now.co2eKg);
 });

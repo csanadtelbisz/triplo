@@ -1,7 +1,7 @@
 import type { CarFuel, CarInput, CarSize, ClimateResult } from "./types";
 import { Run, requireDistance } from "./run";
 
-const DEFAULT_OCCUPANCY = 1.5; // UK National Travel Survey average
+export const DEFAULT_OCCUPANCY = 1.5; // UK National Travel Survey average
 const MAX_OCCUPANCY = 9;
 
 /** DEFRA row suffix per fuel type ("average" is DEFRA's "Unknown" fuel row). */

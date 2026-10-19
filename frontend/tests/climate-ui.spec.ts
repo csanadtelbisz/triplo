@@ -11,7 +11,7 @@ async function open(page: Page, seed = false) {
 const dialog = (page: Page) => page.locator('.climate-dialog').last();
 const climateCard = (page: Page) => page.locator('.trip-summary').filter({ has: page.getByRole('heading', { name: 'Climate Impact', exact: true }) });
 
-test('named profiles, mode defaults, inline copies and overrides persist', async ({ page }) => {
+test('named profiles, mode defaults, inherited values and overrides persist', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Add climate profile', exact: true }).click();
   await dialog(page).getByLabel('Name', { exact: true }).fill('My car');
@@ -25,12 +25,16 @@ test('named profiles, mode defaults, inline copies and overrides persist', async
   const card = climateCard(page);
   await expect(card.getByRole('radio', { name: 'Use transport mode default: My car', exact: true })).toBeChecked();
   await expect(card).toContainText('8.0 kg CO₂e');
+  await expect(card.getByLabel('Base algorithm', { exact: true })).toBeDisabled();
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('2');
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toBeDisabled();
+  await expect(card.getByLabel('Fuel consumption (L/100 km)', { exact: true })).toHaveValue('6');
   await card.getByRole('radio', { name: 'Custom', exact: true }).check();
   await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue('car');
   await expect(card.getByLabel('Name', { exact: true })).toHaveCount(0);
-  await card.getByLabel('Copy from:', { exact: true }).selectOption(profileId);
-  await card.getByRole('button', { name: 'Copy', exact: true }).click();
   await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('2');
+  await card.getByLabel('Occupancy (people)', { exact: true }).fill('');
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (1.5)');
   await card.getByLabel('Occupancy (people)', { exact: true }).fill('4');
   await expect(card).toContainText('4.0 kg CO₂e');
   await page.reload();
@@ -84,13 +88,12 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await expect(page.getByRole('heading', { name: 'Distance per Year', exact: true })).toBeVisible();
 });
 
-test('shared editor exposes every algorithm and Copy preserves the profile name', async ({ page }) => {
+test('shared editor exposes every algorithm without copying controls', async ({ page }) => {
   await open(page, true);
   await page.getByRole('button', { name: 'Add climate profile', exact: true }).click();
   const editor = dialog(page);
   await editor.getByLabel('Name', { exact: true }).fill('New profile');
-  await editor.getByLabel('Copy from:', { exact: true }).selectOption('own-car');
-  await editor.getByRole('button', { name: 'Copy', exact: true }).click();
+  await expect(editor.getByLabel('Copy from:', { exact: true })).toHaveCount(0);
   await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('New profile');
   await editor.getByLabel('Fuel type', { exact: true }).selectOption('bev');
   await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
@@ -101,6 +104,7 @@ test('shared editor exposes every algorithm and Copy preserves the profile name'
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
   await editor.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A20N');
   await editor.getByLabel('Airline (ICAO)', { exact: true }).fill('RYR');
+  await expect(editor.getByLabel('Passenger load factor (%)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (aircraft average)');
   await editor.getByLabel('Passenger load factor (%)', { exact: true }).fill('90');
   await editor.getByLabel('Override seat configuration', { exact: true }).check();
   await expect(editor.getByLabel('Economy seats', { exact: true })).toBeVisible();
@@ -224,4 +228,28 @@ test('climate analytics sort trips, omit zero-impact modes, and use neutral metr
   await page.getByRole('button', { name: 'Group by trip', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'bus Segments', exact: true })).toHaveCount(0);
   await expect(rows).toHaveCount(4);
+});
+
+test('built-in defaults are visible and flight placeholders and details show relevant defaults and years', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('1.5');
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toBeDisabled();
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toBeEnabled();
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('');
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (1.5)');
+  await card.getByLabel('Fuel type', { exact: true }).selectOption('petrol');
+  await expect(card.getByLabel('Fuel consumption (L/100 km)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (DEFRA average)');
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
+  await expect(card.getByLabel('Aircraft type (ICAO)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (DEFRA average)');
+  await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A20N');
+  await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (75%)');
+  await card.getByText('Calculation details', { exact: true }).click();
+  await expect(card.locator('.climate-details')).toContainText('Aircraft table: 2026');
+  await expect(card.locator('.climate-details')).not.toContainText('factors:2015');
+  await page.getByLabel('Read only', { exact: true }).check();
+  await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toBeDisabled();
+  await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toHaveValue('75');
 });

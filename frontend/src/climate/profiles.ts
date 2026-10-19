@@ -8,9 +8,10 @@ import { countryDistances } from '../countries/parts';
 import { modeKey } from '../countries/analytics';
 import { climateCountryCodes } from './countryCodes';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
+import { noEmissionResult, restoreClimateImpact } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 3;
+const CLIMATE_CALCULATION_VERSION = 4;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -111,12 +112,12 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
 
 function segmentClimateCache(trip: Trip, segment: Segment, settings: ClimateSettings): SegmentClimateImpact {
   const { input, undated } = climateInput(trip, segment, settings);
-  const inputKey = canonical({ revision: climateRevision, input, undated });
+  const inputKey = input.mode === 'none' ? 'none' : canonical({ revision: climateRevision, input, undated });
   const cached = segment.climateImpact?.inputKey === inputKey ? segment.climateImpact : computed.get(segment);
-  if (cached?.inputKey === inputKey && (cached.result || cached.error)) return cached;
+  if (cached?.inputKey === inputKey && (cached.result || cached.error || input.mode === 'none')) return restoreClimateImpact(cached);
   let next: SegmentClimateImpact;
   try {
-    const result = calculate(input);
+    const result = input.mode === 'none' ? noEmissionResult() : calculate(input);
     if (undated && input.mode !== 'none') result.assumptions.unshift(`No trip date: ${input.date.slice(0, 4)} factors selected`);
     next = { inputKey, result };
   } catch (error) {

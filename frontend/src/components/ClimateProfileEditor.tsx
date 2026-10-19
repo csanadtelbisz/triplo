@@ -1,19 +1,24 @@
 import { useId, useState } from 'react';
-import type { ClimateProfile, NamedClimateProfile } from '../../../shared/types';
+import type { ClimateProfile } from '../../../shared/types';
 import type { SeatClass } from '../../../climate/src/types';
 import { defaultData } from '../../../climate/src/generated/data';
+import { DEFAULT_OCCUPANCY } from '../../../climate/src/car';
+import { getFlightDefaults } from '../../../climate/src/flight';
 import { CAR_SIZE_EXAMPLES } from '../../../climate/src/examples';
 import { Dialog } from './Dialog';
 import '../styles/Climate.css';
 
 const text = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 const classes: SeatClass[] = ['economy', 'premium_economy', 'business', 'first'];
-export function ClimateProfileEditor({ value, onChange, profiles, name, onNameChange, disabled = false }: {
-  value: ClimateProfile; onChange: (profile: ClimateProfile) => void; profiles: NamedClimateProfile[];
+export function ClimateProfileEditor({ value, onChange, name, onNameChange, disabled = false, distanceKm, flightGeometry }: {
+  value: ClimateProfile; onChange: (profile: ClimateProfile) => void;
+  distanceKm?: number; flightGeometry?: 'exact' | 'great_circle';
   name?: string; onNameChange?: (name: string) => void; disabled?: boolean;
 }) {
-  const [copyId, setCopyId] = useState('');
   const id = useId();
+  const flightDefaults = value.mode === 'flight' && distanceKm !== undefined
+    ? getFlightDefaults({ ...value, distanceKm, geometry: value.geometry || flightGeometry }, defaultData) : undefined;
+  const automatic = (value: string | number) => `Automatic (${value})`;
   const patch = (options: object) => {
     const next = { ...value, ...options } as ClimateProfile;
     if (next.mode === 'car' && !['petrol', 'diesel', 'hybrid', 'lpg'].includes(next.fuelType || '')) delete next.exactFuelLPer100Km;
@@ -25,19 +30,13 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
       {values.map((v, i) => <option key={v} value={v}>{labels?.[i] || text(v)}</option>)}
     </select>
   </label>;
-  const number = (label: string, key: string, current: number | undefined, min: number, max?: number, scale = 1, placeholder = 'Automatic') => <label>{label}
-    <input type="number" min={min} max={max} step="any" placeholder={placeholder} value={current === undefined ? '' : current * scale} onChange={e => {
+  const number = (label: string, key: string, current: number | undefined, min: number, max?: number, scale = 1, fallback?: number, description = 'DEFRA average') => <label>{label}
+    <input type="number" min={min} max={max} step="any" placeholder={automatic(fallback === undefined ? description : `${Number((fallback * scale).toFixed(2))}${scale === 100 ? '%' : ''}`)} value={current === undefined ? disabled && fallback !== undefined ? fallback * scale : '' : current * scale} onChange={e => {
       if (e.target.validity.valid) patch({ [key]: e.target.value === '' ? undefined : Number(e.target.value) / scale });
     }} />
   </label>;
   return <fieldset className="climate-editor" disabled={disabled}>
     {onNameChange && <label>Name<input required value={name || ''} onChange={e => onNameChange(e.target.value)} /></label>}
-    <div className="climate-copy-row">
-      <label>Copy from:<select aria-label="Copy from:" value={copyId} onChange={e => setCopyId(e.target.value)}><option value="">Select climate profile…</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-      <button type="button" className="dialog-btn dialog-btn-secondary" disabled={!profiles.some(p => p.id === copyId)} onClick={() => {
-        const source = profiles.find(p => p.id === copyId); if (source) onChange(structuredClone(source.profile));
-      }}>Copy</button>
-    </div>
     <label>Base algorithm<select aria-label="Base algorithm" value={value.mode} onChange={e => onChange({ mode: e.target.value } as ClimateProfile)}>
       <option value="none">No emissions</option><option value="car">Car / taxi</option><option value="bus">Bus</option><option value="rail">Rail / subway</option><option value="flight">Flight</option><option value="ferry">Ferry</option>
     </select></label>
@@ -46,7 +45,7 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
       {select('Fuel type', 'fuelType', value.fuelType || 'average', ['average', 'petrol', 'diesel', 'hybrid', 'phev', 'bev', 'cng', 'lpg'], ['Average', 'Petrol', 'Diesel', 'Hybrid (petrol)', 'Plug-in hybrid', 'Electric (BEV)', 'CNG', 'LPG'])}
       {select('Car size', 'engineSize', value.engineSize || 'average', ['average', 'small', 'medium', 'large'])}
       {value.engineSize && value.engineSize !== 'average' && <small>Examples: {CAR_SIZE_EXAMPLES[value.engineSize][value.fuelType === 'bev' ? 'electric' : 'fuelBased'].join(', ')}</small>}
-      {number('Occupancy (people)', 'occupancy', value.occupancy, 1, 9, 1, '1.5')}
+      {number('Occupancy (people)', 'occupancy', value.occupancy, 1, 9, 1, DEFAULT_OCCUPANCY)}
       {['petrol', 'diesel', 'hybrid', 'lpg'].includes(value.fuelType || '') && number('Fuel consumption (L/100 km)', 'exactFuelLPer100Km', value.exactFuelLPer100Km, 0)}
     </>}
     {value.mode === 'bus' && select('Bus type', 'busType', value.busType || 'coach', ['coach', 'local'])}
@@ -59,11 +58,11 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
     {value.mode === 'flight' && <>
       {select('Distance basis', 'geometry', value.geometry || '', ['', 'great_circle', 'exact'], ['Automatic (track or great circle)', 'Great circle (+8% flown distance)', 'Exact flown track'])}
       {select('Cabin class', 'cabinClass', value.cabinClass || 'average', ['average', ...classes])}
-      <label>Aircraft type (ICAO)<input list={`${id}-aircraft`} placeholder="Automatic, e.g. A20N" value={value.aircraftType || ''} onChange={e => patch({ aircraftType: e.target.value.toUpperCase() || undefined })} /></label>
+      <label>Aircraft type (ICAO)<input list={`${id}-aircraft`} placeholder="Automatic (DEFRA average)" value={value.aircraftType || ''} onChange={e => patch({ aircraftType: e.target.value.toUpperCase() || undefined })} /></label>
       <datalist id={`${id}-aircraft`}>{[...new Map(defaultData.aircraft.flatMap(a => a.icao.map(code => [code, a.model] as const))).entries()].map(([code, model]) => <option key={code} value={code}>{model}</option>)}</datalist>
-      <label>Airline (ICAO)<input list={`${id}-operators`} placeholder="Automatic, e.g. RYR" value={value.operator || ''} onChange={e => patch({ operator: e.target.value.toUpperCase() || undefined })} /></label>
+      <label>Airline (ICAO)<input list={`${id}-operators`} placeholder="Automatic (UK-airline average)" value={value.operator || ''} onChange={e => patch({ operator: e.target.value.toUpperCase() || undefined })} /></label>
       <datalist id={`${id}-operators`}>{Object.entries(defaultData.operators).map(([code, operator]) => <option key={code} value={code}>{operator.name}</option>)}</datalist>
-      {number('Passenger load factor (%)', 'loadFactor', value.loadFactor, 0.01, 100, 100)}
+      {number('Passenger load factor (%)', 'loadFactor', value.loadFactor, 0.01, 100, 100, flightDefaults?.loadFactor, value.aircraftType ? 'aircraft average' : 'DEFRA average')}
       <label className="climate-check"><input type="checkbox" checked={!!value.seats} onChange={e => patch({ seats: e.target.checked ? { economy: 180 } : undefined })} />Override seat configuration</label>
       {value.seats && classes.map(c => <label key={c}>{text(c)} seats<input type="number" min="0" step="1" value={value.seats?.[c] ?? 0} onChange={e => {
         if (e.target.validity.valid) patch({ seats: { ...value.seats, [c]: Number(e.target.value) } });
@@ -74,8 +73,8 @@ export function ClimateProfileEditor({ value, onChange, profiles, name, onNameCh
   </fieldset>;
 }
 
-export function ClimateProfileDialog({ initial, profiles, named = false, initialName = '', onSave, onClose }: {
-  initial: ClimateProfile; profiles: NamedClimateProfile[]; named?: boolean; initialName?: string;
+export function ClimateProfileDialog({ initial, named = false, initialName = '', onSave, onClose }: {
+  initial: ClimateProfile; named?: boolean; initialName?: string;
   onSave: (profile: ClimateProfile, name: string) => void; onClose: () => void;
 }) {
   // The dialog mounts per editing session, so Cancel always discards the draft.
@@ -83,7 +82,7 @@ export function ClimateProfileDialog({ initial, profiles, named = false, initial
   const [name, setName] = useState(initialName);
   return <Dialog isOpen title={named ? 'Climate profile' : 'Custom climate profile'} onClose={onClose} className="climate-dialog">
     <form onSubmit={e => { e.preventDefault(); if (!named || name.trim()) onSave(profile, name.trim()); }}>
-      <ClimateProfileEditor value={profile} onChange={setProfile} profiles={profiles} name={name} onNameChange={named ? setName : undefined} />
+      <ClimateProfileEditor value={profile} onChange={setProfile} name={name} onNameChange={named ? setName : undefined} />
       <div className="dialog-actions"><button type="button" className="dialog-btn dialog-btn-cancel" onClick={onClose}>Cancel</button><button type="submit" className="dialog-btn dialog-btn-primary" disabled={named && !name.trim()}>Save</button></div>
     </form>
   </Dialog>;

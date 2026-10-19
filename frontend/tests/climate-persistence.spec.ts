@@ -19,6 +19,7 @@ test('real app persists climate caches, refreshes preference changes, and reload
     geometry: { type: 'LineString', coordinates: [[19, 47], [20, 47]] },
     waypoints: [{ id: 'a', coordinates: [19, 47] }, { id: 'b', coordinates: [20, 47] }],
   }] };
+  remote.segments.push({ ...remote.segments[0], id: 'walk', name: 'Walk', transportMode: 'walk' });
   let writes = 0;
   await context.route('https://api.github.com/**', route => {
     const url = route.request().url();
@@ -34,6 +35,7 @@ test('real app persists climate caches, refreshes preference changes, and reload
   await context.route('https://tiles.openfreemap.org/**', route => route.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background' }] } }));
   await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'empty-fixture', countries: [], attribution: 'Test boundaries' } }));
   await page.goto('/tests/country-app.html');
+  await expect(page.getByRole('heading', { name: /Cached climate trip/ })).toBeVisible({ timeout: 15000 });
   const browserCache = () => page.evaluate(() => new Promise<Trip[]>((resolve, reject) => {
     const request = indexedDB.open('TriploDB', 1);
     request.onerror = () => reject(request.error);
@@ -44,7 +46,7 @@ test('real app persists climate caches, refreshes preference changes, and reload
       read.onerror = () => { reject(read.error); db.close(); };
     };
   }));
-  await expect.poll(async () => (await browserCache())[0]?.segments[0].countryParts?.length).toBe(1);
+  await expect.poll(async () => (await browserCache())[0]?.segments[0].countryParts?.length, { timeout: 15000 }).toBe(1);
   await expect.poll(async () => (await browserCache())[0]?.segments[0].climateImpact?.result?.co2eKg || 0).toBeGreaterThan(0);
   await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
   await expect.poll(() => writes).toBe(1);
@@ -52,6 +54,8 @@ test('real app persists climate caches, refreshes preference changes, and reload
   expect(original.result?.co2eKg).toBeGreaterThan(0);
   expect(remote.segments[0].geometry).toBeUndefined();
   expect(remote.segments[0].distanceStats).toBeUndefined();
+  expect(remote.segments[0].climateImpact?.result).not.toHaveProperty('warnings');
+  expect(remote.segments[1].climateImpact).toEqual({ inputKey: 'none' });
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
   await page.evaluate(() => {
     const profiles = JSON.parse(localStorage.getItem('climateProfiles')!);
@@ -67,5 +71,6 @@ test('real app persists climate caches, refreshes preference changes, and reload
   await page.reload();
   await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled({ timeout: 15000 });
   await expect.poll(async () => (await browserCache())[0]?.segments[0].climateImpact?.inputKey).toBe(remote.segments[0].climateImpact!.inputKey);
+  await expect.poll(async () => (await browserCache())[0]?.segments[1].climateImpact?.result?.co2eKg).toBe(0);
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
 });

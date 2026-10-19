@@ -41,8 +41,9 @@ import type { AnalyticsSelection } from './countries/analytics';
 import { useCountryData } from './countries/useCountryData';
 import { getEffectiveGeometry } from './utils/effectiveGeometry';
 import { comparisonGeometry, getSegmentGeometry } from './utils/segmentGeometry';
-import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryTripInputs, tripForStorage, withSavedCountryParts } from './countries/cache';
+import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryTripInputs, withSavedCountryParts } from './countries/cache';
 import { getClimateSettings, withClimateCache } from './climate/profiles';
+import { serializeTrip } from './utils/serializeTrip';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -70,7 +71,7 @@ function stripMeta(trip: Trip, includeCaches = true): string {
       return { ...segment, geometry: segment.transportMode === 'flight' ? getEffectiveGeometry(trip.segments[index]) : comparisonGeometry(getSegmentGeometry(trip.segments[index])) };
     }) });
   }
-  const serialized = JSON.stringify(tripForStorage({ ...trip, metadata: undefined }));
+  const serialized = serializeTrip({ ...trip, metadata: undefined }, false);
   serializedTrips.set(trip, serialized);
   return serialized;
 }

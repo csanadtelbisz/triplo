@@ -36,7 +36,7 @@ export function ClimatePreferences() {
         <tr><td colSpan={2}><button className="climate-add-profile" onClick={() => setEditing({ id: crypto.randomUUID(), name: '', profile: { mode: 'car' } })}><MaterialIcon name="add" size={16} aria-hidden="true" />Add climate profile</button></td></tr>
       </tbody></table>
     </div>
-    {editing && <ClimateProfileDialog key={editing.id} initial={editing.profile} initialName={editing.name} named profiles={profiles.filter(p => p.id !== editing.id)} onClose={() => setEditing(null)} onSave={(profile, name) => {
+    {editing && <ClimateProfileDialog key={editing.id} initial={editing.profile} initialName={editing.name} named onClose={() => setEditing(null)} onSave={(profile, name) => {
       const next = { ...editing, profile, name };
       save(profiles.some(p => p.id === editing.id) ? profiles.map(p => p.id === editing.id ? next : p) : [...profiles, next]);
       setEditing(null);

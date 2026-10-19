@@ -1,7 +1,20 @@
 import type { AircraftRow, CabinClass, ClimateResult, FlightInput, SeatClass } from "./types";
 import { Run, requireDistance } from "./run";
+import type { DataBundle } from "./data";
 
 const CLASSES: SeatClass[] = ["economy", "premium_economy", "business", "first"];
+
+/** Resolve the same aircraft, layout and load defaults for calculations and editors. */
+export function getFlightDefaults(input: Pick<FlightInput, 'aircraftType' | 'operator' | 'distanceKm' | 'geometry'>, data: DataBundle) {
+  const rows = data.aircraft.filter(row => row.icao.includes(input.aircraftType?.toUpperCase() || ''));
+  if (!rows.length) return undefined;
+  const flownKm = input.distanceKm * (input.geometry === 'exact' ? 1 : 1 + data.flight.distanceUplift);
+  const reference = rows.reduce((a, b) => Math.abs(b.avgFlightKm - flownKm) < Math.abs(a.avgFlightKm - flownKm) ? b : a);
+  const operator = input.operator?.toUpperCase();
+  const layout = data.layouts.find(row => row.operator === operator && reference.icao.includes(row.aircraft));
+  const seats = layout?.seats || Object.fromEntries(CLASSES.map(c => [c, reference.seats * data.flight.classSeatShares[reference.bodyType][c]])) as Record<SeatClass, number>;
+  return { reference, layout, seats, loadFactor: operator && data.operators[operator] ? data.operators[operator].loadFactor : reference.loadFactor };
+}
 
 function interpolate(points: { x: number; y: number }[], x: number): number {
   const p = [...points].sort((a, b) => a.x - b.x);
@@ -60,7 +73,8 @@ function tier2(run: Run, cabin: CabinClass, gcKm: number, flownKm: number): Clim
 // ---------------------------------------------------------------- tier 1: aircraft model
 function tier1(run: Run, input: FlightInput, rows: AircraftRow[], cabin: CabinClass, flownKm: number): ClimateResult | null {
   const P = run.data.flight;
-  const ref = rows.reduce((a, b) => (Math.abs(b.avgFlightKm - flownKm) < Math.abs(a.avgFlightKm - flownKm) ? b : a));
+  const defaults = getFlightDefaults(input, run.data)!;
+  const ref = defaults.reference;
   const body = ref.bodyType;
   const efPoints = rows.map((r) => ({ x: r.avgFlightKm, y: r.kgCo2PerVkm }));
   const minKm = Math.min(...efPoints.map((p) => p.x)), maxKm = Math.max(...efPoints.map((p) => p.x));
@@ -81,16 +95,14 @@ function tier1(run: Run, input: FlightInput, rows: AircraftRow[], cabin: CabinCl
     seats = { economy: 0, premium_economy: 0, business: 0, first: 0, ...input.seats };
     run.assume("Seat configuration given by the caller");
   } else if (op) {
-    const lay = run.data.layouts.find((l) => l.operator === op && ref.icao.includes(l.aircraft));
+    const lay = defaults.layout;
     if (lay) {
       seats = lay.seats;
       run.assume(`Seat layout of ${op} for ${lay.aircraft}`);
     }
   }
   if (!seats) {
-    const shares = P.classSeatShares[body];
-    seats = {} as Record<SeatClass, number>;
-    for (const c of CLASSES) seats[c] = ref.seats * shares[c];
+    seats = defaults.seats;
     run.assume(`${ref.model}: ${ref.seats} seats (DEFRA UK-airline average), DEFRA class shares for ${body}-body`);
   }
   const totalSeats = CLASSES.reduce((a, c) => a + seats![c], 0);
@@ -106,11 +118,11 @@ function tier1(run: Run, input: FlightInput, rows: AircraftRow[], cabin: CabinCl
     lf = undefined;
   }
   if (lf === undefined && op && run.data.operators[op]) {
-    lf = run.data.operators[op].loadFactor;
+    lf = defaults.loadFactor;
     run.assume(`Load factor ${lf} (operator ${op})`);
   }
   if (lf === undefined) {
-    lf = ref.loadFactor;
+    lf = defaults.loadFactor;
     run.assume(`Load factor ${lf} (DEFRA UK-airline average for ${ref.model})`);
   }
 

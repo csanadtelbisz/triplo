@@ -4,6 +4,7 @@ import { countryPartStats, getSegmentGeometry, samePosition, sameSegmentGeometry
 import { segmentKey } from './types';
 import type { CountryData } from './types';
 import { getClimateSettings, withClimateCache } from '../climate/profiles';
+import { compactClimateImpact } from '../climate/cache';
 
 export const canPersistCountryParts = (trip: Trip) => !trip.metadata?.isSharedTripReference;
 
@@ -14,7 +15,9 @@ export function withSavedCountryParts(working: Trip, saved: Trip): Trip {
   const segments = working.segments.map(segment => {
     const original = originals.get(segment.id);
     if (!original) return segment;
-    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances, segment.climateImpact]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances, original.climateImpact])) return segment;
+    const climate = segment.climateImpact && compactClimateImpact(segment.climateImpact);
+    const savedClimate = original.climateImpact && compactClimateImpact(original.climateImpact);
+    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances, climate]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances, savedClimate])) return segment;
     const content = { ...segment };
     for (const field of ['geometry', 'countryParts', 'countryDistances', 'climateImpact'] as const) {
       delete content[field];

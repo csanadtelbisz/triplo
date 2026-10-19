@@ -22,11 +22,13 @@ test('segment climate results persist and are reused after JSON reload without r
   expect(cached.segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(7.96782);
   expect(withClimateCache(cached, settings)).toBe(cached);
   const restored: Trip = JSON.parse(serializeTrip(cached));
-  expect(withClimateCache(restored, settings)).toBe(restored);
-  expect(segmentClimate(restored, restored.segments[0], settings)).toBe(restored.segments[0].climateImpact);
+  const hydrated = withClimateCache(restored, settings);
+  expect(hydrated.segments[0].climateImpact?.result).toEqual(cached.segments[0].climateImpact?.result);
+  expect(withClimateCache(hydrated, settings)).toBe(hydrated);
+  expect(segmentClimate(hydrated, hydrated.segments[0], settings)).toBe(hydrated.segments[0].climateImpact);
   expect(restored.segments[0].climateImpact?.result?.factorSets.defra?.yearUsed).toBe(2026);
   const renamed = { ...restored, name: 'Renamed trip', segments: [{ ...restored.segments[0], name: 'Renamed segment' }] };
-  expect(withClimateCache(renamed, settings)).toBe(renamed);
+  expect(withClimateCache(renamed, settings).segments[0].climateImpact?.result).toEqual(cached.segments[0].climateImpact?.result);
 });
 
 test('distance, date, algorithm, profile and calculator revisions invalidate the cache', () => {
@@ -102,4 +104,49 @@ test('cold reload reuses climate caches after multi-country and flight distance 
   const stored: Trip = JSON.parse(serializeTrip(split));
   const restored = computeTripCaches(stored);
   expect(restored.segments.map(s => s.climateImpact?.inputKey)).toEqual(stored.segments.map(s => s.climateImpact?.inputKey));
+  expect(serializeTrip(withSavedCountryParts(restored, stored))).toBe(serializeTrip(restored));
+});
+
+test('compact JSON omits default result fields and encodes zero emissions with one short marker', () => {
+  const cached = withClimateCache({ ...trip, segments: [
+    { ...segment, id: 'none', climateProfile: { mode: 'none' } },
+    segment,
+    { ...segment, id: 'electric', climateProfile: { mode: 'car', fuelType: 'bev' }, countryDistances: { HU: 100 } },
+    { ...segment, id: 'bus', climateProfile: { mode: 'bus' } },
+    { ...segment, id: 'rail', climateProfile: { mode: 'rail' }, countryDistances: { HU: 100 } },
+    { ...segment, id: 'aircraft', climateProfile: { mode: 'flight', aircraftType: 'A20N' } },
+    { ...segment, id: 'ferry', climateProfile: { mode: 'ferry' } },
+    { ...segment, id: 'fallback', climateProfile: { mode: 'flight', aircraftType: 'UNKNOWN' } },
+  ] }, settings);
+  const serialized = serializeTrip(cached);
+  const stored: Trip = JSON.parse(serialized);
+  expect(stored.segments[0].climateImpact).toEqual({ inputKey: 'none' });
+  expect(JSON.stringify(stored.segments[0].climateImpact).length).toBeLessThan(25);
+  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('scope');
+  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('status');
+  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('warnings');
+  expect(stored.segments[2].climateImpact?.result).not.toHaveProperty('directKg');
+  expect(stored.segments[7].climateImpact?.result?.status).toBe('fallback');
+  expect(stored.segments[7].climateImpact?.result?.warnings.length).toBeGreaterThan(0);
+  const restored = withClimateCache(stored, settings);
+  expect(restored.segments.map(s => s.climateImpact?.result)).toEqual(cached.segments.map(s => s.climateImpact?.result));
+  expect(withClimateCache(restored, settings)).toBe(restored);
+  expect(serializeTrip(restored)).toBe(serialized);
+  expect(JSON.parse(serializeTrip(restored, false))).toEqual(stored);
+  // Expanded caches from previous versions remain supported as well.
+  const expanded: Trip = JSON.parse(JSON.stringify(cached));
+  expect(withClimateCache(expanded, settings)).toBe(expanded);
+});
+
+test('a restored zero marker invalidates when the segment starts emitting and errors remain intact', () => {
+  const cached = withClimateCache({ ...trip, segments: [{ ...segment, climateProfile: { mode: 'none' } }] }, settings);
+  const stored: Trip = JSON.parse(serializeTrip(cached));
+  expect(segmentClimate(stored, stored.segments[0], settings).result?.co2eKg).toBe(0);
+  const emitting = withClimateCache({ ...stored, segments: [{ ...stored.segments[0], climateProfile: { mode: 'bus' } }] }, settings);
+  expect(emitting.segments[0].climateImpact?.result?.co2eKg).toBeGreaterThan(0);
+  expect(emitting.segments[0].climateImpact?.inputKey).not.toBe('none');
+  const invalid = withClimateCache({ ...trip, startDate: 'invalid' }, settings);
+  const restored: Trip = JSON.parse(serializeTrip(invalid));
+  expect(withClimateCache(restored, settings)).toBe(restored);
+  expect(restored.segments[0].climateImpact?.error).toContain('Invalid date');
 });
