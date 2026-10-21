@@ -44,9 +44,17 @@ country code, GeoJSON `geometry`, and `distanceStats` (kilometres and elevation)
 Together the parts replace the segment's full `geometry`, aggregate
 `distanceStats`, and old `countryDistances`; the full route is not duplicated.
 Re-entry stays in route order, for example HU → SK → HU. Waypoints and their
-`waypointDistances` remain unchanged. Imported GPX tracks retain their full
+`waypointDistances` remain in the trip. Imported GPX tracks retain their full
 source geometry, including portions outside the current waypoints; only the
 traversed portions contribute country statistics and map cropping.
+
+Saved JSON keeps two-space indentation, with geometry objects, coordinate
+arrays, and individual distance-stat blocks on one line. Waypoint coordinates
+are rounded to at most 7 decimal places; distances (kilometres), including
+country/mode totals, to 5; and elevation totals (metres) to 2. Elevation up/down
+are omitted when `hasElevation` is false and restored as zero when caches load.
+Rounding happens only during serialization; runtime measurements and segment
+geometry coordinates retain their existing precision.
 
 A bounded A → B → A excursion is attributed entirely to A when its whole path
 stays within 10 metres of A. The check includes the interiors of sparse edges,

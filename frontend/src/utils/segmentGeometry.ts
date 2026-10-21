@@ -36,8 +36,8 @@ export function countryPartStats(segment: Segment): SegmentDistanceStats | undef
   return segment.countryParts.reduce<SegmentDistanceStats>((sum, part) => ({
     totalDistance: sum.totalDistance + part.distanceStats.totalDistance,
     hasElevation: sum.hasElevation || part.distanceStats.hasElevation,
-    elevationUp: sum.elevationUp + part.distanceStats.elevationUp,
-    elevationDown: sum.elevationDown + part.distanceStats.elevationDown,
+    elevationUp: sum.elevationUp + (part.distanceStats.elevationUp ?? 0),
+    elevationDown: sum.elevationDown + (part.distanceStats.elevationDown ?? 0),
   }), { totalDistance: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 });
 }
 

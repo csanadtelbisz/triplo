@@ -61,10 +61,15 @@ test('country-part files retain GPX tails, editor measurements, exports, and cou
   expect(saved.segments[0]).not.toHaveProperty('geometry');
   expect(saved.segments[0]).not.toHaveProperty('distanceStats');
   expect(saved.segments[0]).not.toHaveProperty('countryDistances');
-  expect(saved.segments[0].waypointDistances).toEqual(original.segments[0].waypointDistances);
+  saved.segments[0].waypointDistances!.forEach((stats, i) => {
+    const source = original.segments[0].waypointDistances![i];
+    expect(Math.abs(stats.distanceKm - source.distanceKm)).toBeLessThanOrEqual(.0000051);
+    expect(Math.abs(stats.elevationUp - source.elevationUp)).toBeLessThanOrEqual(.0051);
+    expect(Math.abs(stats.elevationDown - source.elevationDown)).toBeLessThanOrEqual(.0051);
+  });
   const restored = computeTripCaches(saved);
-  expect(restored.segments[0].waypointDistances).toEqual(original.segments[0].waypointDistances);
-  expect(restored.segments[0].distanceStats!.totalDistance).toBeCloseTo(original.segments[0].distanceStats!.totalDistance, 10);
+  expect(restored.segments[0].waypointDistances).toEqual(saved.segments[0].waypointDistances);
+  expect(restored.segments[0].distanceStats!.totalDistance).toBeCloseTo(original.segments[0].distanceStats!.totalDistance, 4);
   expect(getSegmentGeometry(restored.segments[0])!.coordinates[0]).toEqual([-2, 0, 0]);
   expect(getSegmentGeometry(restored.segments[0])!.coordinates.at(-1)).toEqual([2, 0, 40]);
   const country = resultFromParts(restored.segments[0]);
