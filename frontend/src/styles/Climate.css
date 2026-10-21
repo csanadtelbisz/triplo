@@ -25,7 +25,9 @@
 .climate-preferences > .climate-attribution { margin: 0 0 12px; }
 .climate-details { font-size: .75rem; line-height: 1.5; opacity: .85; }
 .climate-details summary { cursor: pointer; }
-.climate-info-button { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 32px; height: 32px; padding: 4px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.climate-info-button { position: relative; display: inline-flex; align-items: center; justify-content: center; vertical-align: -2px; width: 18px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+/* Keep the touch target large without increasing the text line's height. */
+.climate-info-button::after { content: ''; position: absolute; width: 32px; height: 32px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 .climate-info-button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 .climate-info-text { display: block; margin: 4px 0 8px; padding: 4px 8px; border-left: 2px solid var(--border-color, #aaa); }
 .climate-info-text[hidden] { display: none; }
