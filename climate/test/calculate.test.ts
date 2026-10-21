@@ -284,6 +284,24 @@ test("flight tier 1: class weights follow the aircraft body type, not the distan
   near(b.co2eKg / e.co2eKg, 2.9, 1e-9); // wide-body weight business 2.9 vs economy 1
 });
 
+test("flight details report the actual cabin weight and average-cabin allocation", () => {
+  for (const [aircraftType, cabinClass, weight] of [
+    ['A20N', 'economy', 1], ['A20N', 'business', 1.5], ['B77W', 'business', 2.9], ['B77W', 'first', 4], ['B77W', 'premium_economy', 1.6],
+  ] as const) {
+    const result = calculate({ mode: 'flight', date: D, distanceKm: 1000, aircraftType, cabinClass });
+    assert.ok(result.assumptions.some(a => a.startsWith(`Seat weight: ${weight} × economy (`)));
+  }
+  const average = calculate({ mode: 'flight', date: D, distanceKm: 1000, aircraftType: 'B77W' });
+  assert.ok(average.assumptions.includes('Seat weight: equal weighting across occupied seats (average cabin)'));
+});
+
+test("flight details identify embedded DEFRA weights using the effective short-haul cabin", () => {
+  for (const [cabinClass, effective] of [['first', 'business'], ['premium_economy', 'economy'], ['average', 'average']] as const) {
+    const result = calculate({ mode: 'flight', date: D, distanceKm: 1000, cabinClass });
+    assert.ok(result.assumptions.includes(`Seat weight: included in the DEFRA short-haul ${effective} passenger factor`));
+  }
+});
+
 test("flight: unknown aircraft type warns and uses DEFRA averages", () => {
   const r = calculate({ mode: "flight", date: D, distanceKm: 1000, aircraftType: "ZZZZ" });
   assert.equal(r.warnings[0].code, "AIRCRAFT_TYPE_UNKNOWN");

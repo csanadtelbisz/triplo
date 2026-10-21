@@ -61,6 +61,7 @@ function tier2(run: Run, cabin: CabinClass, gcKm: number, flownKm: number): Clim
   }
   const base = `flight.${band}.${cls}`;
   run.assume(`DEFRA ${band}-haul average factors (up to ${P.shortHaulMaxKm} km short-haul); 8% distance uplift already included in the factors`);
+  run.assume(`Seat weight: included in the DEFRA ${band}-haul ${cls === "avg" ? "average" : cls.replaceAll("_", " ")} passenger factor`);
   return run.finish({
     directKg: gcKm * run.factor(`${base}.rf`),
     upstreamKg: gcKm * run.factor(`${base}.wtt`),
@@ -132,9 +133,11 @@ function tier1(run: Run, input: FlightInput, rows: AircraftRow[], cabin: CabinCl
   let perPaxFactor: number;
   if (cabin === "average") {
     perPaxFactor = 1 / (lf * totalSeats); // whole flight divided by occupied seats
+    run.assume("Seat weight: equal weighting across occupied seats (average cabin)");
   } else {
     if (!(seats[cabin] > 0)) run.warn("CLASS_NOT_IN_LAYOUT", `${cabin} has no seats in this configuration; calculated as if it existed.`);
     perPaxFactor = w[cabin] / weighted / lf;
+    run.assume(`Seat weight: ${w[cabin]} × economy (${cabin.replaceAll("_", " ")}, ${body}-body aircraft)`);
   }
 
   const direct = (tripCo2 * P.rfMultiplier + fuelKg * nonCo2PerKg) * perPaxFactor;

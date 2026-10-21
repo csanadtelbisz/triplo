@@ -143,6 +143,26 @@ test('direct and upstream explanations toggle with touch and keyboard even in re
   await page.screenshot({ path: '/tmp/triplo-climate-touch-explanations.png', fullPage: true });
 });
 
+test('flight details disclose seat weights for selected cabins and explain averaged factors', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
+  await card.getByText('Calculation details', { exact: true }).click();
+  await expect(card.getByText('Seat weight: included in the DEFRA short-haul average passenger factor', { exact: true })).toBeVisible();
+  await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A20N');
+  await expect(card.getByText('Seat weight: equal weighting across occupied seats (average cabin)', { exact: true })).toBeVisible();
+  await card.getByLabel('Cabin class', { exact: true }).selectOption('business');
+  await expect(card.getByText('Seat weight: 1.5 × economy (business, narrow-body aircraft)', { exact: true })).toBeVisible();
+  await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('B77W');
+  await expect(card.getByText('Seat weight: 2.9 × economy (business, wide-body aircraft)', { exact: true })).toBeVisible();
+  await card.getByLabel('Cabin class', { exact: true }).selectOption('first');
+  await expect(card.getByText('Seat weight: 4 × economy (first, wide-body aircraft)', { exact: true })).toBeVisible();
+  await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('');
+  await expect(card.getByText('Seat weight: included in the DEFRA short-haul business passenger factor', { exact: true })).toBeVisible();
+});
+
 test('named profiles, mode defaults, inherited values and overrides persist', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Add climate profile', exact: true }).click();
