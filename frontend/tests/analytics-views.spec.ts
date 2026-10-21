@@ -100,6 +100,7 @@ test('scatter supports mouse, keyboard and finger scrubbing with a fixed trip-na
   const a = chart.locator('[data-trip-id="first"]'), b = chart.locator('[data-trip-id="second"]');
   await expect(a).toHaveAttribute('cy', '24');
   await expect(chart.locator('[data-trip-id="walk"]')).toHaveAttribute('cx', '305');
+  for (const label of await chart.locator('.trip-scatter-grid text').allTextContents()) expect(label).not.toMatch(/[.,]\d$/);
   const readout = page.locator('.trip-scatter-readout');
   const before = await readout.boundingBox();
   const center = async (point: typeof a) => { const box = (await point.boundingBox())!; return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; };

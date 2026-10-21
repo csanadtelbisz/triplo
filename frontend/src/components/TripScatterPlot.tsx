@@ -43,8 +43,8 @@ export function TripScatterPlot({ points }: { points: TripScatterPoint[] }) {
       onTouchStart={event => event.stopPropagation()} onTouchMove={event => event.stopPropagation()} onTouchEnd={event => event.stopPropagation()}>
       {[0, .5, 1].map(fraction => <g key={fraction} className="trip-scatter-grid">
         <line x1={left} x2={right} y1={bottom - fraction * (bottom - top)} y2={bottom - fraction * (bottom - top)} />
-        <text x={left - 7} y={bottom - fraction * (bottom - top) + 4} textAnchor="end">{(maxImpact * fraction).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>
-        <text x={left + fraction * (right - left)} y={bottom + 18} textAnchor="middle">{(maxDistance * fraction).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>
+        <text x={left - 7} y={bottom - fraction * (bottom - top) + 4} textAnchor="end">{(maxImpact * fraction).toLocaleString(undefined, { maximumFractionDigits: 0 })}</text>
+        <text x={left + fraction * (right - left)} y={bottom + 18} textAnchor="middle">{(maxDistance * fraction).toLocaleString(undefined, { maximumFractionDigits: 0 })}</text>
       </g>)}
       <path className="trip-scatter-axes" d={`M ${left} ${top} V ${bottom} H ${right}`} />
       <g role="img" aria-label="Climate impact in kilograms CO₂e"><title>Climate impact (kg CO₂e)</title><text className="trip-scatter-axis-label" x={left} y={12} textAnchor="middle">kg CO₂e</text></g>

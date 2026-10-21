@@ -332,6 +332,8 @@ test('newly added airlines appear in the profile editor and supply their load fa
   await card.getByRole('radio', { name: 'Custom', exact: true }).check();
   await card.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
   await expect(card.locator('datalist option[value="ACA"]')).toHaveText('Air Canada');
+  // ROT/SEH have layouts only; EZS/RUK have operator factors only.
+  for (const code of ['ROT', 'SEH', 'EZS', 'RUK']) await expect(card.locator(`datalist option[value="${code}"]`)).toHaveCount(1);
   await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A320');
   await card.getByLabel('Airline (ICAO)', { exact: true }).fill('ACA');
   await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (84.6%)');

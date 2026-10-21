@@ -12,6 +12,9 @@ import '../styles/Climate.css';
 
 const text = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 const classes: SeatClass[] = ['economy', 'premium_economy', 'business', 'first'];
+const airlines = [...new Set([...Object.keys(defaultData.operators), ...defaultData.layouts.map(layout => layout.operator)])]
+  .map(code => ({ code, name: defaultData.operators[code]?.name || code }))
+  .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
 export function ClimateProfileEditor({ value, onChange, name, onNameChange, disabled = false, distanceKm, flightGeometry }: {
   value: ClimateProfile; onChange: (profile: ClimateProfile) => void;
   distanceKm?: number; flightGeometry?: 'exact' | 'great_circle';
@@ -63,7 +66,7 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
       <label>Aircraft type (ICAO)<input list={`${id}-aircraft`} placeholder="Automatic (DEFRA average)" value={value.aircraftType || ''} onChange={e => patch({ aircraftType: e.target.value.toUpperCase() || undefined })} /></label>
       <datalist id={`${id}-aircraft`}>{[...new Map(defaultData.aircraft.flatMap(a => a.icao.map(code => [code, a.model] as const))).entries()].map(([code, model]) => <option key={code} value={code}>{model}</option>)}</datalist>
       <label>Airline (ICAO)<input list={`${id}-operators`} placeholder="Automatic (UK-airline average)" value={value.operator || ''} onChange={e => patch({ operator: e.target.value.toUpperCase() || undefined })} /></label>
-      <datalist id={`${id}-operators`}>{Object.entries(defaultData.operators).map(([code, operator]) => <option key={code} value={code}>{operator.name}</option>)}</datalist>
+      <datalist id={`${id}-operators`}>{airlines.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</datalist>
       {number('Passenger load factor (%)', 'loadFactor', value.loadFactor, 0.01, 100, 100, flightDefaults?.loadFactor, value.aircraftType ? 'aircraft average' : 'DEFRA average')}
       <label className="climate-check"><input type="checkbox" checked={!!value.seats} onChange={e => patch({ seats: e.target.checked ? { economy: 180 } : undefined })} />Override seat configuration</label>
       {value.seats && classes.map(c => <label key={c}>{text(c)} seats<input type="number" min="0" step="1" value={value.seats?.[c] ?? 0} onChange={e => {
