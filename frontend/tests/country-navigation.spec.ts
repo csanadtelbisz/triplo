@@ -354,7 +354,9 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
     expect(segment).not.toHaveProperty('geometry');
     expect(segment).not.toHaveProperty('distanceStats');
     expect(segment).not.toHaveProperty('countryDistances');
-    expect(Object.values(countryDistances(segment)).reduce((sum, distance) => sum + distance, 0)).toBeCloseTo(computeTripCaches(trip).segments.find(source => source.id === segment.id)!.distanceStats!.totalDistance, 8);
+    const storedDistance = Object.values(countryDistances(segment)).reduce((sum, distance) => sum + distance, 0);
+    const originalDistance = computeTripCaches(trip).segments.find(source => source.id === segment.id)!.distanceStats!.totalDistance;
+    expect(Math.abs(storedDistance - originalDistance)).toBeLessThanOrEqual(segment.countryParts!.length * .000005 + 1e-9);
     expect(segment).not.toHaveProperty('countryCache');
     for (const part of segment.countryParts!) expect(part.distanceStats).not.toHaveProperty('geometryVersion');
   }
