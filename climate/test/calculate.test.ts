@@ -55,6 +55,16 @@ test("car: average petrol-ish car, occupancy 1.5 default", () => {
   near(r.directKg, (200 * 0.16152) / 1.5);
 });
 
+test("car: diesel comparisons follow vehicle class, while equal fuel consumption emits more than petrol", () => {
+  const common = { mode: "car", date: D, distanceKm: 100, occupancy: 1 } as const;
+  near(calculate({ ...common, engineSize: "medium", fuelType: "petrol" }).co2eKg, 22.368, 1e-12);
+  near(calculate({ ...common, engineSize: "medium", fuelType: "diesel" }).co2eKg, 21.312, 1e-12);
+  near(calculate({ ...common, fuelType: "petrol" }).co2eKg, 20.751, 1e-12);
+  near(calculate({ ...common, fuelType: "diesel" }).co2eKg, 21.411, 1e-12);
+  near(calculate({ ...common, fuelType: "petrol", exactFuelLPer100Km: 6 }).co2eKg, 15.93564, 1e-12);
+  near(calculate({ ...common, fuelType: "diesel", exactFuelLPer100Km: 6 }).co2eKg, 19.1673, 1e-12);
+});
+
 test("car: occupancy divides the result and is clamped to 1..9", () => {
   const alone = calculate({ mode: "car", date: D, distanceKm: 100, fuelType: "petrol", occupancy: 1 }).co2eKg;
   const four = calculate({ mode: "car", date: D, distanceKm: 100, fuelType: "petrol", occupancy: 4 }).co2eKg;

@@ -11,3 +11,18 @@
 .analytics-summary-row .analytics-summary-cell { padding: 0 8px 0 0; font-size: 0.85rem; text-transform: none; }
 .analytics-summary-row .analytics-summary-cell.right { padding: 0; font-weight: 500; }
 .analytics-summary-row:focus-visible { outline: 2px solid #1976d2; outline-offset: 2px; }
+.trip-scatter { margin-top: 20px; }
+.trip-scatter h3 { font-size: 1rem; margin: 0 0 10px; }
+.trip-scatter-readout { display: flex; flex-direction: column; height: 48px; justify-content: center; text-align: center; }
+.trip-scatter-readout strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-scatter-readout span { font-size: .75rem; opacity: .75; }
+.trip-scatter svg { width: 100%; display: block; touch-action: none; color: inherit; }
+.trip-scatter-grid line { stroke: currentColor; opacity: .12; }
+.trip-scatter-grid text { fill: currentColor; font-size: 10px; opacity: .7; }
+.trip-scatter-axes { stroke: currentColor; stroke-width: 1; fill: none; opacity: .6; }
+.trip-scatter-point { fill: #1976d2; stroke: var(--bg-color, white); stroke-width: 1.5; }
+.trip-scatter-point.active, .trip-scatter-point:focus-visible { fill: #ed8b00; stroke: currentColor; outline: none; }
+
+.trip-scatter-axis-label { fill: currentColor; font-size: 11px; }
+.analytics-clear-filter { padding: 0 4px; vertical-align: middle; }
+.analytics-summary-table + .country-list { margin-top: 12px; }

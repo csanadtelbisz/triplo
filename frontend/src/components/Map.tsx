@@ -1,5 +1,5 @@
 import { getSegmentGeometry } from '../utils/segmentGeometry';
-import { useState, useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import type { Segment, Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -28,7 +28,9 @@ import { getMapTheme } from '../utils/appearancePreferences';
 import { attachMobileDistanceMeasurement } from '../utils/mobileDistanceMeasurement';
 import { getEffectiveGeometry } from '../utils/effectiveGeometry';
 import { useMapRenderInputs } from '../utils/useMapRenderInputs';
-import { modeKey, tripIntersects } from '../countries/analytics';
+import { matchesAnalyticsSegment, tripIntersects } from '../countries/analytics';
+import { segmentClimate } from '../climate/profiles';
+import { useClimateSettings } from '../climate/useClimateSettings';
 import type { AnalyticsSelection } from '../countries/analytics';
 import { segmentKey, UNASSIGNED } from '../countries/types';
 import type { CountryData } from '../countries/types';
@@ -94,6 +96,12 @@ export const Map = forwardRef<MapRef, MapProps>(({
     countryData,
     onAnalyticsSegmentClick
 }, ref) => {
+  const climateSettings = useClimateSettings();
+  const emittingSegments = useMemo(() => {
+    if (!analyticsSelection?.climate) return null;
+    return new Set(trips.flatMap(trip => trip.segments.filter(segment => (segmentClimate(trip, segment, climateSettings).result?.co2eKg || 0) > 0).map(segment => segmentKey(trip.id, segment.id))));
+  }, [trips, analyticsSelection?.climate, climateSettings]);
+  const analyticsVisible = (trip: Trip, segment: Segment) => !analyticsSelection || matchesAnalyticsSegment(trip, segment, analyticsSelection, countryData, emittingSegments?.has(segmentKey(trip.id, segment.id)) ? 1 : 0);
   const renderInputs = useMapRenderInputs(trips, selectedTrip, styleContextSelectedSegment);
   const activeCountryData = analyticsSelection?.country ? countryData : undefined;
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -947,13 +955,13 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const isAnalyticsFilterActive = !!getTransientStyleConfig()?.id.startsWith('analytics-filter:');
 
       const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
-      const visibleTrips = targetTrips.filter(trip => tripIntersects(trip, analyticsSelection?.range || null));
+      const visibleTrips = targetTrips.filter(trip => (!analyticsSelection?.trip || trip.id === analyticsSelection.trip) && tripIntersects(trip, analyticsSelection?.range || null));
       
       const features: GeoJSON.Feature[] = [];
 
       visibleTrips.forEach(trip => {
         trip.segments.forEach(seg => {
-          if (analyticsSelection?.mode && modeKey(seg) !== analyticsSelection.mode) return;
+          if (!analyticsVisible(trip, seg)) return;
           const geometry = croppedGeometry(trip.id, seg);
           if (!geometry.coordinates.length) return;
           const userStyle = evaluatedStyles?.getSegmentStyle ? evaluatedStyles.getSegmentStyle(seg, seg.customColor || getModeColor(seg.transportMode) || '#007bff', styleContext) : null;
@@ -992,7 +1000,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
-          if (analyticsSelection?.mode && modeKey(seg) !== analyticsSelection.mode) return;
+          if (!analyticsVisible(trip, seg)) return;
           const country = analyticsSelection?.country;
           const countryResult = countryData?.results[segmentKey(trip.id, seg.id)];
           if (country && !countryResult?.distanceKmByCountry[country]) return;
@@ -1254,7 +1262,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderInputs, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, activeCountryData]);
+  }, [renderInputs, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, activeCountryData, emittingSegments]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
@@ -1263,10 +1271,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     const country = analyticsSelection?.country;
     if (!country) { focusedCountryRef.current = null; return; }
     if (!country || !countryData) return;
-    const focusKey = `${countryData.index.version}/${country}`;
+    const focusKey = `${countryData.index.version}/${country}/${analyticsSelection.trip || ''}/${!!analyticsSelection.climate}`;
     if (focusedCountryRef.current === focusKey) return;
     const entry = countryData.index.countries.find(c => c.code === country);
-    const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => !analyticsSelection.mode || modeKey(s) === analyticsSelection.mode).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
+    const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => analyticsVisible(t, s)).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
     if (!coordinates.length) return;
     const landParts = entry?.landParts || (entry ? [entry.landBounds] : []);
     const score = (b: number[]) => coordinates.filter(c => c[0] >= b[0] - 0.2 && c[0] <= b[2] + 0.2 && c[1] >= b[1] - 0.2 && c[1] <= b[3] + 0.2).length;
@@ -1282,7 +1290,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsSelection?.country, countryData, mapLoaded]);
+  }, [analyticsSelection?.country, analyticsSelection?.trip, analyticsSelection?.climate, countryData, mapLoaded, emittingSegments]);
 
   // Decluttering map markers on zoom/pan
   useEffect(() => {

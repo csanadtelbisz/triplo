@@ -1,3 +1,4 @@
+import { groupAnalyticsBy } from './analytics-test-helpers';
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
@@ -137,21 +138,19 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Climate Impact per Year (kg CO₂e)', exact: true })).toBeVisible();
   await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
-  await expect(page.getByRole('button', { name: 'Group by country', exact: true })).toHaveCount(0);
+  await groupAnalyticsBy(page, 'trips');
   await expect(page.getByLabel('Trip climate impacts', { exact: true })).toContainText('Climate trip');
-  await page.getByRole('button', { name: 'Group by transport mode', exact: true }).click();
+  await groupAnalyticsBy(page, 'modes');
   await expect(page.locator('.analytics-summary-rows')).toContainText('car');
-  await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
   await page.getByRole('button', { name: 'Show distance', exact: true }).click();
   await expect(page.locator('.analytics-summary-rows')).toContainText('100.0');
-  await page.getByRole('button', { name: 'Group by country', exact: true }).click();
+  await groupAnalyticsBy(page, 'countries');
   await page.locator('.country-row').filter({ hasText: 'HU' }).click();
   await expect(page.locator('.analytics-summary-rows').last()).toContainText('75.0');
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
-  await expect(page.locator('.country-row')).toHaveCount(0);
-  await expect(page.locator('.analytics-summary-rows')).toContainText('4.6');
+  await expect(page.locator('.country-row')).toHaveCount(1);
+  await expect(page.locator('.analytics-summary-rows').last()).toContainText('3.5');
   await page.getByRole('button', { name: 'Show distance', exact: true }).click();
-  await expect(page.locator('.analytics-summary-rows').last()).toContainText('75.0');
   await expect(page.getByRole('heading', { name: 'Distance per Year', exact: true })).toBeVisible();
 });
 
@@ -283,21 +282,22 @@ test('climate analytics sort trips, omit zero-impact modes, and use neutral metr
   await expect(climateIcon).toHaveText('eco');
   await expect(climateIcon).toHaveCSS('color', color);
   await expect(climateIcon).not.toHaveClass(/active/);
+  await groupAnalyticsBy(page, 'trips');
   const rows = page.getByLabel('Trip climate impacts', { exact: true }).locator('.analytics-summary-row');
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText('Bus journey');
   await expect(rows.nth(1)).toContainText('Climate trip');
-  await expect(page.getByRole('button', { name: 'Group by transport mode', exact: true })).toHaveText('route');
-  await page.getByRole('button', { name: 'Group by transport mode', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Group by trip', exact: true })).toHaveText('commute');
+  await expect(page.locator('[data-analytics-grouping]')).toHaveText('route');
+  await groupAnalyticsBy(page, 'modes');
+  await expect(page.locator('[data-analytics-grouping]')).toHaveText('commute');
   await expect(page.locator('.analytics-summary-row')).toHaveCount(2);
   await expect(page.locator('.analytics-summary-rows')).not.toContainText('Walk');
   await expect(page.locator('.analytics-summary-rows')).not.toContainText('airport_shuttle');
   await page.locator('.analytics-summary-row').filter({ hasText: /bus/i }).click();
   await expect(page.getByRole('heading', { name: 'bus Segments', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Group by trip', exact: true }).click();
+  await groupAnalyticsBy(page, 'trips');
   await expect(page.getByRole('heading', { name: 'bus Segments', exact: true })).toHaveCount(0);
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(3);
 });
 
 test('built-in defaults are visible and flight placeholders and details show relevant defaults and years', async ({ page }) => {

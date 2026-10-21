@@ -97,7 +97,8 @@ const analyticsHistoryPath = (state: PanelHistoryState | null) => {
   if (!state || (!['analytics', 'analytics-segment'].includes(state.panel) && !state.analyticsSelection)) return null;
   const selection = state.analyticsSelection;
   const path = ['analytics'];
-  if (selection?.countries && selection.country) path.push(`country:${selection.country}`);
+  if (selection?.trip) path.push(`trip:${selection.trip}`);
+  if (selection?.country) path.push(`country:${selection.country}`);
   if (selection?.mode || state.analyticsModeFilter) path.push(`mode:${selection?.mode || state.analyticsModeFilter}`);
   if (state.analyticsSegmentInfo) path.push(`segment:${state.analyticsSegmentInfo.tripId}:${state.analyticsSegmentInfo.segmentId}`);
   if (state.panel === 'poi') path.push(`poi:${state.poi?.id}`);
