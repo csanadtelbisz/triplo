@@ -4,6 +4,11 @@ import type { Page } from '@playwright/test';
 import { groupAnalyticsBy } from './analytics-test-helpers';
 import { emptyAnalyticsSelection, matchesAnalyticsSegment, selectedClimate } from '../src/countries/analytics';
 
+test.beforeEach(async ({ context }) => {
+  await context.route('https://flagcdn.com/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') }));
+});
+
+
 const segment = (id: string, mode: Segment['transportMode'], km: number, countries: Record<string, number>, emitting = true): Segment => ({
   id, name: id, transportMode: mode, routingProfile: 'straight', source: 'manual', waypoints: [], countryDistances: countries,
   distanceStats: { totalDistance: km, elevationUp: 0, elevationDown: 0, hasElevation: false },
@@ -42,27 +47,30 @@ for (const climate of [false, true]) test(`trip, country and transport filters i
   const trips = page.getByLabel(climate ? 'Trip climate impacts' : 'Trip distances', { exact: true });
   await expect(trips.locator('.analytics-summary-row')).toHaveCount(climate ? 2 : 3);
   await expect(trips.locator('.analytics-summary-row').first()).toContainText(climate ? 'Cross-border trip' : 'Walking trip');
-  await trips.getByRole('button', { name: /Cross-border trip/ }).click();
+  await page.getByRole('button', { name: /Cross-border trip/ }).click();
   await expect(page.getByLabel('Trip comparison', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /per Year/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Clear (trip|country) filter/ })).toHaveCount(0);
   const countries = page.getByLabel('Countries', { exact: true });
   const modes = page.getByLabel('Transport modes', { exact: true });
-  await expect(countries.locator('.country-row')).toHaveCount(climate ? 2 : 3);
+  await expect(countries.locator('.country-row:not(.is-collapsed)')).toHaveCount(climate ? 2 : 3);
   await expect(modes.getByRole('button', { name: /car/i })).toContainText(climate ? '4.6' : '130.0');
   await modes.getByRole('button', { name: /bus/i }).click();
-  await expect(countries.locator('.country-row')).toHaveCount(1);
-  await expect(countries.locator('.country-row')).toContainText('DE');
+  await expect(countries.locator('.country-row:not(.is-collapsed)')).toHaveCount(1);
+  await expect(countries.locator('.country-row:not(.is-collapsed)')).toContainText('DE');
   await countries.getByRole('button', { name: /DE/ }).click();
   await expect(modes.getByRole('button', { name: /bus/i })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Clear transport mode filter', exact: true }).click();
   await expect(modes.getByRole('button', { name: /car/i })).toContainText(climate ? '1.8' : '40.0');
   await expect(modes.getByRole('button', { name: /bus/i })).toContainText(climate ? '2.3' : '50.0');
   await page.getByRole('button', { name: climate ? 'Show distance' : 'Show climate impact', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Clear trip filter', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(countries.getByRole('button', { name: /DE/ })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Clear country filter', exact: true }).click();
-  await expect(countries.locator('.country-row')).toHaveCount(climate ? 3 : 2);
-  await page.getByRole('button', { name: 'Clear trip filter', exact: true }).click();
+  await countries.getByRole('button', { name: /DE/ }).click();
+  await expect(countries.locator('.country-row:not(.is-collapsed)')).toHaveCount(climate ? 3 : 2);
+  await page.getByRole('button', { name: /Cross-border trip/ }).click();
   await expect(page.getByLabel('Trip comparison', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /per Year/ })).toBeVisible();
 });
 
 test('the three-state grouping works for both metrics and country climate totals reconcile', async ({ page }) => {
@@ -76,7 +84,7 @@ test('the three-state grouping works for both metrics and country climate totals
     if (!climate) await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
   }
   const countries = page.getByLabel('Countries', { exact: true });
-  await expect(countries.locator('.country-row')).toHaveCount(2);
+  await expect(countries.locator('.country-row:not(.is-collapsed)')).toHaveCount(2);
   await expect(countries.getByRole('button', { name: /HU/ })).toContainText('4.6');
   await expect(countries.getByRole('button', { name: /DE/ })).toContainText('4.1');
   await countries.getByRole('button', { name: /HU/ }).click();
@@ -90,6 +98,8 @@ test('scatter supports mouse, keyboard and finger scrubbing with a fixed trip-na
   const chart = page.getByRole('group', { name: 'Trips by distance and climate impact', exact: true });
   await chart.scrollIntoViewIfNeeded();
   const a = chart.locator('[data-trip-id="first"]'), b = chart.locator('[data-trip-id="second"]');
+  await expect(a).toHaveAttribute('cy', '24');
+  await expect(chart.locator('[data-trip-id="walk"]')).toHaveAttribute('cx', '305');
   const readout = page.locator('.trip-scatter-readout');
   const before = await readout.boundingBox();
   const center = async (point: typeof a) => { const box = (await point.boundingBox())!; return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; };
@@ -124,4 +134,55 @@ test('scatter omits trips with incomplete climate estimates in either metric', a
   await expect(page.getByLabel('Trip climate impacts', { exact: true })).toContainText('Cross-border trip');
   await expect(page.locator('.trip-scatter-point')).toHaveCount(1);
   await expect(page.locator('.trip-scatter-point')).toHaveAttribute('data-trip-id', 'second');
+});
+
+
+test('country and trip rows animate collapse without unmounting, with flag columns and unwrapped headers', async ({ page }) => {
+  await open(page, true);
+  await groupAnalyticsBy(page, 'countries');
+  const countries = page.getByLabel('Countries', { exact: true });
+  const allCountries = countries.locator('.country-row');
+  await expect(allCountries).toHaveCount(2);
+  const hu = countries.getByRole('button', { name: /HU/ });
+  await expect(hu.locator('img')).toHaveAttribute('src', 'https://flagcdn.com/w40/hu.png');
+  await expect.poll(() => hu.locator('img').evaluate((img: HTMLImageElement) => img.naturalWidth > 0)).toBe(true);
+  await hu.click();
+  await expect(allCountries).toHaveCount(2);
+  const de = allCountries.filter({ hasText: 'DE' });
+  await expect(de).toHaveAttribute('inert', '');
+  await expect(de).toHaveClass(/is-collapsed/);
+  await expect(de).toHaveCSS('max-height', '0px');
+  await hu.click();
+  await expect(de).not.toHaveClass(/is-collapsed/);
+  await expect(de).toHaveCSS('max-height', '44px');
+  for (const group of ['countries', 'modes', 'trips'] as const) {
+    await groupAnalyticsBy(page, group);
+    const header = page.locator('.analytics-summary-header');
+    await expect(header.locator('.analytics-summary-distance')).toHaveText('Climate impact (kg CO₂e)');
+    const layout = await header.evaluate(element => {
+      const label = element.querySelector('.analytics-summary-distance')!;
+      const range = document.createRange(); range.selectNodeContents(label);
+      return { lines: range.getClientRects().length, rightGap: element.getBoundingClientRect().right - label.getBoundingClientRect().right };
+    });
+    expect(layout.lines).toBe(1);
+    expect(Math.abs(layout.rightGap)).toBeLessThan(1);
+  }
+  const trips = page.getByLabel('Trip climate impacts', { exact: true });
+  await page.getByRole('button', { name: /Cross-border trip/ }).click();
+  await expect(trips.locator('.analytics-summary-row')).toHaveCount(2);
+  await expect(trips.locator('.analytics-summary-row').filter({ hasText: 'Second trip' })).toHaveClass(/is-collapsed/);
+  await page.getByRole('button', { name: /Cross-border trip/ }).click();
+  await expect(trips.locator('.is-collapsed')).toHaveCount(0);
+  await page.screenshot({ path: '/tmp/triplo-analytics-flags-headers.png', fullPage: true });
+});
+
+test('country names remain usable when FlagCDN images fail', async ({ page }) => {
+  await page.route('https://flagcdn.com/**', route => route.abort());
+  await open(page);
+  await groupAnalyticsBy(page, 'countries');
+  const hu = page.getByLabel('Countries', { exact: true }).getByRole('button', { name: /HU/ });
+  await expect(hu).toBeVisible();
+  await hu.click();
+  await expect(hu).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Transport modes', { exact: true })).toBeVisible();
 });

@@ -746,8 +746,8 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
   await groupAnalyticsBy(page, 'countries');
-  await expect(page.locator('.country-row')).toHaveCount(3);
-  await expect(page.locator('.country-row').last()).toContainText('Unassigned');
+  await expect(page.locator('.country-row:not(.is-collapsed)')).toHaveCount(3);
+  await expect(page.locator('.country-row:not(.is-collapsed)').last()).toContainText('Unassigned');
   await expect(page.locator('.country-list .analytics-summary-header')).toContainText('Country (2)');
   await expect(page.locator('.country-list')).toContainText('Distance (km)');
   await expect(page.locator('.country-list a')).toHaveCount(0);
@@ -762,7 +762,10 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   });
   const country = await sizing();
   await groupAnalyticsBy(page, 'modes');
-  expect(await sizing()).toEqual(country);
+  const mode = await sizing();
+  expect(country.row.columns.split(' ')).toHaveLength(3);
+  expect(mode.row.columns.split(' ')).toHaveLength(2);
+  expect({ ...mode, row: { ...mode.row, columns: country.row.columns } }).toEqual(country);
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Status', { exact: true }).click();
   const providers = page.getByRole('region', { name: 'Other providers' });
@@ -813,7 +816,7 @@ test('metric switching preserves country/mode filters and trip grouping clears t
   await page.getByLabel('Transport modes', { exact: true }).getByRole('button', { name: /flight/ }).click();
   await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['flight']);
   await page.goBack();
-  await expect(page.getByRole('button', { name: 'Clear trip filter', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Show distance', exact: true }).click();
   await expect(page.getByLabel('Trip distances', { exact: true })).toContainText('Cross-year crossing');
 });
@@ -842,9 +845,9 @@ test('trip and eco filters restrict real map routes and exclude a no-emission ca
   await page.getByLabel('Countries', { exact: true }).getByRole('button', { name: /Country A/ }).click();
   await expect.poll(async () => (await routes(page)).flatMap(feature => (feature.geometry as GeoJSON.MultiLineString).coordinates.flat()).every(point => point[0] <= 0)).toBe(true);
   await page.goBack();
-  await expect(page.getByRole('button', { name: 'Clear trip filter', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
   await page.goBack();
-  await expect(page.getByRole('button', { name: 'Clear trip filter', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
   await page.goBack();
   await expect(page.getByLabel('Trip comparison', { exact: true })).toBeVisible();
   await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive']);

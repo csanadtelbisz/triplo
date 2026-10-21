@@ -3,18 +3,13 @@ import type { PointerEvent } from 'react';
 
 export interface TripScatterPoint { id: string; name: string; distance: number; impact: number }
 
-const ceiling = (value: number) => {
-  const step = 10 ** Math.floor(Math.log10(Math.max(1, value)));
-  return Math.ceil(Math.max(1, value) * 1.1 / step) * step;
-};
-
 export function TripScatterPlot({ points }: { points: TripScatterPoint[] }) {
   const svg = useRef<SVGSVGElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = points.find(point => point.id === activeId);
   const width = 340, height = 210, left = 48, bottom = 176, right = 305, top = 24;
-  const maxDistance = ceiling(Math.max(0, ...points.map(point => point.distance)));
-  const maxImpact = ceiling(Math.max(0, ...points.map(point => point.impact)));
+  const maxDistance = Math.max(0, ...points.map(point => point.distance)) || 1;
+  const maxImpact = Math.max(0, ...points.map(point => point.impact)) || 1;
   const position = (point: TripScatterPoint) => ({ x: left + point.distance / maxDistance * (right - left), y: bottom - point.impact / maxImpact * (bottom - top) });
   const hover = (event: PointerEvent<SVGSVGElement>) => {
     const matrix = svg.current?.getScreenCTM();
@@ -51,7 +46,7 @@ export function TripScatterPlot({ points }: { points: TripScatterPoint[] }) {
         <text x={left - 7} y={bottom - fraction * (bottom - top) + 4} textAnchor="end">{(maxImpact * fraction).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>
         <text x={left + fraction * (right - left)} y={bottom + 18} textAnchor="middle">{(maxDistance * fraction).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>
       </g>)}
-      <path className="trip-scatter-axes" d={`M ${left} ${top - 12} V ${bottom} H ${right + 14}`} />
+      <path className="trip-scatter-axes" d={`M ${left} ${top} V ${bottom} H ${right}`} />
       <g role="img" aria-label="Climate impact in kilograms CO₂e"><title>Climate impact (kg CO₂e)</title><text className="trip-scatter-axis-label" x={left} y={12} textAnchor="middle">kg CO₂e</text></g>
       <g role="img" aria-label="Distance in kilometres"><title>Distance (km)</title><text className="trip-scatter-axis-label" x={right + 14} y={bottom - 6}>km</text></g>
       {points.map(point => {

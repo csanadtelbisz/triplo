@@ -19,7 +19,7 @@ python3 -I scripts/build-json.py data src/generated/data.ts
 npm run typecheck && npm test
 ```
 If DEFRA renames a category, edit `scripts/factor_keys.py` (the build script lists keys it could not find).
-Operator profiles: fill `data/operators.csv` and `data/operator-layouts.csv` (currently empty).
+Operator profiles: edit `data/operators.csv` and `data/operator-layouts.csv`. Triplo regenerates `src/generated/data.ts` automatically when the Vite development server starts, when these CSVs change during development, and on production/preview builds. Python 3 is required for this generation step. The npm build lifecycle regenerates before type-checking; the Vite plugin also covers direct `vite build` deployments. Unchanged generated content is not rewritten, so startup causes no unnecessary reload. `npm run climate:generate` in `frontend/` is also available for manual regeneration.
 Electric inter-city and high-speed rail use the separate energy benchmarks in `data/rail-energy.json` (French transport-reporting defaults, 2017). These are not inferred from DEFRA's mixed-traction national rail or Eurostar emission factors. Update the benchmark values and source together, then regenerate `src/generated/data.ts`; the content revision invalidates Triplo's saved estimates. Route-country grid intensity and the year's DEFRA grid-loss uplift are applied at calculation time.
 
 ## Licences / attribution (show in the app)

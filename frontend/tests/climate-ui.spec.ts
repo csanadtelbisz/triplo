@@ -145,10 +145,10 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await page.getByRole('button', { name: 'Show distance', exact: true }).click();
   await expect(page.locator('.analytics-summary-rows')).toContainText('100.0');
   await groupAnalyticsBy(page, 'countries');
-  await page.locator('.country-row').filter({ hasText: 'HU' }).click();
+  await page.locator('.country-row:not(.is-collapsed)').filter({ hasText: 'HU' }).click();
   await expect(page.locator('.analytics-summary-rows').last()).toContainText('75.0');
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
-  await expect(page.locator('.country-row')).toHaveCount(1);
+  await expect(page.locator('.country-row:not(.is-collapsed)')).toHaveCount(1);
   await expect(page.locator('.analytics-summary-rows').last()).toContainText('3.5');
   await page.getByRole('button', { name: 'Show distance', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Distance per Year', exact: true })).toBeVisible();
@@ -322,4 +322,17 @@ test('built-in defaults are visible and flight placeholders and details show rel
   await page.getByLabel('Read only', { exact: true }).check();
   await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toBeDisabled();
   await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toHaveValue('75');
+});
+
+
+test('newly added airlines appear in the profile editor and supply their load factors', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
+  await expect(card.locator('datalist option[value="ACA"]')).toHaveText('Air Canada');
+  await card.getByLabel('Aircraft type (ICAO)', { exact: true }).fill('A320');
+  await card.getByLabel('Airline (ICAO)', { exact: true }).fill('ACA');
+  await expect(card.getByLabel('Passenger load factor (%)', { exact: true })).toHaveAttribute('placeholder', 'Automatic (84.6%)');
 });

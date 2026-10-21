@@ -1,5 +1,6 @@
 import { segmentClimate } from '../climate/profiles';
 import { useClimateSettings } from '../climate/useClimateSettings';
+import { climateCountryCodes } from '../climate/countryCodes';
 import { countryDistances } from '../countries/parts';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
@@ -444,7 +445,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       impact += selectedClimate(trip, segment, kg || 0, selection.country, countryData) * fraction;
     }
     return { trip, distance, impact, available, hasSegments };
-  }).filter(row => row.hasSegments && (!selection.climate || row.impact > 0))
+  }).filter(row => row.trip.id === selection.trip || (row.hasSegments && (!selection.climate || row.impact > 0)))
     .sort((a, b) => (selection.climate ? b.impact - a.impact : b.distance - a.distance) || a.trip.name.localeCompare(b.trip.name)), [trips, eligible, selection, timeRange, countryData, climateValues]);
   const countryRows = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -455,7 +456,8 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
         if (distance > 0) totals[code] = (totals[code] || 0) + metric(trip, segment, code, countryData) * tripFraction(trip, timeRange);
       }
     }
-    return Object.entries(totals).filter(([, distance]) => distance > 0)
+    if (selection.country && totals[selection.country] === undefined) totals[selection.country] = 0;
+    return Object.entries(totals).filter(([code, distance]) => distance > 0 || code === selection.country)
       .sort(([a, distanceA], [b, distanceB]) => a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : distanceB - distanceA).map(([code, distance]) => {
         const country = countryData?.index.countries.find(c => c.code === code);
         return { code, distance, name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
@@ -605,8 +607,9 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
         {(
           <>
             {grouping === 'trips' && <div className="trip-summary-table analytics-summary-table" aria-label={selection.climate ? 'Trip climate impacts' : 'Trip distances'}>
-              <div className="analytics-summary-header"><div>Trip{selection.trip && <button type="button" className="iconButton analytics-clear-filter" aria-label="Clear trip filter" onClick={() => onSelectionChange({ ...selection, trip: null, country: null, mode: null })}><MaterialIcon name="close" size={14} /></button>}</div><div className="analytics-summary-distance">{metricLabel}</div></div>
-              <div className="analytics-summary-rows">{tripRows.filter(row => !selection.trip || row.trip.id === selection.trip).map(({ trip, distance, impact }) => <button type="button" className="trip-summary-row analytics-summary-row climate-trip-analytics-row" key={trip.id}
+              <div className="analytics-summary-header"><div>Trip</div><div className="analytics-summary-distance">{metricLabel}</div></div>
+              <div className="analytics-summary-rows">{tripRows.map(({ trip, distance, impact }) => <button type="button" className={`trip-summary-row analytics-summary-row climate-trip-analytics-row${selection.trip && trip.id !== selection.trip ? ' is-collapsed' : ''}`} key={trip.id}
+                inert={!!selection.trip && trip.id !== selection.trip} aria-hidden={!!selection.trip && trip.id !== selection.trip}
                 aria-pressed={selection.trip === trip.id} onClick={() => onSelectionChange({ ...selection, trip: selection.trip === trip.id ? null : trip.id, country: null, mode: null })}>
                 <span className="trip-summary-td analytics-summary-cell">{trip.name || 'Untitled trip'}</span>
                 <span className="trip-summary-td right analytics-summary-cell">{(selection.climate ? impact : distance).toFixed(1)}</span>
@@ -619,11 +622,12 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
                 {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
                 <div className="trip-summary-table analytics-summary-table">
                   <div className="analytics-summary-header">
-                    <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED).length}){selection.country && <button type="button" className="iconButton analytics-clear-filter" aria-label="Clear country filter" onClick={() => onSelectionChange({ ...selection, country: null, ...(grouping === 'countries' ? { mode: null } : {}) })}><MaterialIcon name="close" size={14} /></button>}</div><div className="analytics-summary-distance">{metricLabel}</div>
+                    <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED).length})</div><div className="analytics-summary-distance">{metricLabel}</div>
                   </div>
                   <div className="analytics-summary-rows">
-                    {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
-                      <button type="button" className="trip-summary-row analytics-summary-row country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, ...(grouping === 'countries' ? { mode: null } : {}) })}>
+                    {countryRows.map(row => (
+                      <button type="button" className={`trip-summary-row analytics-summary-row country-row${selection.country && selection.country !== row.code ? ' is-collapsed' : ''}`} key={row.code} inert={!!selection.country && selection.country !== row.code} aria-hidden={!!selection.country && selection.country !== row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, ...(grouping === 'countries' ? { mode: null } : {}) })}>
+                        <span className="analytics-country-flag" aria-hidden="true">{climateCountryCodes[row.code] && <img src={`https://flagcdn.com/w40/${row.code.toLowerCase()}.png`} srcSet={`https://flagcdn.com/w80/${row.code.toLowerCase()}.png 2x`} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} />}</span>
                         <span className="trip-summary-td analytics-summary-cell">{row.name}</span><span className="trip-summary-td right analytics-summary-cell">{row.distance.toFixed(1)}</span>
                       </button>
                     ))}
@@ -645,7 +649,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
 
                   return (
                     <button type="button" aria-pressed={selectedModeKey === row.modeKey}
-                      key={row.modeKey}
+                      key={row.modeKey} inert={collapsed} aria-hidden={collapsed}
                       className={`trip-summary-row analytics-summary-row${collapsed ? ' is-collapsed' : ''}`}
                       onClick={() => handleModeClick(row.modeKey)}
                     >
@@ -666,10 +670,10 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
             </div>
             )}
 
-            <YearlyDistanceChart climate={selection.climate} yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
+            {!selection.trip && <YearlyDistanceChart climate={selection.climate} yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
               const range: [number, number] | null = year === null ? null : [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
               onSelectionChange({ ...selection, year, range }, true);
-            }} interactive />
+            }} interactive />}
 
             {selectedModeKey && (
               <div style={{ marginTop: '20px' }}>
