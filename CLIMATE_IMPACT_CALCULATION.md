@@ -94,7 +94,12 @@ export interface ClimateResult {
   distanceKmUsed: number;       // after uplift where applicable
   factorSets: {
     defra?: { yearUsed: number };
-    grid?: { yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember" };
+    grid?: {
+      yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember";
+      intensityGCo2ePerKwh: number;
+      countries: { country: string; sourceRegion: string; level: "country" | "continent" | "world";
+        yearUsed: number; intensityGCo2ePerKwh: number; share: number }[];
+    };
     aircraft?: { tableVersion: string };
     railEnergy?: { yearUsed: number; source: string };
   };
@@ -357,7 +362,7 @@ Trip summaries show total and per-mode kg CO₂e. Analytics uses the same three-
 
 Trip grouping without a selected trip also shows a scatter plot with distance (km) and climate impact (kg CO₂e) axes. Both axes respect current filters; distance mode includes no-emission travel, while climate mode uses emitting segments only. Trips with incomplete estimates are omitted from the scatter rather than shown as zero. Each positive axis ends exactly at the largest visible value, placing the furthest/highest dots at the chart boundaries; an all-zero axis uses a finite fallback scale. Axis tick labels are rounded to integers. Pointer hover, keyboard focus and captured touch scrubbing highlight the nearest point; a fixed readout above the plot shows the trip name and values without changing chart layout.
 
-Data attribution and calculation assumptions are available in the profile preferences and segment Climate Impact cards.
+Data attribution and calculation assumptions are available in the profile preferences and segment Climate Impact cards. Electricity calculation details list every contributing country code, normalised route-distance share, selected data year and lifecycle generation intensity in g CO₂e/kWh. The calculator reports the requested country separately from the actual series used, making continent/world fallbacks explicit; a weighted generation factor is shown before transmission/distribution losses. Direct/upstream info controls retain desktop hover text and toggle an inline explanation on touch or keyboard activation, including read-only views. These details remain in-memory results and are not saved in trip JSON.
 
 ```ts
 export type TravelInput = NoEmissionInput | FlightInput | CarInput | BusInput | RailInput | FerryInput;

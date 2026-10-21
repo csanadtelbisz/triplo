@@ -79,6 +79,70 @@ test('electric rail types show distinct estimates and dated benchmark provenance
   await expect(card.getByRole('link', { name: 'French transport-reporting benchmarks (2017)' })).toHaveAttribute('href', 'https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253');
 });
 
+test('electricity details show country years, route weights and generation factors for rail and electric cars', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('rail');
+  await card.getByText('Calculation details', { exact: true }).click();
+  const table = card.getByRole('table', { name: 'Electricity emission factors', exact: true });
+  await expect(table.locator('tbody tr').nth(0)).toHaveText('HU75.0%2025163.02');
+  await expect(table.locator('tbody tr').nth(1)).toHaveText('DE25.0%2025329.65');
+  await expect(table.getByText('HU', { exact: true })).toHaveAttribute('title', 'HUN');
+  await expect(card.getByText('Weighted electricity factor: 204.68 g CO₂e/kWh.', { exact: true })).toBeVisible();
+  await card.getByLabel('Base algorithm', { exact: true }).selectOption('car');
+  await card.getByLabel('Fuel type', { exact: true }).selectOption('bev');
+  await expect(table.locator('tbody tr').nth(0)).toHaveText('HU75.0%2025163.02');
+  await expect(table.locator('tbody tr').nth(1)).toHaveText('DE25.0%2025329.65');
+  await expect(card.getByText(/transmission and distribution losses are added separately/)).toBeVisible();
+});
+
+test('electricity details identify regional fallbacks and unassigned country shares', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('climate-test-trip', JSON.stringify({
+    id: 'fallback', name: 'Fallback grid', startDate: '2026-05-01', createdAt: '', updatedAt: '',
+    segments: [{ id: 'car', transportMode: 'rail', routingService: 'manual', routingProfile: 'straight', source: 'manual', waypoints: [],
+      countryDistances: { LI: 50, __unassigned__: 50 }, distanceStats: { totalDistance: 100, elevationUp: 0, elevationDown: 0, hasElevation: false } }],
+  })));
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByText('Calculation details', { exact: true }).click();
+  const table = card.getByRole('table', { name: 'Electricity emission factors', exact: true });
+  await expect(table.locator('tbody tr').nth(0)).toHaveText('LIEurope average50.0%2025271.19');
+  await expect(table.locator('tbody tr').nth(1)).toHaveText('World50.0%2025458.29');
+});
+
+test('direct and upstream explanations toggle with touch and keyboard even in read-only mode', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  await page.getByLabel('Read only', { exact: true }).check();
+  const card = climateCard(page);
+  await card.getByText('Calculation details', { exact: true }).click();
+  const direct = card.getByRole('button', { name: 'About direct emissions', exact: true });
+  const upstream = card.getByRole('button', { name: 'About upstream emissions', exact: true });
+  const directText = card.getByRole('note').filter({ hasText: 'Emissions from operating the vehicle' });
+  const upstreamText = card.getByRole('note').filter({ hasText: 'Emissions from producing and distributing fuel' });
+  await expect(direct).toHaveAttribute('aria-expanded', 'false');
+  await expect(directText).toBeHidden();
+  await direct.tap();
+  await expect(directText).toBeVisible();
+  await expect(direct).toHaveAttribute('aria-expanded', 'true');
+  await expect(direct).toHaveAttribute('title', /Flights also include radiative forcing/);
+  await upstream.tap();
+  await expect(upstreamText).toBeVisible();
+  await direct.tap();
+  await expect(directText).toBeHidden();
+  await expect(upstreamText).toBeVisible();
+  await direct.focus();
+  await direct.press('Enter');
+  await expect(directText).toBeVisible();
+  await upstream.focus();
+  await upstream.press('Space');
+  await expect(upstreamText).toBeHidden();
+  await page.screenshot({ path: '/tmp/triplo-climate-touch-explanations.png', fullPage: true });
+});
+
 test('named profiles, mode defaults, inherited values and overrides persist', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Add climate profile', exact: true }).click();

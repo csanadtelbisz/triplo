@@ -1,5 +1,5 @@
 import type { DataBundle } from "./data";
-import type { ClimateResult, CountryShares, Warning } from "./types";
+import type { ClimateResult, CountryShares, GridFactor, Warning } from "./types";
 
 export const FAR_YEARS = 10;
 
@@ -32,6 +32,7 @@ export class Run {
   defraYears = new Set<number>();
   gridYears: number[] = [];
   gridLevels = new Set<string>();
+  gridFactors: GridFactor[] = [];
   private warned = new Set<string>();
   readonly data: DataBundle;
   readonly year: number;
@@ -80,22 +81,22 @@ export class Run {
     if (entries.length === 0 || sum <= 0) {
       if (warnOnDefault) this.warn("GRID_DEFAULT_WORLD", "No country shares given; world average grid intensity used.");
       else this.assume("Grid: world average (no country shares given)");
-      return this.gridOne("_WORLD", "world");
+      return this.gridOne("_WORLD", "world", "_WORLD", 1);
     }
     let total = 0;
     for (const [iso, w] of entries) {
       const code = iso.toUpperCase();
       let g: number;
-      if (this.data.grid[code]) g = this.gridOne(code, code === "_WORLD" ? "world" : code.startsWith("_") ? "continent" : "country");
+      if (this.data.grid[code]) g = this.gridOne(code, code === "_WORLD" ? "world" : code.startsWith("_") ? "continent" : "country", code, w / sum);
       else {
         const cont = this.data.regions[code];
         const ck = cont ? CONTINENT_KEY[cont] : undefined;
         if (ck && this.data.grid[ck]) {
           this.warn("GRID_FALLBACK_CONTINENT", `No grid data for ${code}; ${cont} average used.`);
-          g = this.gridOne(ck, "continent");
+          g = this.gridOne(ck, "continent", code, w / sum);
         } else {
           this.warn("GRID_FALLBACK_WORLD", `No grid data for ${code}; world average used.`);
-          g = this.gridOne("_WORLD", "world");
+          g = this.gridOne("_WORLD", "world", code, w / sum);
         }
       }
       total += (w / sum) * g;
@@ -103,12 +104,13 @@ export class Run {
     return total;
   }
 
-  private gridOne(code: string, level: "country" | "continent" | "world"): number {
+  private gridOne(code: string, level: "country" | "continent" | "world", country: string, share: number): number {
     const s = this.data.grid[code];
     if (!s) throw new Error(`Missing grid series ${code}`);
     const [y, v] = closest(s, this.year);
     this.gridYears.push(y);
     this.gridLevels.add(level);
+    this.gridFactors.push({ country, sourceRegion: code, level, yearUsed: y, intensityGCo2ePerKwh: v, share });
     if (Math.abs(y - this.year) > FAR_YEARS) this.warn("GRID_YEAR_FAR", `Grid data for ${code} from ${y} used for ${this.year} (more than ${FAR_YEARS} years apart).`);
     return v;
   }
@@ -118,7 +120,10 @@ export class Run {
     if (this.defraYears.size) factorSets.defra = { yearUsed: Math.max(...this.defraYears) };
     if (this.gridYears.length) {
       const level = this.gridLevels.size > 1 ? "mixed" : ([...this.gridLevels][0] as "country" | "continent" | "world");
-      factorSets.grid = { yearUsed: Math.max(...this.gridYears), level, source: "OWID/Ember" };
+      factorSets.grid = {
+        yearUsed: Math.max(...this.gridYears), level, source: "OWID/Ember", countries: this.gridFactors,
+        intensityGCo2ePerKwh: this.gridFactors.reduce((sum, factor) => sum + factor.share * factor.intensityGCo2ePerKwh, 0),
+      };
     }
     if (r.aircraftTable) factorSets.aircraft = { tableVersion: String(this.data.flight.year) };
     if (r.railEnergy) factorSets.railEnergy = { yearUsed: this.data.railEnergy.year, source: this.data.railEnergy.source };

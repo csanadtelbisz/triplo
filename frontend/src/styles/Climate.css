@@ -25,6 +25,15 @@
 .climate-preferences > .climate-attribution { margin: 0 0 12px; }
 .climate-details { font-size: .75rem; line-height: 1.5; opacity: .85; }
 .climate-details summary { cursor: pointer; }
+.climate-info-button { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 32px; height: 32px; padding: 4px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.climate-info-button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.climate-info-text { display: block; margin: 4px 0 8px; padding: 4px 8px; border-left: 2px solid var(--border-color, #aaa); }
+.climate-info-text[hidden] { display: none; }
+.climate-electricity-table { width: 100%; border-collapse: collapse; font-size: inherit; }
+.climate-electricity-table th, .climate-electricity-table td { padding: 4px; text-align: right; }
+.climate-electricity-table th:first-child, .climate-electricity-table td:first-child { text-align: left; }
+.climate-electricity-table th { border-bottom: 1px solid var(--border-color, #aaa); white-space: nowrap; }
+.climate-electricity-table small { display: block; font-size: inherit; }
 .transport-mode-select-row { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
 .transport-mode-select-row > select { flex: 1; min-width: 0; width: 0 !important; }
 .transport-mode-preferences input:not([type=checkbox]), .transport-mode-preferences select, .transport-mode-preferences .iconButton { border: 1px solid #ccc; }

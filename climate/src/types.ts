@@ -79,6 +79,19 @@ export interface Warning {
   message: string;
 }
 
+export interface GridFactor {
+  /** Country requested by the caller, or _WORLD when no shares are available. */
+  country: Iso3;
+  /** Actual country/region series used, including fallback series. */
+  sourceRegion: string;
+  level: "country" | "continent" | "world";
+  yearUsed: number;
+  /** Lifecycle generation intensity before transmission/distribution losses. */
+  intensityGCo2ePerKwh: number;
+  /** Normalised share in the electricity mix. */
+  share: number;
+}
+
 export interface ClimateResult {
   /** Total, well-to-wheel, per traveller, kg CO2e. */
   co2eKg: number;
@@ -92,7 +105,11 @@ export interface ClimateResult {
   distanceKmUsed: number;
   factorSets: {
     defra?: { yearUsed: number };
-    grid?: { yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember" };
+    grid?: {
+      yearUsed: number; level: "country" | "continent" | "world" | "mixed"; source: "OWID/Ember";
+      countries: GridFactor[];
+      intensityGCo2ePerKwh: number;
+    };
     aircraft?: { tableVersion: string };
     railEnergy?: { yearUsed: number; source: string };
   };

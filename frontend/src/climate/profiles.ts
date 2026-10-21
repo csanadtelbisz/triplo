@@ -13,7 +13,7 @@ import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 import { noEmissionResult } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 6;
+const CLIMATE_CALCULATION_VERSION = 7;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 

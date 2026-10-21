@@ -137,6 +137,32 @@ test("grid year: closest year, ties to the later year, >10 years warns", () => {
   assert.equal(gridWarnings(at(2020)).length, 0); // exactly 10 years: no warning
 });
 
+test("grid details preserve each country, selected year, factor and normalised share", () => {
+  const c = makeCalculator({ ...defaultData, grid: { AAA: [[2020, 100]], BBB: [[2024, 300]] } });
+  const result = c.calculate({ mode: 'car', fuelType: 'bev', date: D, distanceKm: 100, gridShares: { AAA: 3, BBB: 1 } });
+  assert.deepEqual(result.factorSets.grid, {
+    yearUsed: 2024, level: 'country', source: 'OWID/Ember', intensityGCo2ePerKwh: 150,
+    countries: [
+      { country: 'AAA', sourceRegion: 'AAA', level: 'country', yearUsed: 2020, intensityGCo2ePerKwh: 100, share: .75 },
+      { country: 'BBB', sourceRegion: 'BBB', level: 'country', yearUsed: 2024, intensityGCo2ePerKwh: 300, share: .25 },
+    ],
+  });
+});
+
+test("grid details identify requested countries separately from regional and world fallback factors", () => {
+  const c = makeCalculator({ ...defaultData, regions: { LIE: 'Europe' }, grid: { _EUROPE: [[2023, 200]], _WORLD: [[2025, 400]] } });
+  const result = c.calculate({ mode: 'rail', date: D, distanceKm: 100, countryShares: { LIE: 1, ZZZ: 3 } });
+  assert.deepEqual(result.factorSets.grid?.countries, [
+    { country: 'LIE', sourceRegion: '_EUROPE', level: 'continent', yearUsed: 2023, intensityGCo2ePerKwh: 200, share: .25 },
+    { country: 'ZZZ', sourceRegion: '_WORLD', level: 'world', yearUsed: 2025, intensityGCo2ePerKwh: 400, share: .75 },
+  ]);
+  assert.equal(result.factorSets.grid?.intensityGCo2ePerKwh, 350);
+  const defaults = c.calculate({ mode: 'car', date: D, distanceKm: 100, fuelType: 'bev' });
+  assert.deepEqual(defaults.factorSets.grid?.countries, [
+    { country: '_WORLD', sourceRegion: '_WORLD', level: 'world', yearUsed: 2025, intensityGCo2ePerKwh: 400, share: 1 },
+  ]);
+});
+
 test("rail: inter_city default assumes electric traction", () => {
   const r = calculate({ mode: "rail", date: D, distanceKm: 100, countryShares: { FRA: 1 } });
   const explicit = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "electric", countryShares: { FRA: 1 } });
