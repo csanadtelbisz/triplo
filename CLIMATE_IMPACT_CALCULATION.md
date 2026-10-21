@@ -219,10 +219,6 @@ Alternatives checked: Google TIM (its data derives from the restricted EUROCONTR
 
 ---
 
-### Comparing petrol and diesel
-
-The stored 2026 factors were checked against the official DEFRA flat workbook by row ID: medium petrol = 0.17411 direct + 0.04957 upstream = 0.22368 kg CO₂e/vehicle-km; medium diesel = 0.17209 + 0.04103 = 0.21312. These class averages incorporate different fleet fuel consumption. The average-size rows reverse the ordering: petrol 0.20751 vs diesel 0.21411 kg/vehicle-km. At equal litres consumed, diesel is higher (2026 well-to-wheel: 3.19455 kg CO₂e/litre vs petrol 2.65594). Occupancy divides both consistently. These are climate estimates and do not compare NOₓ or particulate air pollution; no factor or fuel mapping changes were required.
-
 ## 6. Ground transport
 
 ### 6.1 Car (also used for taxis)
@@ -247,6 +243,10 @@ export interface CarInput extends CommonInput {
 - **BEV:** DEFRA car rows give 0 for the vehicle (electricity is accounted separately). Energy use: `SECR kWh UK electricity for EVs` rows (kWh per km, by size). `upstream = kWhPerKm x gridIntensity(shares) x (1 + TD_UPLIFT)`, `direct = 0`.
 - **PHEV (split, as you decided):** liquid-fuel part from DEFRA's plug-in hybrid row (km basis; for the average car 0.0896 kg/km in 2026) as TTW + its WTT, and electric part from the PHEV kWh/km row priced at the grid (as for BEV). The split is fixed by DEFRA, with no user-adjustable electric share.
 - Hybrid (non-plug-in): the "Hybrid" row. CNG/LPG: rows exist only for some sizes; if a row is empty (DEFRA leaves it blank), fall back to `average` size with a warning.
+
+#### Comparing petrol and diesel
+
+The stored 2026 factors were checked against the official DEFRA flat workbook by row ID: medium petrol = 0.17411 direct + 0.04957 upstream = 0.22368 kg CO₂e/vehicle-km; medium diesel = 0.17209 + 0.04103 = 0.21312. These class averages incorporate different fleet fuel consumption. The average-size rows reverse the ordering: petrol 0.20751 vs diesel 0.21411 kg/vehicle-km. At equal litres consumed, diesel is higher (2026 well-to-wheel: 3.19455 kg CO₂e/litre vs petrol 2.65594). Occupancy divides both consistently. These are climate estimates and do not compare NOₓ or particulate air pollution; no factor or fuel mapping changes were required.
 
 #### Car size examples (for UI hints only; illustrative, not used in calculations)
 
