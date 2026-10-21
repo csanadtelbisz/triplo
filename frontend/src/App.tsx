@@ -43,6 +43,7 @@ import { getEffectiveGeometry } from './utils/effectiveGeometry';
 import { comparisonGeometry, getSegmentGeometry } from './utils/segmentGeometry';
 import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryTripInputs, withSavedCountryParts } from './countries/cache';
 import { getClimateSettings, withClimateCache } from './climate/profiles';
+import { withoutClimateResults } from './climate/cache';
 import { serializeTrip } from './utils/serializeTrip';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
@@ -126,7 +127,7 @@ const saveTripCache = async (trips: Trip[]) => {
     // Shared trips are only references in user storage. Never retain their
     // fetched content in the offline cache.
     const cached = trips.filter(t => !t.metadata?.isSharedTripReference).map(t => ({
-      ...t,
+      ...withoutClimateResults(t),
       metadata: { ...t.metadata, _isCached: true }
     }));
     const db = await initDB();

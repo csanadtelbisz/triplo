@@ -17,7 +17,7 @@ regions = {r["iso3"]: r["continent"] for r in rd("country-region.csv")}
 aircraft = [{"model": r["model"], "icao": r["icao"].split(";"), "bodyType": r["body_type"], "band": r["band"],
              "seats": int(r["seats"]), "loadFactor": float(r["load_factor"]),
              "kgCo2PerVkm": float(r["kg_co2_per_vkm"]), "avgFlightKm": int(r["avg_flight_km"])} for r in rd("aircraft.csv")]
-operators = {r["operator"]: {"name": r["name"], "loadFactor": float(r["load_factor"])} for r in rd("operators.csv")}
+operators = {r["operator"]: {"name": r["name"], **({"loadFactor": float(r["load_factor"])} if r["load_factor"].strip() else {})} for r in rd("operators.csv")}
 layouts = [{"operator": r["operator"], "aircraft": r["aircraft"], "seats": {k: int(r[k] or 0) for k in ("economy", "premium_economy", "business", "first")}} for r in rd("operator-layouts.csv")]
 params = json.load(open(os.path.join(d, "flight-params.json")))
 params = {k: v for k, v in params.items() if not k.startswith("_")}

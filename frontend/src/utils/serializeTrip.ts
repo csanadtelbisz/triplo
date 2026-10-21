@@ -1,12 +1,10 @@
 import type { SharedTripReference, Trip } from '../../../shared/types';
 import { tripForStorage } from '../countries/cache';
-import { compactClimateImpact } from '../climate/cache';
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 export function serializeTrip(trip: Trip | SharedTripReference, pretty = true): string {
-  const serialized = JSON.stringify('segments' in trip ? tripForStorage(trip) : trip,
-    (key, value) => key === 'climateImpact' && value ? compactClimateImpact(value) : value);
+  const serialized = JSON.stringify('segments' in trip ? tripForStorage(trip) : trip);
   if (!pretty) return serialized;
   const value: JsonValue = JSON.parse(serialized);
   function format(value: JsonValue, depth: number, key = ''): string {

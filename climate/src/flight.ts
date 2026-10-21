@@ -13,7 +13,7 @@ export function getFlightDefaults(input: Pick<FlightInput, 'aircraftType' | 'ope
   const operator = input.operator?.toUpperCase();
   const layout = data.layouts.find(row => row.operator === operator && reference.icao.includes(row.aircraft));
   const seats = layout?.seats || Object.fromEntries(CLASSES.map(c => [c, reference.seats * data.flight.classSeatShares[reference.bodyType][c]])) as Record<SeatClass, number>;
-  return { reference, layout, seats, loadFactor: operator && data.operators[operator] ? data.operators[operator].loadFactor : reference.loadFactor };
+  return { reference, layout, seats, loadFactor: (operator ? data.operators[operator]?.loadFactor : undefined) ?? reference.loadFactor };
 }
 
 function interpolate(points: { x: number; y: number }[], x: number): number {
@@ -117,7 +117,7 @@ function tier1(run: Run, input: FlightInput, rows: AircraftRow[], cabin: CabinCl
     run.warn("LOAD_FACTOR_INVALID", `Load factor ${lf} outside (0, 1]; default used.`);
     lf = undefined;
   }
-  if (lf === undefined && op && run.data.operators[op]) {
+  if (lf === undefined && op && run.data.operators[op]?.loadFactor !== undefined) {
     lf = defaults.loadFactor;
     run.assume(`Load factor ${lf} (operator ${op})`);
   }

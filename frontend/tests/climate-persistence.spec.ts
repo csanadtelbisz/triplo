@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Trip } from '../../shared/types';
 
-test('real app persists climate caches, refreshes preference changes, and reloads saved estimates', async ({ page, context }) => {
+test('real app keeps climate results out of all storage and preference recalculation never dirties trips', async ({ page, context }) => {
   test.setTimeout(60000);
   await page.setViewportSize({ width: 1100, height: 850 });
   page.on('dialog', dialog => dialog.accept());
@@ -18,6 +18,7 @@ test('real app persists climate caches, refreshes preference changes, and reload
     id: 'drive', name: 'Drive', transportMode: 'car', routingService: 'manual', routingProfile: 'straight', source: 'manual',
     geometry: { type: 'LineString', coordinates: [[19, 47], [20, 47]] },
     waypoints: [{ id: 'a', coordinates: [19, 47] }, { id: 'b', coordinates: [20, 47] }],
+    climateImpact: { inputKey: 'legacy-calculator', error: 'Obsolete saved calculation' },
   }] };
   remote.segments.push({ ...remote.segments[0], id: 'walk', name: 'Walk', transportMode: 'walk' });
   let writes = 0;
@@ -47,30 +48,38 @@ test('real app persists climate caches, refreshes preference changes, and reload
     };
   }));
   await expect.poll(async () => (await browserCache())[0]?.segments[0].countryParts?.length, { timeout: 15000 }).toBe(1);
-  await expect.poll(async () => (await browserCache())[0]?.segments[0].climateImpact?.result?.co2eKg || 0).toBeGreaterThan(0);
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
   await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
   await expect.poll(() => writes).toBe(1);
-  const original = remote.segments[0].climateImpact!;
-  expect(original.result?.co2eKg).toBeGreaterThan(0);
   expect(remote.segments[0].geometry).toBeUndefined();
   expect(remote.segments[0].distanceStats).toBeUndefined();
-  expect(remote.segments[0].climateImpact?.result).not.toHaveProperty('warnings');
-  expect(remote.segments[1].climateImpact).toEqual({ inputKey: 'none' });
+  expect(remote.segments.every(s => !('climateImpact' in s))).toBe(true);
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  const openClimateAnalytics = async () => {
+    await page.getByTitle('Analytics', { exact: true }).click();
+    await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  };
+  await openClimateAnalytics();
+  const impact = page.getByLabel('Transport modes', { exact: true }).locator('.analytics-summary-row .right');
+  await expect(impact).toHaveCount(1);
+  const original = Number(await impact.textContent());
+  expect(original).toBeGreaterThan(0);
   await page.evaluate(() => {
     const profiles = JSON.parse(localStorage.getItem('climateProfiles')!);
     profiles[0].profile.occupancy = 4;
     localStorage.setItem('climateProfiles', JSON.stringify(profiles));
     window.dispatchEvent(new Event('preferences-updated'));
   });
-  await expect.poll(async () => (await browserCache())[0]?.segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(original.result!.co2eKg / 2);
-  await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
-  await expect.poll(() => writes).toBe(2);
-  expect(remote.segments[0].climateImpact?.inputKey).not.toBe(original.inputKey);
+  await expect.poll(async () => Math.abs(Number(await impact.textContent()) * 2 - original)).toBeLessThanOrEqual(.11);
+  const revised = await impact.textContent();
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  expect(writes).toBe(1);
   await page.reload();
   await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled({ timeout: 15000 });
-  await expect.poll(async () => (await browserCache())[0]?.segments[0].climateImpact?.inputKey).toBe(remote.segments[0].climateImpact!.inputKey);
-  await expect.poll(async () => (await browserCache())[0]?.segments[1].climateImpact?.result?.co2eKg).toBe(0);
+  await openClimateAnalytics();
+  await expect(impact).toHaveText(revised!);
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  expect(writes).toBe(1);
 });

@@ -284,6 +284,26 @@ test("flight: explicit seats and load factor override", () => {
   assert.ok(r.co2eKg > 0 && r.co2eKg !== q.co2eKg);
 });
 
+test("flight: named airlines without load factors use aircraft averages and retain their layouts", () => {
+  for (const operator of ['ROT', 'SEH']) {
+    assert.ok(defaultData.operators[operator].name);
+    assert.equal(defaultData.operators[operator].loadFactor, undefined);
+    const layout = defaultData.layouts.find(row => row.operator === operator)!;
+    assert.ok(layout);
+    const input = { mode: 'flight' as const, date: D, distanceKm: 1500, aircraftType: layout.aircraft };
+    const result = calculate({ ...input, operator });
+    const explicitLayout = calculate({ ...input, seats: layout.seats });
+    assert.ok(Number.isFinite(result.co2eKg) && result.co2eKg > 0);
+    near(result.co2eKg, explicitLayout.co2eKg, 1e-12);
+    assert.ok(result.assumptions.some(a => a.includes(`Seat layout of ${operator}`)));
+    assert.ok(result.assumptions.some(a => a.includes('DEFRA UK-airline average for')));
+    assert.ok(!result.assumptions.some(a => a.includes(`(operator ${operator})`)));
+    const override = calculate({ ...input, operator, loadFactor: .9 });
+    const explicitOverride = calculate({ ...input, seats: layout.seats, loadFactor: .9 });
+    near(override.co2eKg, explicitOverride.co2eKg, 1e-12);
+  }
+});
+
 test("flight: very short distance for a long-haul aircraft warns", () => {
   const r = calculate({ mode: "flight", date: D, distanceKm: 300, aircraftType: "B77W" });
   assert.ok(r.warnings.some((w) => w.code === "AIRCRAFT_DISTANCE_OUT_OF_RANGE"));

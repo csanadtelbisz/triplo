@@ -11,6 +11,7 @@ export interface NamedClimateProfile {
 /** Keep a snapshot so saved/shared trips remain usable without the original preferences. */
 export type ClimateProfileChoice = { profileId: string; name: string; profile: ClimateProfile } | { custom: ClimateProfile };
 
+/** Transient calculation cache, excluded from trip persistence. */
 export interface SegmentClimateImpact {
   /** Canonical inputs and calculator/data revision; "none" represents a zero-emission result. */
   inputKey: string;
@@ -60,6 +61,7 @@ export interface CountryPart {
 
 export interface Segment {
   climateProfile?: ClimateProfile;
+  /** Runtime only. Legacy saved results are ignored and recalculated. */
   climateImpact?: SegmentClimateImpact;
   id: string; // UUID
   transportMode: TransportMode;

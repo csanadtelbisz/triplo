@@ -7,6 +7,7 @@ import { serializeTrip } from '../src/utils/serializeTrip';
 import { computeTripCaches } from '../src/utils/distance';
 import { segmentKey } from '../src/countries/types';
 import { CountryPartitioner } from '../src/countries/partition';
+import { withoutClimateResults } from '../src/climate/cache';
 
 const settings: ClimateSettings = { profiles: [], builtIn: {}, custom: [] };
 const segment: Segment = { id: 'car', transportMode: 'car', routingService: 'manual', routingProfile: 'straight', source: 'manual',
@@ -16,17 +17,19 @@ const segment: Segment = { id: 'car', transportMode: 'car', routingService: 'man
 };
 const trip: Trip = { id: 'trip', name: 'Trip', startDate: '2026-05-01', createdAt: '', updatedAt: '', segments: [segment] };
 
-test('segment climate results persist and are reused after JSON reload without recalculation', () => {
+test('segment results are cached in memory and recalculated after JSON reload', () => {
   const cached = withClimateCache(trip, settings);
   expect(trip.segments[0].climateImpact).toBeUndefined();
   expect(cached.segments[0].climateImpact?.result?.co2eKg).toBeCloseTo(7.96782);
   expect(withClimateCache(cached, settings)).toBe(cached);
   const restored: Trip = JSON.parse(serializeTrip(cached));
+  expect(restored.segments[0].climateImpact).toBeUndefined();
   const hydrated = withClimateCache(restored, settings);
   expect(hydrated.segments[0].climateImpact?.result).toEqual(cached.segments[0].climateImpact?.result);
   expect(withClimateCache(hydrated, settings)).toBe(hydrated);
   expect(segmentClimate(hydrated, hydrated.segments[0], settings)).toBe(hydrated.segments[0].climateImpact);
-  expect(restored.segments[0].climateImpact?.result?.factorSets.defra?.yearUsed).toBe(2026);
+  expect(hydrated.segments[0].climateImpact).not.toBe(cached.segments[0].climateImpact);
+  expect(hydrated.segments[0].climateImpact?.result?.factorSets.defra?.yearUsed).toBe(2026);
   const renamed = { ...restored, name: 'Renamed trip', segments: [{ ...restored.segments[0], name: 'Renamed segment' }] };
   expect(withClimateCache(renamed, settings).segments[0].climateImpact?.result).toEqual(cached.segments[0].climateImpact?.result);
 });
@@ -80,7 +83,7 @@ test('automatic bus caches refresh across 10 km and replace estimates from the o
   expect(withClimateCache(restored, settings)).toBe(restored);
 });
 
-test('old electric rail estimates refresh and benchmark metadata survives compact persistence', () => {
+test('old electric rail estimates are ignored and benchmark metadata is recalculated on load', () => {
   for (const railType of ['inter_city', 'high_speed'] as const) {
     const train: Segment = { ...segment, climateProfile: { mode: 'rail', railType, traction: 'electric' }, countryDistances: { HU: 75, DE: 25 } };
     const current = withClimateCache({ ...trip, segments: [train] }, settings);
@@ -92,14 +95,15 @@ test('old electric rail estimates refresh and benchmark metadata survives compac
     expect(refreshed.segments[0].climateImpact?.result).toEqual(entry.result);
     expect(refreshed.segments[0].climateImpact?.inputKey).toBe(entry.inputKey);
     const stored: Trip = JSON.parse(serializeTrip(refreshed));
-    expect(stored.segments[0].climateImpact?.result?.factorSets.railEnergy).toEqual({ yearUsed: 2017, source: 'French transport reporting' });
+    expect(stored.segments[0].climateImpact).toBeUndefined();
     const hydrated = withClimateCache(stored, settings);
     expect(hydrated.segments[0].climateImpact?.result).toEqual(entry.result);
+    expect(hydrated.segments[0].climateImpact?.result?.factorSets.railEnergy).toEqual({ yearUsed: 2017, source: 'French transport reporting' });
     expect(withClimateCache(hydrated, settings)).toBe(hydrated);
   }
 });
 
-test('country-part arrival updates electric caches and saved compact segments retain their climate result', () => {
+test('country-part arrival updates electric results while storage omits climate results', () => {
   const electric = { ...trip, segments: [{ ...segment, climateProfile: { mode: 'car' as const, fuelType: 'bev' as const } }] };
   const cached = withClimateCache(electric, settings);
   const parts = [{ country: 'HU', geometry: { type: 'LineString' as const, coordinates: [[19, 47], [20, 47]] }, distanceStats: segment.distanceStats! }];
@@ -109,9 +113,9 @@ test('country-part arrival updates electric caches and saved compact segments re
   expect(updated.segments[0].climateImpact?.result?.factorSets.grid?.level).toBe('country');
   const saved = tripForStorage(updated);
   expect(saved.segments[0].distanceStats).toBeUndefined();
-  expect(saved.segments[0].climateImpact).toBe(updated.segments[0].climateImpact);
+  expect(saved.segments[0].climateImpact).toBeUndefined();
   expect(withClimateCache(JSON.parse(serializeTrip(updated)), getClimateSettings()).segments[0].climateImpact?.inputKey).toBe(updated.segments[0].climateImpact?.inputKey);
-  expect(withSavedCountryParts(updated, cached).segments[0].climateImpact).toBe(cached.segments[0].climateImpact);
+  expect(withSavedCountryParts(updated, cached).segments[0].climateImpact).toBe(updated.segments[0].climateImpact);
 });
 
 test('distance-cache computation attaches climate results; errors and teleport results are cached independently', () => {
@@ -128,7 +132,7 @@ test('distance-cache computation attaches climate results; errors and teleport r
   expect(withClimateCache(reference, settings)).toBe(reference);
 });
 
-test('cold reload reuses climate caches after multi-country and flight distance hydration', () => {
+test('cold reload recalculates after multi-country and flight distance hydration without dirtying the trip', () => {
   const polygon = (west: number, east: number): GeoJSON.Polygon => ({ type: 'Polygon', coordinates: [[[west, -2], [east, -2], [east, 2], [west, 2], [west, -2]]] });
   const partitioner = new CountryPartitioner(['AA', 'BB'].map((code, i) => ({ code, territorial: polygon(i ? 0 : -2, i ? 2 : 0), land: polygon(i ? 0 : -2, i ? 2 : 0) })));
   const route = (id: string, mode: Segment['transportMode'], coordinates: [number, number][]): Segment => ({ id, transportMode: mode, source: 'manual', routingProfile: 'straight', routingService: 'manual', geometry: { type: 'LineString', coordinates }, waypoints: coordinates.map((coordinates, i) => ({ id: `${id}-${i}`, coordinates })) });
@@ -142,11 +146,17 @@ test('cold reload reuses climate caches after multi-country and flight distance 
   const split = attachCountryParts([initial], parts)[0];
   const stored: Trip = JSON.parse(serializeTrip(split));
   const restored = computeTripCaches(stored);
-  expect(restored.segments.map(s => s.climateImpact?.inputKey)).toEqual(stored.segments.map(s => s.climateImpact?.inputKey));
+  expect(stored.segments.every(s => !s.climateImpact)).toBe(true);
+  expect(restored.segments.map(s => s.climateImpact?.inputKey)).toEqual(split.segments.map(s => s.climateImpact?.inputKey));
+  restored.segments.forEach((segment, i) => {
+    for (const field of ['co2eKg', 'directKg', 'upstreamKg', 'distanceKmUsed'] as const) {
+      expect(segment.climateImpact!.result![field]).toBeCloseTo(split.segments[i].climateImpact!.result![field], 10);
+    }
+  });
   expect(serializeTrip(withSavedCountryParts(restored, stored))).toBe(serializeTrip(restored));
 });
 
-test('compact JSON omits default result fields and encodes zero emissions with one short marker', () => {
+test('all algorithms omit results from storage but keep profile choices and recompute on reload', () => {
   const cached = withClimateCache({ ...trip, segments: [
     { ...segment, id: 'none', climateProfile: { mode: 'none' } },
     segment,
@@ -159,33 +169,51 @@ test('compact JSON omits default result fields and encodes zero emissions with o
   ] }, settings);
   const serialized = serializeTrip(cached);
   const stored: Trip = JSON.parse(serialized);
-  expect(stored.segments[0].climateImpact).toEqual({ inputKey: 'none' });
-  expect(JSON.stringify(stored.segments[0].climateImpact).length).toBeLessThan(25);
-  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('scope');
-  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('status');
-  expect(stored.segments[1].climateImpact?.result).not.toHaveProperty('warnings');
-  expect(stored.segments[2].climateImpact?.result).not.toHaveProperty('directKg');
-  expect(stored.segments[7].climateImpact?.result?.status).toBe('fallback');
-  expect(stored.segments[7].climateImpact?.result?.warnings.length).toBeGreaterThan(0);
+  expect(serialized).not.toContain('"climateImpact"');
+  expect(stored.segments.map(s => s.climateProfile)).toEqual(cached.segments.map(s => s.climateProfile));
+  const offline = withoutClimateResults(cached);
+  expect(offline.segments.every(s => !('climateImpact' in s))).toBe(true);
+  expect(offline.segments[1].distanceStats).toBe(cached.segments[1].distanceStats);
+  expect(offline.segments[2].countryDistances).toBe(cached.segments[2].countryDistances);
+  expect(cached.segments[7].climateImpact?.result?.warnings.length).toBeGreaterThan(0);
   const restored = withClimateCache(stored, settings);
   expect(restored.segments.map(s => s.climateImpact?.result)).toEqual(cached.segments.map(s => s.climateImpact?.result));
   expect(withClimateCache(restored, settings)).toBe(restored);
   expect(serializeTrip(restored)).toBe(serialized);
   expect(JSON.parse(serializeTrip(restored, false))).toEqual(stored);
-  // Expanded caches from previous versions remain supported as well.
+  // Expanded caches from previous versions are discarded, even with matching keys.
   const expanded: Trip = JSON.parse(JSON.stringify(cached));
-  expect(withClimateCache(expanded, settings)).toBe(expanded);
+  expanded.segments[1].climateImpact!.result!.co2eKg = 999999;
+  const fresh = withClimateCache(expanded, settings);
+  expect(fresh.segments[1].climateImpact?.result).toEqual(cached.segments[1].climateImpact?.result);
+  expect(serializeTrip(fresh)).toBe(serialized);
 });
 
-test('a restored zero marker invalidates when the segment starts emitting and errors remain intact', () => {
+test('legacy zero markers are ignored and errors are recalculated instead of persisted', () => {
   const cached = withClimateCache({ ...trip, segments: [{ ...segment, climateProfile: { mode: 'none' } }] }, settings);
   const stored: Trip = JSON.parse(serializeTrip(cached));
+  stored.segments[0].climateImpact = { inputKey: 'none' };
   expect(segmentClimate(stored, stored.segments[0], settings).result?.co2eKg).toBe(0);
   const emitting = withClimateCache({ ...stored, segments: [{ ...stored.segments[0], climateProfile: { mode: 'bus' } }] }, settings);
   expect(emitting.segments[0].climateImpact?.result?.co2eKg).toBeGreaterThan(0);
   expect(emitting.segments[0].climateImpact?.inputKey).not.toBe('none');
   const invalid = withClimateCache({ ...trip, startDate: 'invalid' }, settings);
   const restored: Trip = JSON.parse(serializeTrip(invalid));
-  expect(withClimateCache(restored, settings)).toBe(restored);
-  expect(restored.segments[0].climateImpact?.error).toContain('Invalid date');
+  expect(restored.segments[0].climateImpact).toBeUndefined();
+  const refreshed = withClimateCache(restored, settings);
+  expect(refreshed.segments[0].climateImpact?.error).toContain('Invalid date');
+  expect(withClimateCache(refreshed, settings)).toBe(refreshed);
+});
+
+test('calculation changes never affect serialized save state while profile edits do', () => {
+  const inherited = { ...trip, segments: [{ ...segment, climateProfile: undefined }] };
+  const cached = withClimateCache(inherited, settings);
+  const preferred: ClimateSettings = { ...settings, profiles: [{ id: 'zero', name: 'Zero', profile: { mode: 'none' } }], builtIn: { car: { climateProfileId: 'zero' } } };
+  const refreshed = withClimateCache(cached, preferred);
+  expect(refreshed.segments[0].climateImpact?.result?.co2eKg).toBe(0);
+  expect(serializeTrip(refreshed)).toBe(serializeTrip(cached));
+  const legacy = { ...cached, segments: [{ ...cached.segments[0], climateImpact: { inputKey: 'obsolete', error: 'Old algorithm' } }] };
+  expect(serializeTrip(legacy)).toBe(serializeTrip(refreshed));
+  expect(serializeTrip({ ...refreshed, climateProfiles: { car: { custom: { mode: 'bus' } } } })).not.toBe(serializeTrip(refreshed));
+  expect(serializeTrip({ ...refreshed, segments: [{ ...refreshed.segments[0], climateProfile: { mode: 'bus' } }] })).not.toBe(serializeTrip(refreshed));
 });

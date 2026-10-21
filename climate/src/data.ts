@@ -10,7 +10,7 @@ export interface DataBundle {
   /** iso3 -> continent name as in OWID */
   regions: Record<string, string>;
   aircraft: AircraftRow[];
-  operators: Record<string, { name: string; loadFactor: number }>;
+  operators: Record<string, { name: string; loadFactor?: number }>;
   layouts: { operator: string; aircraft: string; seats: Record<SeatClass, number> }[];
   flight: FlightParams;
   railEnergy: RailEnergyParams;

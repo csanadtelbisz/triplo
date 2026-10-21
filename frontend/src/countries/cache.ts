@@ -4,22 +4,20 @@ import { countryPartStats, getSegmentGeometry, samePosition, sameSegmentGeometry
 import { segmentKey } from './types';
 import type { CountryData } from './types';
 import { getClimateSettings, withClimateCache } from '../climate/profiles';
-import { compactClimateImpact } from '../climate/cache';
+import { withoutClimateResults } from '../climate/cache';
 
 export const canPersistCountryParts = (trip: Trip) => !trip.metadata?.isSharedTripReference;
 
 export function withSavedCountryParts(working: Trip, saved: Trip): Trip {
-  // Compare save state against persisted geometry and climate caches, so new
-  // background calculations remain saveable without creating undo entries.
+  // Compare save state against persisted geometry, so new background country
+  // calculations remain saveable without creating undo entries.
   const originals = new Map(saved.segments.map(segment => [segment.id, segment]));
   const segments = working.segments.map(segment => {
     const original = originals.get(segment.id);
     if (!original) return segment;
-    const climate = segment.climateImpact && compactClimateImpact(segment.climateImpact);
-    const savedClimate = original.climateImpact && compactClimateImpact(original.climateImpact);
-    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances, climate]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances, savedClimate])) return segment;
+    if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances])) return segment;
     const content = { ...segment };
-    for (const field of ['geometry', 'countryParts', 'countryDistances', 'climateImpact'] as const) {
+    for (const field of ['geometry', 'countryParts', 'countryDistances'] as const) {
       delete content[field];
       if (original[field] !== undefined) Object.assign(content, { [field]: original[field] });
     }
@@ -52,7 +50,7 @@ export function compactCountryData(trip: Trip): Trip {
 }
 
 export function tripForStorage(trip: Trip): Trip {
-  const compact = compactCountryData(trip);
+  const compact = withoutClimateResults(compactCountryData(trip));
   return { ...compact, segments: compact.segments.map(segment => {
     if (!segment.countryParts) return segment;
     const content = { ...segment };

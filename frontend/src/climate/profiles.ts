@@ -10,7 +10,7 @@ import { countryDistances } from '../countries/parts';
 import { modeKey } from '../countries/analytics';
 import { climateCountryCodes } from './countryCodes';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
-import { noEmissionResult, restoreClimateImpact } from './cache';
+import { noEmissionResult } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
 const CLIMATE_CALCULATION_VERSION = 6;
@@ -117,8 +117,9 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
 function segmentClimateCache(trip: Trip, segment: Segment, settings: ClimateSettings): SegmentClimateImpact {
   const { input, undated } = climateInput(trip, segment, settings);
   const inputKey = input.mode === 'none' ? 'none' : canonical({ revision: climateRevision, input, undated });
-  const cached = segment.climateImpact?.inputKey === inputKey ? segment.climateImpact : computed.get(segment);
-  if (cached?.inputKey === inputKey && (cached.result || cached.error || input.mode === 'none')) return restoreClimateImpact(cached);
+  // Only trust results calculated in this session, never legacy saved entries.
+  const cached = computed.get(segment);
+  if (cached?.inputKey === inputKey) return cached;
   let next: SegmentClimateImpact;
   try {
     const result = input.mode === 'none' ? noEmissionResult() : calculate(input);
@@ -135,7 +136,7 @@ export function segmentClimate(trip: Trip, segment: Segment, settings: ClimateSe
   return segmentClimateCache(trip, segment, settings);
 }
 
-/** Refresh only invalid caches; preserve identities for unchanged trips and routes. */
+/** Refresh transient results; preserve identities when current inputs are unchanged. */
 export function withClimateCache(trip: Trip, settings: ClimateSettings = getClimateSettings()): Trip {
   if (trip.metadata?.isSharedTripReference) return trip;
   let changed = false;
@@ -144,6 +145,7 @@ export function withClimateCache(trip: Trip, settings: ClimateSettings = getClim
     if (climateImpact === segment.climateImpact) return segment;
     changed = true;
     const next = { ...segment, climateImpact };
+    computed.set(next, climateImpact);
     copyEffectiveGeometryCache(segment, next);
     return next;
   });
