@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Trip } from '../../../shared/types';
-import type { PersistingService, ConnectionInstruction } from './PersistingService';
+import { PersistingService } from './PersistingService';
+import type { ConnectionInstruction } from './PersistingService';
 import gdriveIcon from '../assets/icons/google_drive.png';
 import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
 import { serializeTrip } from '../utils/serializeTrip';
@@ -11,7 +12,7 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 // Tell TypeScript about the Google Identity Services global
 declare const google: any;
 
-export class GoogleDrivePersistingService implements PersistingService {
+export class GoogleDrivePersistingService extends PersistingService {
   name = 'Google Drive' as const;
   icon = gdriveIcon;
 
@@ -19,6 +20,7 @@ export class GoogleDrivePersistingService implements PersistingService {
   private gisInited: boolean = false;
 
   constructor() {
+    super();
     this.loadScripts();
   }
 
@@ -313,11 +315,7 @@ export class GoogleDrivePersistingService implements PersistingService {
     });
   }
 
-  async saveAll(trips: any[]): Promise<void> {
-    for (const trip of trips) {
-      await this.save(trip);
-    }
-  }
+  // Inherit saveAll: Drive's batch endpoint does not support file-content uploads.
 
   async delete(tripId: string): Promise<void> {
     if (!this.getAccessToken()) return;

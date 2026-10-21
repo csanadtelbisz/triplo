@@ -118,6 +118,20 @@ want to keep.
   sharing through Gists, configure a share token with Gist access in the GitHub
   storage settings.
 
+**Save All** uses each provider's batch operation. GitHub publishes changed trip
+files in one commit on the repository's default branch, preserving unrelated
+files. It uploads file blobs in groups of four, then creates a tree/commit and
+advances the branch without force; a concurrent push leaves trips unsaved so
+the save can be retried. Identical contents produce no new commit. Single-trip
+batches use the normal one-file save. Completely empty repositories use the
+default loop until GitHub's Git object API can work with an initialized branch.
+
+`PersistingService.saveAll` provides a sequential `save` loop that providers can
+override. Google Drive inherits it because its
+[batch API excludes file-content uploads](https://developers.google.com/workspace/drive/api/guides/performance#batch_requests).
+An error leaves the batch marked unsaved, including when a provider's loop
+partly succeeded; saving across providers is not a shared transaction.
+
 Both providers can also store preferences and custom style scripts. The native
 trip format is the `Trip` object defined in [shared/types.ts](shared/types.ts),
 with GeoJSON segment geometry. Sharing uses a publicly readable Google Drive

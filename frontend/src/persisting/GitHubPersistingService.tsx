@@ -1,12 +1,13 @@
 ﻿import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import type { PersistingService, ConnectionInstruction } from './PersistingService';
+import { PersistingService } from './PersistingService';
+import type { ConnectionInstruction, PersistedTrip } from './PersistingService';
 import type { Trip } from '../../../shared/types';
 import githubIcon from '../assets/icons/github.png';
 import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
 import { serializeTrip } from '../utils/serializeTrip';
 
-export class GitHubPersistingService implements PersistingService {
+export class GitHubPersistingService extends PersistingService {
   name = 'GitHub' as const;
   icon = githubIcon;
 
@@ -243,10 +244,54 @@ export class GitHubPersistingService implements PersistingService {
     }
   }
 
-  async saveAll(trips: any[]): Promise<void> {
-    for (const trip of trips) {
-      await this.save(trip);
+  async saveAll(trips: PersistedTrip[]): Promise<void> {
+    if (!trips.length) return;
+    if (trips.length === 1) return this.save(trips[0]);
+    if (!this.isAvailable()) throw new Error('GitHub service unavailable');
+    const repo = this.getRepo();
+    const base = `/repos/${repo}`;
+    const checked = async (response: Response) => {
+      if (!response.ok) {
+        if (response.status === 401) localStorage.removeItem('github_token');
+        throw new Error(`GitHub batch save failed: ${response.status} ${await response.text()}`);
+      }
+      return response.json();
+    };
+    const repository = await checked(await this.request(base));
+    const branch = repository.default_branch.split('/').map(encodeURIComponent).join('/');
+    const ref = `/git/refs/heads/${branch}`;
+    const headResponse = await this.request(`${base}/git/ref/heads/${branch}`);
+    // Git's object API cannot initialize an empty GitHub repository. Preserve
+    // first-save support using the standard Contents API until it has a branch.
+    if (headResponse.status === 409) return super.saveAll(trips);
+    const head = (await checked(headResponse)).object.sha;
+    const parent = await checked(await this.request(`${base}/git/commits/${head}`));
+
+    // Upload immutable blobs in small groups; avoid one enormous tree request
+    // when trips contain large GPX tracks. No branch changes until all succeed.
+    const entries: { path: string; mode: string; type: string; sha: string }[] = [];
+    for (let offset = 0; offset < trips.length; offset += 4) {
+      entries.push(...await Promise.all(trips.slice(offset, offset + 4).map(async trip => {
+        const blob = await checked(await this.request(`${base}/git/blobs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: this.encodeUtf8Base64(serializeTrip(trip)), encoding: 'base64' }),
+        }));
+        return { path: `trips/${trip.id}.triplo.json`, mode: '100644', type: 'blob', sha: blob.sha };
+      })));
     }
+    const tree = await checked(await this.request(`${base}/git/trees`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base_tree: parent.tree.sha, tree: entries }),
+    }));
+    if (tree.sha === parent.tree.sha) return;
+    const commit = await checked(await this.request(`${base}/git/commits`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: `Triplo: Sync ${trips.length} trips`, tree: tree.sha, parents: [head] }),
+    }));
+    // Fast-forward only: a concurrent push must never be overwritten. Failure
+    // propagates to Save All, which keeps all affected trips marked unsaved.
+    await checked(await this.request(`${base}${ref}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sha: commit.sha, force: false }),
+    }));
   }
 
   async delete(tripId: string): Promise<void> {
