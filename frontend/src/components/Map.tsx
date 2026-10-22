@@ -97,11 +97,13 @@ export const Map = forwardRef<MapRef, MapProps>(({
     onAnalyticsSegmentClick
 }, ref) => {
   const climateSettings = useClimateSettings();
+  // With no analytics filter, retain the normal map view and its style rules.
+  const filterClimate = !!analyticsSelection?.climate && !!(analyticsSelection.trip || analyticsSelection.country || analyticsSelection.mode || analyticsSelection.range);
   const emittingSegments = useMemo(() => {
-    if (!analyticsSelection?.climate) return null;
+    if (!filterClimate) return null;
     return new Set(trips.flatMap(trip => trip.segments.filter(segment => (segmentClimate(trip, segment, climateSettings).result?.co2eKg || 0) > 0).map(segment => segmentKey(trip.id, segment.id))));
-  }, [trips, analyticsSelection?.climate, climateSettings]);
-  const analyticsVisible = (trip: Trip, segment: Segment) => !analyticsSelection || matchesAnalyticsSegment(trip, segment, analyticsSelection, countryData, emittingSegments?.has(segmentKey(trip.id, segment.id)) ? 1 : 0);
+  }, [trips, filterClimate, climateSettings]);
+  const analyticsVisible = (trip: Trip, segment: Segment) => !analyticsSelection || matchesAnalyticsSegment(trip, segment, { ...analyticsSelection, climate: filterClimate }, countryData, emittingSegments?.has(segmentKey(trip.id, segment.id)) ? 1 : 0);
   const renderInputs = useMapRenderInputs(trips, selectedTrip, styleContextSelectedSegment);
   const activeCountryData = analyticsSelection?.country ? countryData : undefined;
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -927,7 +929,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         markersRef.current.forEach(m => m.marker.remove());
         markersRef.current = [];
 
-      const isUnselectedState = !selectedTrip || (isStyleConfigEditorOpen && testContextOverrides.isNoTripSelected);
+      const renderedTrip = analyticsSelection?.trip ? trips.find(trip => trip.id === analyticsSelection.trip) : selectedTrip;
+      const isUnselectedState = !renderedTrip || (isStyleConfigEditorOpen && testContextOverrides.isNoTripSelected);
       
       // Derive the currently used map layer/style from the MapLibre instance when available.
       const currentMapStyle = mapRef.current ? (() => {
@@ -943,18 +946,18 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const effectiveSelectedSegmentId = styleContextSelectedSegment?.id || selectedSegmentId;
 
       const styleContext = {
-         isNoTripSelected: isStyleConfigEditorOpen ? testContextOverrides.isNoTripSelected : !selectedTrip,
+         isNoTripSelected: isStyleConfigEditorOpen ? testContextOverrides.isNoTripSelected : !renderedTrip,
          showHiddenSegments: showHiddenSegments || !!analyticsSelection?.country,
          isReadOnly: isStyleConfigEditorOpen ? testContextOverrides.isReadOnly : isReadOnly,
          selectedSegment: (isStyleConfigEditorOpen && testContextOverrides.hasSegmentSelected)
            ? { id: 'test-seg', transportMode: 'bike', routingProfile: 'bike', source: 'manual', routingService: 'none', geometry: { type: 'LineString', coordinates: [] }, waypoints: [] } as any
-           : (styleContextSelectedSegment || selectedTrip?.segments.find(s => s.id === effectiveSelectedSegmentId) || null),
+           : (styleContextSelectedSegment || renderedTrip?.segments.find(s => s.id === effectiveSelectedSegmentId) || null),
          mapLayer: currentMapStyle
       };
 
       const isAnalyticsFilterActive = !!getTransientStyleConfig()?.id.startsWith('analytics-filter:');
 
-      const targetTrips = isUnselectedState ? trips : (selectedTrip ? [selectedTrip] : []);
+      const targetTrips = isUnselectedState ? trips : (renderedTrip ? [renderedTrip] : []);
       const visibleTrips = targetTrips.filter(trip => (!analyticsSelection?.trip || trip.id === analyticsSelection.trip) && tripIntersects(trip, analyticsSelection?.range || null));
       
       const features: GeoJSON.Feature[] = [];

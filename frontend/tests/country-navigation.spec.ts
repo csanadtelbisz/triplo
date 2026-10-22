@@ -837,10 +837,10 @@ test('trip and eco filters restrict real map routes and exclude a no-emission ca
   await page.getByTitle('Analytics', { exact: true }).click();
   await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
   await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
-  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive']);
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
   await groupAnalyticsBy(page, 'trips');
   await page.getByLabel('Trip climate impacts', { exact: true }).getByRole('button', { name: /Cross-year crossing/ }).click();
-  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive']);
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive', 'flight']);
   await page.getByLabel('Transport modes', { exact: true }).getByRole('button', { name: /car/ }).click();
   await expect(page.getByRole('textbox', { name: 'Segment title' })).toHaveCount(1);
   await expect(page.getByRole('textbox', { name: 'Segment title' })).toHaveValue('drive');
@@ -852,5 +852,32 @@ test('trip and eco filters restrict real map routes and exclude a no-emission ca
   await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
   await page.goBack();
   await expect(page.getByLabel('Trip comparison', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive']);
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
+});
+
+for (const climate of [false, true]) test(`analytics trip selection uses selected-trip styles in ${climate ? 'climate' : 'distance'} mode`, async ({ page, context }) => {
+  const selected: Trip = { ...trip, id: 'selected-trip-test', segments: [
+    ...trip.segments,
+    { ...segment('zero-drive', 'car', [[-.8, .6], [.8, .6]]), climateProfile: { mode: 'none' } },
+    { ...segment('hidden-drive', 'car', [[-.8, .8], [.8, .8]]), isHidden: true },
+  ] };
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: selected }));
+  await page.addInitScript(() => {
+    localStorage.setItem('renderStyleConfigs', JSON.stringify([{ id: 'selected-trip', name: 'Selected trip', script: `return {
+      getSegmentStyle: (segment, color, context) => ({ hidden: context.isNoTripSelected || !!segment.isHidden }),
+      getWaypointStyle: (waypoint, segments, colors, context) => ({ hidden: context.isNoTripSelected, type: 'dot' })
+    };` }]));
+    localStorage.setItem('activeRenderStyleConfigId', 'selected-trip');
+  });
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  if (climate) await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await groupAnalyticsBy(page, 'trips');
+  const selectedRow = page.getByLabel(climate ? 'Trip climate impacts' : 'Trip distances', { exact: true }).getByRole('button', { name: /Cross-year crossing/ });
+  await selectedRow.click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(climate ? ['drive', 'flight'] : ['drive', 'flight', 'zero-drive']);
+  await expect.poll(() => page.locator('.maplibregl-marker').count()).toBeGreaterThan(0);
+  await selectedRow.click();
+  await expect.poll(() => routes(page)).toEqual([]);
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
 });
