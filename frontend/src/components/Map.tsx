@@ -1000,6 +1000,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
       // Add markers
       visibleTrips.forEach(trip => {
+        if (analyticsSelection?.trip) return;
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {

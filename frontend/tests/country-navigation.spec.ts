@@ -876,7 +876,7 @@ for (const climate of [false, true]) test(`analytics trip selection uses selecte
   const selectedRow = page.getByLabel(climate ? 'Trip climate impacts' : 'Trip distances', { exact: true }).getByRole('button', { name: /Cross-year crossing/ });
   await selectedRow.click();
   await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(climate ? ['drive', 'flight'] : ['drive', 'flight', 'zero-drive']);
-  await expect.poll(() => page.locator('.maplibregl-marker').count()).toBeGreaterThan(0);
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
   await selectedRow.click();
   await expect.poll(() => routes(page)).toEqual([]);
   await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
