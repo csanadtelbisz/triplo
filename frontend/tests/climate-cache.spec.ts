@@ -83,6 +83,22 @@ test('automatic bus caches refresh across 10 km and replace estimates from the o
   expect(withClimateCache(restored, settings)).toBe(restored);
 });
 
+test('automatic rail defaults refresh across 30 km even when distances round to the same cache key', () => {
+  const rail: Segment = { ...segment, transportMode: 'rail', climateProfile: undefined, countryDistances: { HU: 30 }, distanceStats: { ...segment.distanceStats!, totalDistance: 29.999999999999996 } };
+  const short = withClimateCache({ ...trip, segments: [rail] }, settings);
+  const light = short.segments[0].climateImpact!;
+  expect(JSON.parse(light.inputKey).input.railType).toBe('light_rail');
+  expect(light.result?.factorKeys).toContain('rail.light.ttw');
+  const longer = withClimateCache({ ...short, segments: [{ ...short.segments[0], distanceStats: { ...rail.distanceStats!, totalDistance: 30 } }] }, settings);
+  const interCity = longer.segments[0].climateImpact!;
+  expect(JSON.parse(interCity.inputKey).input.railType).toBe('inter_city');
+  expect(interCity.inputKey).not.toBe(light.inputKey);
+  expect(interCity.result?.factorKeys).toContain('rail.energy.inter_city.kwh_per_pkm');
+  const restored = withClimateCache(JSON.parse(serializeTrip(longer)), settings);
+  expect(restored.segments[0].climateImpact?.result).toEqual(interCity.result);
+  expect(withClimateCache(restored, settings)).toBe(restored);
+});
+
 test('old electric rail estimates are ignored and benchmark metadata is recalculated on load', () => {
   for (const railType of ['inter_city', 'high_speed'] as const) {
     const train: Segment = { ...segment, climateProfile: { mode: 'rail', railType, traction: 'electric' }, countryDistances: { HU: 75, DE: 25 } };

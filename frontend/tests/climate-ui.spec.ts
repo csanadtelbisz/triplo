@@ -48,6 +48,46 @@ test('automatic bus profiles show resolved defaults and change at the 10 km boun
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[0].climateProfile)).toEqual({ mode: 'bus' });
 });
 
+test('automatic rail profiles show resolved defaults and change at the 30 km boundary', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem('climate-test-trip')) return;
+    localStorage.setItem('climate-test-trip', JSON.stringify({ id: 'rail', name: 'Rail trip', startDate: '2026-05-01', createdAt: '', updatedAt: '',
+      segments: [{ id: 'car', transportMode: 'rail', routingProfile: 'straight', source: 'manual', waypoints: [],
+        distanceStats: { totalDistance: 29.999, elevationUp: 0, elevationDown: 0, hasElevation: false }, countryDistances: { HU: 29.999 } }],
+    }));
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  const railType = card.getByLabel('Rail type', { exact: true });
+  const result = card.locator('.climate-result');
+  await expect(railType).toBeDisabled();
+  await expect(railType.locator('option:checked')).toHaveText('Automatic (Light rail)');
+  await expect(card.getByLabel('Traction', { exact: true })).toHaveCount(0);
+  const light = await result.textContent();
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await railType.selectOption('inter_city');
+  await expect(result).not.toHaveText(light!);
+  await railType.selectOption('');
+  await expect(result).toHaveText(light!);
+  await page.evaluate(() => {
+    const trip = JSON.parse(localStorage.getItem('climate-test-trip')!);
+    trip.segments[0].distanceStats.totalDistance = 30;
+    trip.segments[0].countryDistances = { HU: 30 };
+    localStorage.setItem('climate-test-trip', JSON.stringify(trip));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  await expect(railType.locator('option:checked')).toHaveText('Automatic (Inter city)');
+  await expect(card.getByLabel('Traction', { exact: true })).toHaveValue('electric');
+  const interCity = await result.textContent();
+  await railType.selectOption('light_rail');
+  await expect(result).not.toHaveText(interCity!);
+  await railType.selectOption('');
+  await expect(result).toHaveText(interCity!);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[0].climateProfile)).toEqual({ mode: 'rail', traction: 'electric' });
+});
+
 test('legacy unknown traction is shown as diesel and saved without the removed option', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('climateProfiles', JSON.stringify([
     { id: 'old-train', name: 'Old train', profile: { mode: 'rail', traction: 'unknown' } },
@@ -249,7 +289,8 @@ test('shared editor exposes every algorithm without copying controls', async ({ 
   await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('rail');
   await expect(editor.getByLabel('Electricity source', { exact: true })).toHaveCount(0);
-  expect(await editor.getByLabel('Rail type', { exact: true }).locator('option').allTextContents()).toEqual(['High speed', 'Inter city', 'Light rail', 'Subway']);
+  expect(await editor.getByLabel('Rail type', { exact: true }).locator('option').allTextContents()).toEqual(['Automatic (Light rail below 30 km, Inter city otherwise)', 'High speed', 'Inter city', 'Light rail', 'Subway']);
+  await expect(editor.getByLabel('Rail type', { exact: true })).toHaveValue('');
   await expect(editor.getByLabel('Traction', { exact: true })).toBeVisible();
   expect(await editor.getByLabel('Traction', { exact: true }).locator('option').allTextContents()).toEqual(['Electric', 'Diesel']);
   await editor.getByLabel('Base algorithm', { exact: true }).selectOption('bus');

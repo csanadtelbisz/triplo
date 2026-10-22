@@ -60,6 +60,7 @@ export type Traction = "electric" | "diesel";
 
 export interface RailInput extends CommonInput {
   mode: "rail";
+  /** Omit for automatic selection: light rail below 30 km, inter-city otherwise. */
   railType?: RailType;
   /** Default "electric" for inter-city rail. */
   traction?: Traction;

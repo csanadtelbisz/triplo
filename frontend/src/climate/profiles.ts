@@ -1,6 +1,6 @@
 import { calculate } from '../../../climate/src/calculate';
 import { defaultBusType } from '../../../climate/src/bus';
-import { resolveRailTraction } from '../../../climate/src/rail';
+import { defaultRailType, resolveRailTraction } from '../../../climate/src/rail';
 import type { ClimateResult, CountryShares, TravelInput } from '../../../climate/src/types';
 import { climateDataRevision } from '../../../climate/src/generated/data';
 import type { ClimateProfile, ClimateProfileChoice, NamedClimateProfile, Segment, SegmentClimateImpact, Trip } from '../../../shared/types';
@@ -13,7 +13,7 @@ import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 import { noEmissionResult } from './cache';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 8;
+const CLIMATE_CALCULATION_VERSION = 9;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -44,7 +44,7 @@ export type ClimateSettings = ReturnType<typeof getClimateSettings>;
 export const builtInClimateProfiles: NamedClimateProfile[] = [
   { id: 'builtin:car', name: 'Car [built-in]', profile: { mode: 'car' } },
   { id: 'builtin:bus', name: 'Bus [built-in]', profile: { mode: 'bus' } },
-  { id: 'builtin:rail', name: 'Rail [built-in]', profile: { mode: 'rail', railType: 'inter_city', traction: 'electric' } },
+  { id: 'builtin:rail', name: 'Rail [built-in]', profile: { mode: 'rail', traction: 'electric' } },
   { id: 'builtin:flight', name: 'Flight [built-in]', profile: { mode: 'flight' } },
   { id: 'builtin:ferry', name: 'Ferry [built-in]', profile: { mode: 'ferry' } },
   { id: 'builtin:none', name: 'No emission', profile: { mode: 'none' } },
@@ -109,7 +109,12 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
   // Keep the resolved bus type in the cache key even when distance rounding crosses 10 km.
   if (options.mode === 'bus') options = { ...options, busType: options.busType ?? defaultBusType(km) };
   if (options.mode === 'car') options = { ...options, gridShares: shares };
-  if (options.mode === 'rail') options = { ...options, traction: resolveRailTraction(options.traction), countryShares: shares };
+  if (options.mode === 'rail') {
+    // Resolve before cache-key rounding, including routes immediately below 30 km.
+    const railType = options.railType ?? defaultRailType(km);
+    const traction = !options.railType && railType !== 'inter_city' ? 'electric' : resolveRailTraction(options.traction);
+    options = { ...options, railType, traction, countryShares: shares };
+  }
   if (options.mode === 'flight') options = { ...options, geometry: options.geometry || (segment.source === 'gpx' ? 'exact' : 'great_circle') };
   return { input: { ...options, date: dated, distanceKm: km }, undated: !date };
 }

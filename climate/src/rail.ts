@@ -3,6 +3,10 @@ import { Run, requireDistance } from "./run";
 
 const ROW: Record<RailType, string> = { inter_city: "national", high_speed: "international", light_rail: "light", subway: "underground" };
 
+export function defaultRailType(distanceKm: number): RailType {
+  return distanceKm < 30 ? "light_rail" : "inter_city";
+}
+
 /** Older saved profiles used "unknown" for the same approximation as diesel. */
 export function resolveRailTraction(traction?: string): Traction {
   return traction === "diesel" || traction === "unknown" ? "diesel" : "electric";
@@ -11,12 +15,12 @@ export function resolveRailTraction(traction?: string): Traction {
 export function calcRail(run: Run, input: RailInput): ClimateResult {
   requireDistance(input.distanceKm);
   const km = input.distanceKm;
-  let type: RailType = input.railType ?? "inter_city";
+  let type: RailType = input.railType ?? defaultRailType(km);
   if (!(type in ROW)) {
     run.warn("RAIL_TYPE_UNKNOWN", `Unknown rail type "${type}"; inter_city used.`);
     type = "inter_city";
   }
-  let traction = resolveRailTraction(input.traction);
+  let traction = !input.railType && type !== "inter_city" ? "electric" : resolveRailTraction(input.traction);
   const row = ROW[type];
 
   // light rail, subway and high speed are electric by nature

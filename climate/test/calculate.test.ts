@@ -163,7 +163,30 @@ test("grid details identify requested countries separately from regional and wor
   ]);
 });
 
-test("rail: inter_city default assumes electric traction", () => {
+test("rail: automatic selection uses light rail below 30 km and inter-city from 30 km", () => {
+  for (const [distanceKm, railType] of [[29.999, "light_rail"], [30, "inter_city"], [30.001, "inter_city"]] as const) {
+    const input = { mode: "rail", date: D, distanceKm, countryShares: { FRA: 1 } } as const;
+    assert.deepEqual(calculate(input), calculate({ ...input, railType }));
+  }
+});
+
+test("rail: explicit types override automatic selection, including high-speed and subway", () => {
+  for (const distanceKm of [5, 100]) {
+    for (const railType of ["light_rail", "inter_city", "high_speed", "subway"] as const) {
+      const result = calculate({ mode: "rail", date: D, distanceKm, railType, countryShares: { FRA: 1 } });
+      const key = railType === "inter_city" || railType === "high_speed" ? `rail.energy.${railType}.kwh_per_pkm` : `rail.${railType === "light_rail" ? "light" : "underground"}.ttw`;
+      assert.ok(result.factorKeys.includes(key));
+    }
+  }
+});
+
+test("rail: automatic light rail is electric while inter-city respects the traction choice", () => {
+  const input = { mode: "rail", date: D, countryShares: { FRA: 1 } } as const;
+  assert.deepEqual(calculate({ ...input, distanceKm: 20, traction: "diesel" }), calculate({ ...input, distanceKm: 20, railType: "light_rail" }));
+  assert.deepEqual(calculate({ ...input, distanceKm: 30, traction: "diesel" }), calculate({ ...input, distanceKm: 30, railType: "inter_city", traction: "diesel" }));
+});
+
+test("rail: long routes default to inter-city with electric traction", () => {
   const r = calculate({ mode: "rail", date: D, distanceKm: 100, countryShares: { FRA: 1 } });
   const explicit = calculate({ mode: "rail", date: D, distanceKm: 100, traction: "electric", countryShares: { FRA: 1 } });
   near(r.co2eKg, explicit.co2eKg);

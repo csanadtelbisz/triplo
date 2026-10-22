@@ -5,7 +5,7 @@ import { defaultData } from '../../../climate/src/generated/data';
 import { DEFAULT_OCCUPANCY } from '../../../climate/src/car';
 import { getFlightDefaults } from '../../../climate/src/flight';
 import { defaultBusType } from '../../../climate/src/bus';
-import { resolveRailTraction } from '../../../climate/src/rail';
+import { defaultRailType, resolveRailTraction } from '../../../climate/src/rail';
 import { CAR_SIZE_EXAMPLES } from '../../../climate/src/examples';
 import { Dialog } from './Dialog';
 import '../styles/Climate.css';
@@ -24,6 +24,7 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
   const flightDefaults = value.mode === 'flight' && distanceKm !== undefined
     ? getFlightDefaults({ ...value, distanceKm, geometry: value.geometry || flightGeometry }, defaultData) : undefined;
   const automatic = (value: string | number) => `Automatic (${value})`;
+  const railType = value.mode === 'rail' ? value.railType ?? (distanceKm === undefined ? undefined : defaultRailType(distanceKm)) : undefined;
   const patch = (options: object) => {
     const next = { ...value, ...options } as ClimateProfile;
     if (next.mode === 'car' && !['petrol', 'diesel', 'hybrid', 'lpg'].includes(next.fuelType || '')) delete next.exactFuelLPer100Km;
@@ -55,9 +56,11 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
     </>}
     {value.mode === 'bus' && select('Bus type', 'busType', value.busType || '', ['', 'local', 'coach'], [distanceKm === undefined ? 'Automatic (Local below 10 km, Coach otherwise)' : automatic(text(defaultBusType(distanceKm))), 'Local', 'Coach'])}
     {value.mode === 'rail' && <>
-      {select('Rail type', 'railType', value.railType || 'inter_city', ['high_speed', 'inter_city', 'light_rail', 'subway'])}
-      {(!value.railType || value.railType === 'inter_city') && select('Traction', 'traction', resolveRailTraction(value.traction), ['electric', 'diesel'])}
-      {resolveRailTraction(value.traction) === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
+      {select('Rail type', 'railType', value.railType || '', ['', 'high_speed', 'inter_city', 'light_rail', 'subway'], [distanceKm === undefined ? 'Automatic (Light rail below 30 km, Inter city otherwise)' : automatic(text(defaultRailType(distanceKm))), 'High speed', 'Inter city', 'Light rail', 'Subway'])}
+      {(!railType || railType === 'inter_city') && <>
+        {select('Traction', 'traction', resolveRailTraction(value.traction), ['electric', 'diesel'])}
+        {resolveRailTraction(value.traction) === 'diesel' && <small>Diesel-only factors are unavailable; the calculator uses the UK national rail mix.</small>}
+      </>}
     </>}
     {value.mode === 'ferry' && <label className="climate-check"><input type="checkbox" checked={value.withVehicle || false} onChange={e => patch({ withVehicle: e.target.checked })} />Travelling with a car</label>}
     {value.mode === 'flight' && <>

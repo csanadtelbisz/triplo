@@ -287,11 +287,13 @@ export type Traction = "electric" | "diesel";
 
 export interface RailInput extends CommonInput {
   mode: "rail";
-  railType?: RailType;            // default "inter_city"
+  railType?: RailType;            // omit: light rail below 30 km, inter-city otherwise
   traction?: Traction;            // default "electric"
   countryShares?: CountryShares;  // share of the distance per country (0..1 weights); default: world
 }
 ```
+
+With no explicit `railType`, select light rail for segment distance < 30 km and inter-city otherwise (including exactly 30 km). The editor defaults to Automatic, shows the resolved choice for segments and the distance rule for reusable profiles, and permits explicit rail-type overrides. Automatic light rail is electric; the traction choice applies when Automatic resolves to inter-city. Explicit types, including older saved inter-city profiles, retain their selected algorithm. Resolve the automatic type before cache-key distance rounding so crossing 30 km always invalidates the estimate.
 
 Electric inter-city and high-speed rail use a matched pair of electric-only energy benchmarks from the [French transport-reporting order, Annex II](https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253), version in force from 1 June 2017. These Level 1 defaults are stored with their source in `climate/data/rail-energy.json`:
 
@@ -303,7 +305,7 @@ Electric inter-city and high-speed rail use a matched pair of electric-only ener
 Passenger averages account for empty running. These are dated regulatory benchmarks, not measured consumption for every train. Their difference reflects average passenger counts; on the same route and electricity mix, inter-city emissions are about **1.52 times** high-speed emissions. The benchmark year stays 2017 regardless of the trip date and is recorded separately in `factorSets.railEnergy` and the segment's calculation details.
 
 Calculation:
-- Electric `inter_city` (the default) and `high_speed`: `upstreamKg = distanceKm × kWhPerPkm × gridIntensity(countryShares) / 1000 × (1 + TD_UPLIFT)`, `directKg = 0`. Route-country grid intensity and DEFRA's grid-loss uplift use the closest available year to the trip. The UK mixed-traction national rail and Eurostar CO2 factors are **not** used to infer energy for these electric models.
+- Electric `inter_city` and `high_speed`: `upstreamKg = distanceKm × kWhPerPkm × gridIntensity(countryShares) / 1000 × (1 + TD_UPLIFT)`, `directKg = 0`. Route-country grid intensity and DEFRA's grid-loss uplift use the closest available year to the trip. The UK mixed-traction national rail and Eurostar CO2 factors are **not** used to infer energy for these electric models.
 - `light_rail` and `subway` retain their existing electric model: implied energy = DEFRA light rail/tram or London Underground TTW factor / (UK generation + UK T&D factor of the same year), then the same route-grid calculation as above.
 - `inter_city` with `traction: "diesel"` uses DEFRA's national diesel/electric mix without country scaling, with warning `RAIL_DIESEL_APPROXIMATED`. Unknown was removed from the available traction options because it used the same emission factors. Older profiles with `traction: "unknown"` are interpreted as Diesel, including the approximation warning; editing and saving a profile replaces the legacy value. This does not affect the electric defaults.
 - High-speed, light rail and subway are always electric; requesting diesel for them produces `INVALID_COMBINATION` and uses electricity.
@@ -378,7 +380,7 @@ export function calculateMany(inputs: TravelInput[]): BatchItem[];     // BatchI
 | walk, hike, run, bike | `{ mode: "none" }` |
 | car, taxi | `{ mode: "car", ... }` (taxi: user's occupancy) |
 | bus | `{ mode: "bus" }` |
-| rail, subway | `{ mode: "rail", railType: "inter_city", traction: "electric" }` (built-in default; subway can be configured in a custom profile) |
+| rail, subway | `{ mode: "rail", traction: "electric" }` (automatic: light rail below 30 km, inter-city otherwise; subway can be configured in a custom profile) |
 | flight | `{ mode: "flight", ... }` |
 | ferry | `{ mode: "ferry" }` |
 | other | whatever the user configured; if nothing: `{ mode: "none" }` |
