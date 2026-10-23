@@ -1,6 +1,17 @@
 import type { Segment, SegmentDistanceStats } from '../../../shared/types';
 
 const geometries = new WeakMap<Segment, GeoJSON.LineString>();
+const routeIdentities = new WeakMap<Segment, object>();
+
+/** Preserve a route's identity through representation and derived-cache changes. */
+export function copySegmentGeometryIdentity(source: Segment, target: Segment): void {
+  const identity = routeIdentities.get(source) || {};
+  routeIdentities.set(source, identity);
+  routeIdentities.set(target, identity);
+}
+export function sameSegmentGeometryIdentity(a: Segment, b: Segment): boolean {
+  return routeIdentities.has(a) && routeIdentities.get(a) === routeIdentities.get(b);
+}
 export const samePosition = (a: GeoJSON.Position, b: GeoJSON.Position) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 export function getSegmentGeometry(segment: Segment): GeoJSON.LineString | undefined {
@@ -25,8 +36,8 @@ export function countryPartStats(segment: Segment): SegmentDistanceStats | undef
   return segment.countryParts.reduce<SegmentDistanceStats>((sum, part) => ({
     totalDistance: sum.totalDistance + part.distanceStats.totalDistance,
     hasElevation: sum.hasElevation || part.distanceStats.hasElevation,
-    elevationUp: sum.elevationUp + part.distanceStats.elevationUp,
-    elevationDown: sum.elevationDown + part.distanceStats.elevationDown,
+    elevationUp: sum.elevationUp + (part.distanceStats.elevationUp ?? 0),
+    elevationDown: sum.elevationDown + (part.distanceStats.elevationDown ?? 0),
   }), { totalDistance: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 });
 }
 

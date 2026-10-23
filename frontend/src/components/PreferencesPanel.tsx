@@ -1,3 +1,4 @@
+import { ClimatePreferences, DefaultClimateProfileSelect } from './ClimatePreferences';
 import React, { useState, useEffect } from 'react';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/StatusPanel.css';
@@ -139,6 +140,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
   const handleUpdateCustomModes = (newModes: CustomOtherMode[]) => {
     setCustomModes(newModes);
     saveCustomOtherModes(newModes);
+    window.dispatchEvent(new Event('preferences-updated'));
     syncPreferencesToCloud();
   };
 
@@ -158,6 +160,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
 
     setBuiltInOverrides(newOverrides);
     saveBuiltInModeOverrides(newOverrides);
+    window.dispatchEvent(new Event('preferences-updated'));
     syncPreferencesToCloud();
   };
 
@@ -381,9 +384,9 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     <td style={{ padding: '6px 4px' }}>{langName}</td>
                     <td style={{ padding: '6px 4px', width: '90px' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                        <button className="iconButton" style={{ padding: '2px' }} onClick={() => moveUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
-                        <button className="iconButton" style={{ padding: '2px' }} onClick={() => moveDown(idx)} disabled={idx === langPrefs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
-                        <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => deleteLang(idx)}><MaterialIcon name="delete" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px' }} onClick={() => moveUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px' }} onClick={() => moveDown(idx)} disabled={idx === langPrefs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
+                        <button className="iconButton" style={{ padding: '4px', color: '#d32f2f' }} onClick={() => deleteLang(idx)}><MaterialIcon name="delete" size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -403,8 +406,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                           <option key={l.code} value={l.code}>{l.name}</option>
                         ))}
                       </select>
-                      <button className="iconButton" style={{ padding: '2px', color: '#2e7d32' }} onClick={handleAddSubmit} disabled={!selectedNewLang}><MaterialIcon name="check" size={18} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => { setAddingLang(false); setSelectedNewLang(''); }}><MaterialIcon name="close" size={18} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#2e7d32' }} onClick={handleAddSubmit} disabled={!selectedNewLang}><MaterialIcon name="check" size={18} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#d32f2f' }} onClick={() => { setAddingLang(false); setSelectedNewLang(''); }}><MaterialIcon name="close" size={18} /></button>
                     </div>
                   ) : (
                     <button 
@@ -420,12 +423,14 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           </table>
         </div>
 
+        <ClimatePreferences />
+
         <h3 className="status-panel-section-title">Built-in Transport Modes</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 8px 12px' }}>
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
             Override the appearance and behavior of default system transport modes.
           </span>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+          <table className="transport-mode-preferences" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
             <tbody>
               {BUILT_IN_MODES.map((mode) => {
                 const ovr = builtInOverrides[mode] || {};
@@ -439,11 +444,11 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     <td style={{ padding: '6px 2px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
                         <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
-                          <input type="text" value={ovr.name ?? mode} onChange={(e) => handleUpdateBuiltInMode(mode, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} placeholder={mode} title="Override Name" />
-                          <input type="text" value={dIcon} disabled style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', backgroundColor: '#f5f5f5', color: '#888' }} title="System Icon (Cannot be changed)" />
-                          <input type="color" value={ovr.color || dColor} onChange={(e) => handleUpdateBuiltInMode(mode, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', border: '1px solid #ccc', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Override Color" />
+                          <input type="text" value={ovr.name ?? mode} onChange={(e) => handleUpdateBuiltInMode(mode, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} placeholder={mode} title="Override Name" />
+                          <input type="text" value={dIcon} disabled style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} title="System Icon (Cannot be changed)" />
+                          <input type="color" value={ovr.color || dColor} onChange={(e) => handleUpdateBuiltInMode(mode, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Override Color" />
                         </div>
-                        <select value={ovr.routingProfile || `${routingManager.getDefaultRouter(mode as TransportMode).serviceName}|${routingManager.getDefaultRouter(mode as TransportMode).profile}`} onChange={(e) => handleUpdateBuiltInMode(mode, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} title="Override Default Routing Profile">
+                        <label className="transport-mode-select-row"><span>Routing profile</span><select value={ovr.routingProfile || `${routingManager.getDefaultRouter(mode as TransportMode).serviceName}|${routingManager.getDefaultRouter(mode as TransportMode).profile}`} onChange={(e) => handleUpdateBuiltInMode(mode, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} title="Override Default Routing Profile">
                           {routingManager.getServices().flatMap(svc => 
                             svc.getRoutingProfiles(mode as TransportMode).map(profile => (
                               <option key={`builtin-${svc.name}-${profile}`} value={`${svc.name}|${profile}`}>
@@ -451,7 +456,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                               </option>
                             ))
                           )}
-                        </select>
+                        </select></label>
+                        <DefaultClimateProfileSelect mode={mode} label={`${mode} default climate profile`} value={ovr.climateProfileId} onChange={climateProfileId => handleUpdateBuiltInMode(mode, { climateProfileId })} />
                       </div>
                     </td>
                   </tr>
@@ -466,7 +472,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
           <span style={{ fontSize: '0.85rem', color: '#666', lineHeight: 1.4 }}>
             Define custom transport modes with an icon, name, color, and default routing profile.
           </span>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
+          <table className="transport-mode-preferences" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px', fontSize: '0.85rem', tableLayout: 'fixed' }}>
             <tbody>
               {customModes.map((mode, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
@@ -476,23 +482,23 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                   <td style={{ padding: '6px 2px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
                       <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
-                        <input type="text" value={mode.name} onChange={(e) => handleUpdateCustomMode(idx, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Name" title="Name" />
+                        <input type="text" value={mode.name} onChange={(e) => handleUpdateCustomMode(idx, { name: e.target.value })} style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Name" title="Name" />
                         
-                        <input type="text" value={mode.icon} onChange={(e) => handleUpdateCustomMode(idx, { icon: e.target.value })} onBlur={(e) => handleCustomModeIconBlur(idx, e.target.value)} style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid ' + (isIconUsed(mode.icon, idx) ? 'red' : '#ccc'), borderRadius: '4px', boxSizing: 'border-box', backgroundColor: isIconUsed(mode.icon, idx) ? '#ffebee' : 'transparent' }} placeholder="Icon ID" title={isIconUsed(mode.icon, idx) ? "Icon already in use" : "Material Icon ID"} />
+                        <input aria-invalid={isIconUsed(mode.icon, idx)} type="text" value={mode.icon} onChange={(e) => handleUpdateCustomMode(idx, { icon: e.target.value })} onBlur={(e) => handleCustomModeIconBlur(idx, e.target.value)} style={{ width: '100px', flexShrink: 0, padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} placeholder="Icon ID" title={isIconUsed(mode.icon, idx) ? "Icon already in use" : "Material Icon ID"} />
                         
                         <button 
                           type="button" 
                           className="iconButton" 
                           onClick={() => setIconPickerTargetIdx(idx)} 
                           title="Search Icons" 
-                          style={{ width: '26px', height: '26px', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9', color: 'inherit' }}
+                          style={{ width: '26px', height: '26px', padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', borderRadius: '4px', background: '#f9f9f9', color: 'inherit' }}
                         >
                           <MaterialIcon name="search" size={16} />
                         </button>
                         
-                        <input type="color" value={mode.color} onChange={(e) => handleUpdateCustomMode(idx, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', border: '1px solid #ccc', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Color" />
+                        <input type="color" value={mode.color} onChange={(e) => handleUpdateCustomMode(idx, { color: e.target.value })} style={{ width: '26px', flexShrink: 0, height: '26px', padding: '0 2px', borderRadius: '4px', background: '#fff', boxSizing: 'border-box' }} title="Color" />
                       </div>
-                      <select value={mode.routingProfile} onChange={(e) => handleUpdateCustomMode(idx, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} title="Default Routing Profile">
+                      <label className="transport-mode-select-row"><span>Routing profile</span><select value={mode.routingProfile} onChange={(e) => handleUpdateCustomMode(idx, { routingProfile: e.target.value })} style={{ width: '100%', padding: '4px 6px', fontSize: '0.8rem', borderRadius: '4px', boxSizing: 'border-box' }} title="Default Routing Profile">
                         <option value="Straight Line Router|straight_line">Straight Line</option>
                         {routingManager.getServices().flatMap(svc => 
                           svc.getRoutingProfiles('other').map(profile => (
@@ -501,7 +507,8 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                             </option>
                           ))
                         )}
-                      </select>
+                      </select></label>
+                      <DefaultClimateProfileSelect mode="other" label={`${mode.name || 'Custom mode'} default climate profile`} value={mode.climateProfileId} onChange={climateProfileId => handleUpdateCustomMode(idx, { climateProfileId })} />
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#555', cursor: 'pointer', marginTop: '2px' }}>
                         <input 
                           type="checkbox" 
@@ -514,7 +521,7 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                     </div>
                   </td>
                   <td style={{ padding: '6px 4px', textAlign: 'right', verticalAlign: 'middle', width: '30px' }}>
-                    <button className="iconButton" style={{ padding: '2px', color: '#d32f2f' }} onClick={() => handleDeleteCustomMode(idx)} title="Delete mode"><MaterialIcon name="delete" size={20} /></button>
+                    <button className="iconButton" style={{ padding: '2px', color: '#d32f2f', border: 'none' }} onClick={() => handleDeleteCustomMode(idx)} title="Delete mode"><MaterialIcon name="delete" size={20} /></button>
                   </td>
                 </tr>
               ))}
@@ -546,10 +553,10 @@ const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ onGoBack, onSetHome
                   </td>
                   <td style={{ padding: '6px 4px', width: '120px' }}>
                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px' }} onClick={() => handleMoveStyleConfigDown(idx)} disabled={idx === styleConfigs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); onEditingConfigChange(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
-                      <button className="iconButton" style={{ padding: '2px', color: '#d32f2f', visibility: config.readonly ? 'hidden' : 'visible' }} onClick={() => handleDeleteStyleConfig(idx)} title="Delete" disabled={config.readonly}><MaterialIcon name="delete" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px' }} onClick={() => handleMoveStyleConfigUp(idx)} disabled={idx === 0}><MaterialIcon name="arrow_upward" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px' }} onClick={() => handleMoveStyleConfigDown(idx)} disabled={idx === styleConfigs.length - 1}><MaterialIcon name="arrow_downward" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#1976d2' }} onClick={() => { setActiveStyleConfigId(config.id); onEditingConfigChange(config.id); }} title="Edit"><MaterialIcon name="edit" size={16} /></button>
+                      <button className="iconButton" style={{ padding: '4px', color: '#d32f2f', visibility: config.readonly ? 'hidden' : 'visible' }} onClick={() => handleDeleteStyleConfig(idx)} title="Delete" disabled={config.readonly}><MaterialIcon name="delete" size={16} /></button>
                     </div>
                   </td>
                 </tr>

@@ -4,6 +4,11 @@ import { segmentKey } from './types';
 import type { CountryData } from './types';
 
 export interface AnalyticsSelection {
+  climate?: boolean;
+  groupBy?: 'modes' | 'trips' | 'countries';
+  trip?: string | null;
+  climateView?: 'trips' | 'modes';
+  distanceSelection?: Pick<AnalyticsSelection, 'countries' | 'country' | 'mode'>;
   countries: boolean;
   country: string | null;
   mode: string | null;
@@ -12,6 +17,7 @@ export interface AnalyticsSelection {
 }
 export const emptyAnalyticsSelection: AnalyticsSelection = { countries: false, country: null, mode: null, range: null, year: null };
 export const modeKey = (segment: Segment) => segment.transportMode === 'other' && segment.customIcon ? `other:${segment.customIcon}` : segment.transportMode;
+export const analyticsGrouping = (selection: AnalyticsSelection) => selection.groupBy || (selection.countries ? 'countries' : selection.climate && selection.climateView !== 'modes' ? 'trips' : 'modes');
 const day = 86400000;
 function tripDays(trip: Trip): [number, number] | null {
   const start = trip.startDate ? Date.parse(trip.startDate) : NaN;
@@ -35,14 +41,31 @@ export function tripFraction(trip: Trip, range: [number, number] | null): number
 }
 export function selectedDistance(trip: Trip, segment: Segment, country: string | null, data?: CountryData): number {
   if (segment.routingProfile === 'teleport') return 0;
-  return country ? (data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry || countryDistances(segment))?.[country] || 0 : segment.distanceStats?.totalDistance || 0;
+  const distances = data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry || countryDistances(segment);
+  return country ? distances[country] || 0 : segment.distanceStats?.totalDistance ?? Object.values(distances).reduce((sum, km) => sum + km, 0);
 }
-export function countryYearDistances(trips: Trip[], selection: AnalyticsSelection, data?: CountryData) {
+/** Shared by analytics tables and map routes/markers. Climate mode includes emitting segments only. */
+export function matchesAnalyticsSegment(trip: Trip, segment: Segment, selection: AnalyticsSelection, data?: CountryData, climateKg?: number): boolean {
+  return segment.routingProfile !== 'teleport'
+    && (!selection.trip || selection.trip === trip.id)
+    && tripIntersects(trip, selection.range)
+    && (!selection.mode || modeKey(segment) === selection.mode)
+    && (!selection.country || selectedDistance(trip, segment, selection.country, data) > 0)
+    && (!selection.climate || (climateKg !== undefined && climateKg > 0));
+}
+/** Country attribution follows route-distance shares; the calculator returns a segment total. */
+export function selectedClimate(trip: Trip, segment: Segment, kg: number, country: string | null, data?: CountryData): number {
+  if (!country) return kg;
+  const total = selectedDistance(trip, segment, null, data);
+  return total > 0 ? kg * Math.min(1, selectedDistance(trip, segment, country, data) / total) : 0;
+}
+export function countryYearDistances(trips: Trip[], selection: AnalyticsSelection, data?: CountryData, metric: typeof selectedDistance = selectedDistance) {
   const years = new Map<number, number>();
   for (const trip of trips) {
+    if (selection.trip && trip.id !== selection.trip) continue;
     if (!trip.startDate) continue;
     const start = new Date(trip.startDate).getFullYear(), end = new Date(trip.endDate || trip.startDate).getFullYear();
-    const total = trip.segments.reduce((sum, segment) => sum + (!selection.mode || modeKey(segment) === selection.mode ? selectedDistance(trip, segment, selection.country, data) : 0), 0);
+    const total = trip.segments.reduce((sum, segment) => sum + (!selection.mode || modeKey(segment) === selection.mode ? metric(trip, segment, selection.country, data) : 0), 0);
     for (let year = start; year <= end; year++) {
       const range: [number, number] = [new Date(year, 0, 1).getTime(), new Date(year, 11, 31).getTime()];
       years.set(year, (years.get(year) || 0) + total * tripFraction(trip, range));

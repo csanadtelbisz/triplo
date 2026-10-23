@@ -2,6 +2,7 @@ import type { TransportMode } from '../../../shared/types';
 import { ModeThemes } from '../themes/config';
 
 export interface BuiltInModeOverride {
+  climateProfileId?: string;
   name?: string;
   color?: string;
   routingProfile?: string;

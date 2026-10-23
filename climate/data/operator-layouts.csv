@@ -1,0 +1,166 @@
+operator,aircraft,economy,premium_economy,business,first,source,year
+WZZ,A320,180,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A20N,180,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025); table also shows a stray 186 — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A321,230,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+WZZ,A21N,239,0,0,0,Wikipedia Wizz Air fleet table (30 Nov 2025) — https://en.wikipedia.org/wiki/Wizz_Air,2025
+RYR,B738,189,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+RYR,B38M,197,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+RYR,A320,180,0,0,0,Wikipedia Ryanair fleet table (Apr 2026); Lauda Europe aircraft — https://en.wikipedia.org/wiki/Ryanair,2026
+LDM,A320,180,0,0,0,Wikipedia Ryanair fleet table (Apr 2026) — https://en.wikipedia.org/wiki/Ryanair,2026
+EZY,A319,156,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EZY,A320,180,0,0,0,Wikipedia easyJet fleet table (Apr 2025); some aircraft have 186 — https://en.wikipedia.org/wiki/EasyJet,2025
+EZY,A20N,186,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EZY,A21N,235,0,0,0,easyJet 'What planes does easyJet use' page — https://www.easyjet.com/en/traveller/best-of-europe/what-planes-does-easyjet-use,2025
+EJU,A319,156,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A320,180,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A20N,186,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+EJU,A21N,235,0,0,0,Same as EZY — https://en.wikipedia.org/wiki/EasyJet,2025
+THY,A321,158,0,20,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J20 Y158 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A21N,162,0,20,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J20 Y162 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A332,222,0,24,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J24 Y222 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A333,261,0,28,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J28 Y261 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,A359,288,0,28,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J28 Y288 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B738,135,0,16,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J16 Y135 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B38M,135,0,16,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J16 Y135 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B77W,300,0,49,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J49 Y300 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+THY,B789,270,0,30,0,Wikipedia Turkish Airlines fleet table (Jun 2026): J30 Y270 — https://en.wikipedia.org/wiki/Turkish_Airlines_fleet,2026
+AUA,A320,174,0,0,0,"Wikipedia Austrian Airlines fleet table (May 2026): 174 total, cabin split not given (business is economy seats in Europe) — https://en.wikipedia.org/wiki/Austrian_Airlines",2026
+AUA,A20N,180,0,0,0,Wikipedia Austrian Airlines fleet table (May 2026): 180 total — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,A321,200,0,0,0,"Wikipedia Austrian Airlines fleet table (May 2026): A321-100, 200 total, layout varies — https://en.wikipedia.org/wiki/Austrian_Airlines",2026
+AUA,E195,120,0,0,0,Wikipedia Austrian Airlines fleet table (May 2026): 120 total — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B763,157,30,24,0,Wikipedia Austrian Airlines fleet table (May 2026): 24C/30W/157Y — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B772,258,40,32,0,Wikipedia Austrian Airlines fleet table (May 2026): 32C/40W/258Y (777-200ER) — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+AUA,B789,247,21,26,0,Wikipedia Austrian Airlines fleet table (May 2026): 26C/21W/247Y — https://en.wikipedia.org/wiki/Austrian_Airlines,2026
+ACA,BCS3,125,0,12,0,AeroLOPA Air Canada A220-300 layout — https://www.aerolopa.com/ac,2026
+ACA,A319,124,0,12,0,AeroLOPA Air Canada Rouge A319 — https://www.aerolopa.com/ac,2026
+ACA,A320,140,0,12,0,AeroLOPA Air Canada A320 variants fleet-weighted average (14/132 x9; 12/138 x4; 8/144 x3; Rouge 12/156 x4) — https://www.aerolopa.com/ac,2026
+ACA,A321,181,0,13,0,AeroLOPA Air Canada A321 variants fleet-weighted average (Rouge 12/184 x11; 16/180 x16; 8/176 x5) — https://www.aerolopa.com/ac,2026
+ACA,A21N,168,0,14,0,AeroLOPA Air Canada A321XLR (14J/168Y) — https://www.aerolopa.com/ac,2026
+ACA,A333,241,24,32,0,AeroLOPA Air Canada A330-300 main variant (18 aircraft; 2nd variant 30J/255Y x2) — https://www.aerolopa.com/ac,2026
+ACA,B77W,336,24,40,0,AeroLOPA Air Canada 777-300ER variant 1 (12 aircraft; others 28J/24W/398Y x7) — https://www.aerolopa.com/ac,2026
+ACA,B788,214,21,20,0,AeroLOPA Air Canada 787-8 — https://www.aerolopa.com/ac,2026
+ACA,B789,247,21,30,0,AeroLOPA Air Canada 787-9 (32 aircraft) — https://www.aerolopa.com/ac,2026
+ACA,B78X,262,28,42,0,AeroLOPA Air Canada 787-10 new cabin — https://www.aerolopa.com/ac,2026
+ACA,B38M,153,0,16,0,AeroLOPA Air Canada 737 MAX 8 variant 1 (38 aircraft; Rouge 12/165 x7; 189Y x7) — https://www.aerolopa.com/ac,2026
+ACA,DH8D,78,0,0,0,AeroLOPA Air Canada Express Dash 8-400 (34 aircraft at 78 seats) — https://www.aerolopa.com/ac,2026
+ETH,A359,313,0,30,0,AeroLOPA Ethiopian A350-900 (main variants 30J/313Y; ET-BCD/E 30J/307Y) — https://www.aerolopa.com/et,2026
+ETH,A35K,349,0,46,0,AeroLOPA Ethiopian A350-1000 — https://www.aerolopa.com/et,2026
+ETH,B77W,365,0,28,0,AeroLOPA Ethiopian 777-300ER Aura Lite variant (one older variant ET-BBG not parsed) — https://www.aerolopa.com/et,2026
+ETH,B788,246,0,24,0,AeroLOPA Ethiopian 787-8 Cloud Nine 24 / Economy 246 — https://www.aerolopa.com/et-788-1,2026
+ETH,B789,285,0,30,0,AeroLOPA Ethiopian 787-9 (both variants 30J/285Y) — https://www.aerolopa.com/et,2026
+ETH,B738,138,0,16,0,AeroLOPA Ethiopian 737-800 — https://www.aerolopa.com/et,2026
+ETH,B38M,144,0,16,0,AeroLOPA Ethiopian 737 MAX 8 main variant (23 aircraft; ET-BBA/C 8J/177Y) — https://www.aerolopa.com/et,2026
+ETH,DH8D,78,0,0,0,AeroLOPA Ethiopian Q400 ET-ANI to ANV (3 aircraft; older tile 7J/64Y) — https://www.aerolopa.com/et,2026
+PGT,A320,180,0,0,0,Wikipedia Pegasus fleet table (all-economy) — https://en.wikipedia.org/wiki/Pegasus_Airlines,2025
+PGT,A20N,186,0,0,0,AeroLOPA Pegasus A320neo (all-economy) — https://www.aerolopa.com/pc,2026
+PGT,A21N,239,0,0,0,AeroLOPA Pegasus A321neo (all-economy) — https://www.aerolopa.com/pc,2026
+PGT,B738,189,0,0,0,AeroLOPA Pegasus 737-800 (all-economy) — https://www.aerolopa.com/pc,2026
+KZR,A20N,132,0,16,0,AeroLOPA Air Astana A320neo — https://www.aerolopa.com/kc,2026
+KZR,A321,151,0,28,0,AeroLOPA Air Astana A321ceo — https://www.aerolopa.com/kc,2026
+KZR,A21N,150,0,16,0,AeroLOPA Air Astana A321LR (13 aircraft; A321neo 28J/147-151Y x5) — https://www.aerolopa.com/kc,2026
+KZR,B763,193,0,30,0,AeroLOPA Air Astana 767-300ER — https://www.aerolopa.com/kc,2026
+SEH,A320,180,0,0,0,AeroLOPA Sky Express (Greece) A320-214 — https://www.aerolopa.com/gq,2026
+SEH,A20N,186,0,0,0,AeroLOPA Sky Express A320neo 186-seat variant (5 aircraft; others 180 and 174 variants exist) — https://www.aerolopa.com/gq,2026
+SEH,A21N,230,0,0,0,AeroLOPA Sky Express A321neo 230 seats (Wikipedia says 236) — https://www.aerolopa.com/gq-32q,2026
+SEH,AT72,72,0,0,0,AeroLOPA Sky Express ATR 72-600 — https://www.aerolopa.com/gq,2026
+SEH,AT45,48,0,0,0,AeroLOPA Sky Express ATR 42-500 (ICAO AT45) — https://www.aerolopa.com/gq,2026
+FAR,A320,180,0,0,0,Wikipedia FlyArystan fleet table (15 aircraft) — https://en.wikipedia.org/wiki/FlyArystan,2025
+FAR,A20N,188,0,0,0,SeatMaps FlyArystan A320neo high-density V.2 188 seats (V.1 180) — https://seatmaps.com/airlines/fs-flyarystan/airbus-a320neo/,2026
+DLH,A319,138,0,0,0,"Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) ; short-haul cabin split not published: Business is a flexible zone of economy seats with middle seat blocked, so all seats shown as economy — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html",2026
+DLH,A320,168,0,0,0,"Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) ; short-haul cabin split not published: Business is a flexible zone of economy seats with middle seat blocked, so all seats shown as economy — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html",2026
+DLH,A20N,180,0,0,0,"Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) ; short-haul cabin split not published: Business is a flexible zone of economy seats with middle seat blocked, so all seats shown as economy — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html",2026
+DLH,A321,200,0,0,0,"Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) ; short-haul cabin split not published: Business is a flexible zone of economy seats with middle seat blocked, so all seats shown as economy — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html",2026
+DLH,A21N,215,0,0,0,"Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) ; short-haul cabin split not published: Business is a flexible zone of economy seats with middle seat blocked, so all seats shown as economy — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html",2026
+DLH,A333,185,28,42,0,Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html,2026
+DLH,A359,224,21,48,0,Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html,2026
+DLH,A388,371,52,78,8,Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html,2026
+DLH,B789,247,21,26,0,Lufthansa Group fleet page (Lufthansa and Regional Partners; seat figures as of 31 Jul 2026) — https://www.lufthansagroup.com/en/company/fleet/lufthansa-and-regional-partners.html,2026
+LOT,B788,213,21,18,0,Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y) — https://en.wikipedia.org/wiki/LOT_Polish_Airlines,2026
+LOT,B789,249,21,24,0,Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y) — https://en.wikipedia.org/wiki/LOT_Polish_Airlines,2026
+LOT,B738,186,0,0,0,Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y) — https://en.wikipedia.org/wiki/LOT_Polish_Airlines,2026
+LOT,B38M,186,0,0,0,"Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y); aerolopa.com/lo lists a 189-seat variant on 22 aircraft, Wikipedia 186 — https://en.wikipedia.org/wiki/LOT_Polish_Airlines",2026
+LOT,E190,106,0,0,0,Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y) — https://en.wikipedia.org/wiki/LOT_Polish_Airlines,2026
+LOT,E195,115,0,0,0,"Wikipedia LOT Polish Airlines fleet table (cabins B/Y+/Y); table lists 112 or 118 seats, 115 is midpoint — https://en.wikipedia.org/wiki/LOT_Polish_Airlines",2026
+KLM,A332,250,0,18,0,"AeroLOPA KLM seat plan, page kl-332; economy includes Comfort seats; page also states 18J 252M — https://www.aerolopa.com/kl-332",2026
+KLM,A333,262,0,30,0,"AeroLOPA KLM seat plan, page kl-333; economy includes 40 Comfort seats — https://www.aerolopa.com/kl-333",2026
+KLM,A359,271,26,34,0,"AeroLOPA KLM seat plan, page kl-359 — https://www.aerolopa.com/kl-359",2026
+KLM,B772,219,32,35,0,"AeroLOPA KLM seat plan, page kl-772-2; 2026 cabin iteration, 15 aircraft — https://www.aerolopa.com/kl-772-2",2026
+KLM,B77W,322,24,35,0,"AeroLOPA KLM seat plan, page kl-77w — https://www.aerolopa.com/kl-77w",2026
+KLM,B789,224,21,30,0,"AeroLOPA KLM seat plan, page kl-789 — https://www.aerolopa.com/kl-789",2026
+KLM,B78X,252,28,38,0,"AeroLOPA KLM seat plan, page kl-781 — https://www.aerolopa.com/kl-781",2026
+KLM,B738,186,0,0,0,"AeroLOPA KLM seat plan, page kl-738; business zone dynamic (max 24 seats, middle seat blocked) so all counted economy — https://www.aerolopa.com/kl-738",2026
+KLM,A21N,227,0,0,0,"AeroLOPA KLM seat plan, page kl-32q; single total from aerolopa.com/kl index tile, page not opened; business zone dynamic — https://www.aerolopa.com/kl-32q",2026
+AFR,A332,167,21,36,0,AeroLOPA Air France seat plan — https://www.aerolopa.com/af-332,2026
+AFR,A359,236,28,42,0,"AeroLOPA Air France seat plan; seat-weighted avg of 2019 cabin (19 ac: 34J/24W/266Y), 2023 cabin (22 ac: 48J/32W/212Y, page opened) and 2026 cabin (1 ac: 48/32/210); 2019 and 2026 numbers from aerolopa.com/af index tiles only — https://www.aerolopa.com/af-359-2",2026
+AFR,B772,268,32,28,0,AeroLOPA Air France seat plan; 25 aircraft — https://www.aerolopa.com/af-772,2026
+AFR,B77W,204,44,60,4,"AeroLOPA Air France seat plan; dominant variant (16 ac, New La Premiere); other variants: 9 ac 4F/58J/28W/206Y, 4 ac 48J/48W/273Y?, 12 leisure ac 14J/28W/430Y — https://www.aerolopa.com/af-77w-4p-2",2026
+AFR,B789,228,21,30,0,AeroLOPA Air France seat plan — https://www.aerolopa.com/af-789,2026
+AFR,BCS3,148,0,0,0,"AeroLOPA Air France seat plan; index tile total, 55 aircraft — https://www.aerolopa.com/af-223",2026
+AFR,A319,143,0,0,0,"AeroLOPA Air France seat plan; index tile total, 1 aircraft; business zone dynamic — https://www.aerolopa.com/af-319-e",2026
+AFR,A320,174,0,0,0,"AeroLOPA Air France seat plan; 174 economy shown; business zone is dynamic (max 36 seats, middle seat blocked) carved from these; Metro variant 178 — https://www.aerolopa.com/af-a320-euro",2026
+AFR,A321,212,0,0,0,AeroLOPA Air France seat plan; index tile total; business zone dynamic — https://www.aerolopa.com/af-a321-euro,2026
+BAW,A319,143,0,0,0,"AeroLOPA British Airways seat plan ba-19a; total only, Club Europe zone dynamic so all counted economy — https://www.aerolopa.com/ba-19a",2026
+BAW,A320,180,0,0,0,"AeroLOPA British Airways seat plan ba-32g; total only, Club Europe zone dynamic so all counted economy — https://www.aerolopa.com/ba-32g",2026
+BAW,A20N,180,0,0,0,"AeroLOPA British Airways seat plan ba-32n-1; total only, Club Europe zone dynamic so all counted economy — https://www.aerolopa.com/ba-32n-1",2026
+BAW,A321,218,0,0,0,"AeroLOPA British Airways seat plan ba-21v; total only, Club Europe zone dynamic so all counted economy — https://www.aerolopa.com/ba-21v",2026
+BAW,A21N,220,0,0,0,"AeroLOPA British Airways seat plan ba-32q-1; total only, Club Europe zone dynamic so all counted economy — https://www.aerolopa.com/ba-32q-1",2026
+BAW,E190,106,0,0,0,"AeroLOPA British Airways seat plan ba-e90-2; total only, Club Europe zone dynamic so all counted economy (BA CityFlyer) — https://www.aerolopa.com/ba-e90-2",2026
+BAW,A35K,219,56,56,0,"AeroLOPA British Airways seat plan ba-351; F0 J56 W56 Y219 total 331, consistent with seatmap.app/airlines/british-airways — https://www.aerolopa.com/ba-351",2026
+BAW,A388,303,55,97,14,"AeroLOPA British Airways seat plan ba-38a-m; 2013 cabin iteration, total 469 per seatmap.app; a retrofit 106J/84W/215Y version also listed — https://www.aerolopa.com/ba-38a-m",2026
+BAW,B772,140,40,49,8,"AeroLOPA British Airways seat plan ba-77m; dominant variant (18 ac, 237 seats); others 77L 48J/40W/184Y, 77S/77T Gatwick 32J/48W/252Y — https://www.aerolopa.com/ba-77m",2026
+BAW,B77W,132,40,76,8,AeroLOPA British Airways seat plan ba-77h — https://www.aerolopa.com/ba-77h,2026
+BAW,B788,136,37,31,0,AeroLOPA British Airways seat plan ba-78e — https://www.aerolopa.com/ba-78e,2026
+BAW,B789,127,39,42,8,AeroLOPA British Airways seat plan ba-789; sums to 216 vs 215 total on seatmap.app — https://www.aerolopa.com/ba-789,2026
+BAW,B78X,165,35,48,8,AeroLOPA British Airways seat plan ba-781 — https://www.aerolopa.com/ba-781,2026
+IBE,A319,141,0,0,0,"Wikipedia Iberia fleet table (Dec 2025); total only (business zone flexible), all counted economy — https://en.wikipedia.org/wiki/Iberia_(airline)",2025
+IBE,A320,180,0,0,0,"Wikipedia Iberia fleet table (Dec 2025); total only (business zone flexible), all counted economy — https://en.wikipedia.org/wiki/Iberia_(airline)",2025
+IBE,A20N,186,0,0,0,"Wikipedia Iberia fleet table (Dec 2025); total only (business zone flexible), all counted economy — https://en.wikipedia.org/wiki/Iberia_(airline)",2025
+IBE,A321,217,0,0,0,"Wikipedia Iberia fleet table (Dec 2025); total only (business zone flexible), all counted economy — https://en.wikipedia.org/wiki/Iberia_(airline)",2025
+IBE,A21N,168,0,14,0,"Wikipedia Iberia fleet table (Dec 2025); this is the A321XLR (7 ac), 14 business — https://en.wikipedia.org/wiki/Iberia_(airline)",2025
+IBE,A332,269,0,19,0,Wikipedia Iberia fleet table (Dec 2025) — https://en.wikipedia.org/wiki/Iberia_(airline),2025
+IBE,A333,242,21,29,0,Wikipedia Iberia fleet table (Dec 2025); 'Business Plus' 21 counted as premium economy — https://en.wikipedia.org/wiki/Iberia_(airline),2025
+IBE,A359,293,24,31,0,Wikipedia Iberia fleet table (Dec 2025); 'Business Plus' 24 counted as premium economy — https://en.wikipedia.org/wiki/Iberia_(airline),2025
+QTR,A359,247,0,36,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) Qsuites/Super Diamond 36J/247Y — https://www.aerolopa.com/qr,2026
+QTR,A35K,281,0,46,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) 20 of 30 aircraft 46J/281Y; others 24J/371Y — https://www.aerolopa.com/qr,2026
+QTR,A388,461,0,48,8,AeroLOPA qr seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/qr,2026
+QTR,B772,230,0,42,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) 77K Qsuites 7 ac 42J/230Y; 2 ac MiniPods 42J/234Y — https://www.aerolopa.com/qr,2026
+QTR,B77W,312,0,42,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) most common 77P Qsuites 31 of 58 ac; others vary — https://www.aerolopa.com/qr,2026
+QTR,B788,232,0,22,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) 30 of 32 ac 22J/232Y — https://www.aerolopa.com/qr,2026
+QTR,B789,281,0,30,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/qr,2026
+QTR,A320,132,0,12,0,AeroLOPA qr seat maps (cabin order F/J/W/Y) 11 ac 12J/132Y; 10 ac 12J/120Y — https://www.aerolopa.com/qr,2026
+ETD,A35K,327,0,44,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 44J/327Y — https://www.aerolopa.com/ey,2026
+ETD,A388,405,0,70,11,AeroLOPA ey seat maps (cabin order F/J/W/Y) 6 ac 11F/70J/405Y; 2 ac 415Y — https://www.aerolopa.com/ey,2026
+ETD,B77W,330,0,40,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 6 ac 40J/330Y; 2 ac 28J/374Y; 1 ac 8F/40J/280Y — https://www.aerolopa.com/ey,2026
+ETD,B789,271,0,28,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 15 ac 28J/271Y; 10 ac 28J/262Y; 5 ac 8F/28J/190Y; 7 ac 32J/271Y — https://www.aerolopa.com/ey,2026
+ETD,B78X,300,0,32,0,"AeroLOPA ey seat maps (cabin order F/J/W/Y) 5 ac 32J/295Y and 5 ac 32J/304Y, averaged — https://www.aerolopa.com/ey",2026
+ETD,A320,150,0,8,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 17 ac 8J/150Y; 3 ac 16J/120Y — https://www.aerolopa.com/ey,2026
+ETD,A321,188,0,8,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 9 ac 8J/188Y — https://www.aerolopa.com/ey,2026
+ETD,A20N,168,0,8,0,AeroLOPA ey seat maps (cabin order F/J/W/Y) 2 ac 8J/168Y — https://www.aerolopa.com/ey,2026
+ETD,A21N,144,0,14,2,Etihad A321LR 2 First suites + 14 Business + 144 Economy (The National) — https://www.thenationalnews.com/travel/2025/04/28/etihad-airbus-a321lr-first-class/,2025
+DAL,A332,168,21,34,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) Y=144 Main+24 Comfort+; also Wikipedia Delta fleet table https://en.wikipedia.org/wiki/Delta_Air_Lines_fleet — https://www.aerolopa.com/dl,2026
+DAL,A333,227,21,34,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) Y=203 Main+24 Comfort+ — https://www.aerolopa.com/dl,2026
+DAL,A339,224,28,29,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) Y=168 Main+56 Comfort+ — https://www.aerolopa.com/dl,2026
+DAL,A359,195,40,40,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) 27 ac 40 Delta One/40 Premium Select/195; 13 ac 32/48/226 — https://www.aerolopa.com/dl,2026
+DAL,B763,172,18,26,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) 76K 29 ac; 76L 4 ac 36J/175Y — https://www.aerolopa.com/dl,2026
+DAL,B764,184,20,34,0,AeroLOPA dl seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/dl,2026
+DAL,B752,179,0,0,20,"AeroLOPA dl seat maps (cabin order F/J/W/Y) 75D 20F/179 (Comfort+ incl.); also 75G 20/173, 75S 16/152 — https://www.aerolopa.com/dl",2026
+DAL,B738,144,0,0,16,AeroLOPA dl seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/dl,2026
+DAL,A319,120,0,0,12,AeroLOPA dl seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/dl,2026
+DAL,A320,141,0,0,16,AeroLOPA dl seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/dl,2026
+DAL,A321,171,0,0,20,AeroLOPA dl seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/dl,2026
+DAL,A21N,174,0,0,20,AeroLOPA dl seat maps (cabin order F/J/W/Y) 3NE 76 ac — https://www.aerolopa.com/dl,2026
+DAL,BCS3,118,0,0,12,AeroLOPA dl seat maps (cabin order F/J/W/Y) A220-300 12F/118 — https://www.aerolopa.com/dl,2026
+ROT,B738,144,0,16,0,AeroLOPA TAROM seat maps; Wikipedia TAROM (16J/144Y); seatmap.app lists 189-seat all-economy 737-800 variant too — https://www.aerolopa.com/ro,2026
+ROT,AT72,72,0,0,0,"AeroLOPA TAROM / seatmap.app, ATR 72-600 72 seats economy (ATR 72-500 has 68) — https://www.aerolopa.com/ro",2026
+ITY,A332,219,17,20,0,AeroLOPA az seat maps (cabin order F/J/W/Y) 20J/17W/219Y; also Wikipedia https://en.wikipedia.org/wiki/ITA_Airways — https://www.aerolopa.com/az,2026
+ITY,A339,237,24,30,0,AeroLOPA az seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/az,2026
+ITY,A359,262,24,33,0,AeroLOPA az seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/az,2026
+ITY,A21N,141,12,12,0,AeroLOPA az seat maps (cabin order F/J/W/Y) A321neo/LR 12J/12W/141Y — https://www.aerolopa.com/az,2026
+ITY,BCS3,148,0,0,0,AeroLOPA az seat maps (cabin order F/J/W/Y) 148 vs Wikipedia 150 (15 ac); missionline 149 — https://www.aerolopa.com/az,2026
+ITY,A319,138,0,0,0,AeroLOPA az seat maps (cabin order F/J/W/Y) Wikipedia says 144 — https://www.aerolopa.com/az,2026
+ITY,A320,174,0,0,0,AeroLOPA az seat maps (cabin order F/J/W/Y) 14 ac 174; some 180 — https://www.aerolopa.com/az,2026
+ITY,A20N,180,0,0,0,AeroLOPA az seat maps (cabin order F/J/W/Y) — https://www.aerolopa.com/az,2026
+UAE,A388,427,0,76,14,AeroLOPA Emirates A380 388L 3-class (14F/76J/427Y; most common sub-fleet) — https://www.aerolopa.com/ek-388l,2026
+UAE,B77W,304,0,42,8,AeroLOPA Emirates 777-300ER 77WQ 3-class (8F/42J/304Y; 43 ac largest sub-fleet) — https://www.aerolopa.com/ek-77wq,2026
+UAE,A359,259,21,32,0,Emirates media centre A350 (32J/21W/259Y; 312 seats) — https://www.emirates.com/media-centre/the-emirates-a350/,2026
+UAE,B772,214,24,38,0,AeroLOPA Emirates 777-200LR 77LK (38J/24W/214Y; 19 ac) — https://www.aerolopa.com/ek-77lk,2026

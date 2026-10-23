@@ -6,6 +6,7 @@ import { getActiveStyleConfigId, getStyleConfigs, saveStyleConfigs } from './map
 import { getTripListPreferences, saveTripListPreferences } from './tripListPreferences';
 import { getApiKeyPreferences, saveApiKeyPreferences } from './apiKeyPreferences';
 import { getAppearancePreferences, saveAppearancePreferences } from './appearancePreferences';
+import { getClimateProfiles, saveClimateProfiles } from '../climate/profiles';
 import type { RenderStyleConfig } from './mapStylesPreferences';
 
 let syncTimeout: any;
@@ -164,6 +165,7 @@ export const syncPreferencesToCloud = async (immediate = false, changedStyleConf
         language: getLanguagePreferences(),
         customModes: getCustomOtherModes(),
         builtInModes: getBuiltInModeOverrides(),
+        climateProfiles: getClimateProfiles(),
         homePosition: localStorage.getItem('homeMapPosition') ? JSON.parse(localStorage.getItem('homeMapPosition')!) : null,
         tripList: getTripListPreferences(),
         apiKeys: getApiKeyPreferences(),
@@ -210,6 +212,10 @@ export const loadPreferencesFromCloud = async (preferences?: any, source?: strin
     const prefs = preferences || await persistingManager.loadPreferences();
     if (prefs) {
       let changed = false;
+      if (Array.isArray(prefs.climateProfiles) && JSON.stringify(prefs.climateProfiles) !== JSON.stringify(getClimateProfiles())) {
+        saveClimateProfiles(prefs.climateProfiles);
+        changed = true;
+      }
       
       const prevLang = JSON.stringify(getLanguagePreferences());
       if (prefs.language && JSON.stringify(prefs.language) !== prevLang) {

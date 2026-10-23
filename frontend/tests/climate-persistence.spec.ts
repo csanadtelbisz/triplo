@@ -1,0 +1,85 @@
+import { test, expect } from '@playwright/test';
+import type { Trip } from '../../shared/types';
+
+test('real app keeps climate results out of all storage and preference recalculation never dirties trips', async ({ page, context }) => {
+  test.setTimeout(60000);
+  await page.setViewportSize({ width: 1100, height: 850 });
+  page.on('dialog', dialog => dialog.accept());
+  await page.addInitScript(() => {
+    localStorage.setItem('github_token', 'test-token');
+    localStorage.setItem('github_repo', 'test/trips');
+    localStorage.setItem('startMinimized', 'false');
+    if (!localStorage.getItem('climateProfiles')) localStorage.setItem('climateProfiles', JSON.stringify([
+      { id: 'car', name: 'My car', profile: { mode: 'car', fuelType: 'petrol', exactFuelLPer100Km: 6, occupancy: 2 } },
+    ]));
+    localStorage.setItem('builtInModeOverrides', JSON.stringify({ car: { climateProfileId: 'car' } }));
+  });
+  let remote: Trip = { id: 'cached', name: 'Cached climate trip', startDate: '2026-05-01', createdAt: '', updatedAt: '', segments: [{
+    id: 'drive', name: 'Drive', transportMode: 'car', routingService: 'manual', routingProfile: 'straight', source: 'manual',
+    geometry: { type: 'LineString', coordinates: [[19, 47], [20, 47]] },
+    waypoints: [{ id: 'a', coordinates: [19, 47] }, { id: 'b', coordinates: [20, 47] }],
+    climateImpact: { inputKey: 'legacy-calculator', error: 'Obsolete saved calculation' },
+  }] };
+  remote.segments.push({ ...remote.segments[0], id: 'walk', name: 'Walk', transportMode: 'walk' });
+  let writes = 0;
+  await context.route('https://api.github.com/**', route => {
+    const url = route.request().url();
+    if (route.request().method() === 'PUT' && url.includes('/contents/trips/')) {
+      remote = JSON.parse(Buffer.from(route.request().postDataJSON().content, 'base64').toString('utf8'));
+      writes++;
+      return route.fulfill({ json: { content: { sha: 'saved' } } });
+    }
+    return route.fulfill({ status: url.endsWith('/contents/trips') ? 200 : 404,
+      json: url.endsWith('/contents/trips') ? [{ name: 'cached.triplo.json', download_url: 'https://fixtures.test/climate.json' }] : {} });
+  });
+  await context.route('https://fixtures.test/climate.json', route => route.fulfill({ json: remote }));
+  await context.route('https://tiles.openfreemap.org/**', route => route.fulfill({ json: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background' }] } }));
+  await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'empty-fixture', countries: [], attribution: 'Test boundaries' } }));
+  await page.goto('/tests/country-app.html');
+  await expect(page.getByRole('heading', { name: /Cached climate trip/ })).toBeVisible({ timeout: 15000 });
+  const browserCache = () => page.evaluate(() => new Promise<Trip[]>((resolve, reject) => {
+    const request = indexedDB.open('TriploDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const read = db.transaction('trips').objectStore('trips').get('triplo_cached_trips_v2');
+      read.onsuccess = () => { resolve(read.result || []); db.close(); };
+      read.onerror = () => { reject(read.error); db.close(); };
+    };
+  }));
+  await expect.poll(async () => (await browserCache())[0]?.segments[0].countryParts?.length, { timeout: 15000 }).toBe(1);
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
+  await page.getByTitle('Save All Unsaved Trips', { exact: true }).click();
+  await expect.poll(() => writes).toBe(1);
+  expect(remote.segments[0].geometry).toBeUndefined();
+  expect(remote.segments[0].distanceStats).toBeUndefined();
+  expect(remote.segments.every(s => !('climateImpact' in s))).toBe(true);
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  const openClimateAnalytics = async () => {
+    await page.getByTitle('Analytics', { exact: true }).click();
+    await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  };
+  await openClimateAnalytics();
+  const impact = page.getByLabel('Transport modes', { exact: true }).locator('.analytics-summary-row .right');
+  await expect(impact).toHaveCount(1);
+  const original = Number(await impact.textContent());
+  expect(original).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const profiles = JSON.parse(localStorage.getItem('climateProfiles')!);
+    profiles[0].profile.occupancy = 4;
+    localStorage.setItem('climateProfiles', JSON.stringify(profiles));
+    window.dispatchEvent(new Event('preferences-updated'));
+  });
+  await expect.poll(async () => Math.abs(Number(await impact.textContent()) * 2 - original)).toBeLessThanOrEqual(.11);
+  const revised = await impact.textContent();
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  expect(writes).toBe(1);
+  await page.reload();
+  await expect(page.getByTitle('Reload from all services', { exact: true })).toBeEnabled({ timeout: 15000 });
+  await openClimateAnalytics();
+  await expect(impact).toHaveText(revised!);
+  expect((await browserCache())[0].segments.every(s => !('climateImpact' in s))).toBe(true);
+  await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
+  expect(writes).toBe(1);
+});

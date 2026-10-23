@@ -1,11 +1,15 @@
+import { segmentClimate } from '../climate/profiles';
+import { useClimateSettings } from '../climate/useClimateSettings';
+import { climateCountryCodes } from '../climate/countryCodes';
 import { countryDistances } from '../countries/parts';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getCustomOtherModes, getModeAndIconColor } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import type { AnalyticsSelection } from '../countries/analytics';
-import { countryYearDistances, selectedDistance, tripFraction, tripIntersects } from '../countries/analytics';
+import { analyticsGrouping, countryYearDistances, matchesAnalyticsSegment, selectedClimate, selectedDistance, tripFraction } from '../countries/analytics';
+import { TripScatterPlot } from './TripScatterPlot';
 import type { CountryData } from '../countries/types';
 import { UNASSIGNED, segmentKey } from '../countries/types';
 import { countryName } from '../countries/names';
@@ -150,67 +154,7 @@ interface YearDistance {
   distance: number;
 }
 
-function calculateDaysOverlapInYear(startDate: Date, endDate: Date, year: number): number {
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31, 23, 59, 59);
-
-  const overlapStart = new Date(Math.max(startDate.getTime(), yearStart.getTime()));
-  const overlapEnd = new Date(Math.min(endDate.getTime(), yearEnd.getTime()));
-
-  if (overlapStart > overlapEnd) return 0;
-
-  return Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-}
-
-function getDistancePerYear(trips: Trip[], selectedModeKey: string | null): YearDistance[] {
-  const distanceByYear: Record<number, number> = {};
-  const yearSet = new Set<number>();
-
-  trips.forEach(trip => {
-    const startDate = trip.startDate ? new Date(trip.startDate) : null;
-    const endDate = trip.endDate ? new Date(trip.endDate) : startDate;
-
-    if (!startDate || !endDate) return;
-
-    // Determine which years this trip spans
-    const startYear = startDate.getFullYear();
-    const endYear = endDate.getFullYear();
-    const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-
-    for (let year = startYear; year <= endYear; year++) {
-      yearSet.add(year);
-      const daysInYear = calculateDaysOverlapInYear(startDate, endDate, year);
-
-      // Get distance for this trip, filtered by mode
-      let distanceForMode = 0;
-
-      if (selectedModeKey) {
-        // Only count distance for the selected mode
-        const modeKey = selectedModeKey;
-        const summary = trip.tripDistanceSummary;
-        if (summary?.distanceByMode) {
-          distanceForMode = (summary.distanceByMode[modeKey] as number) || 0;
-        }
-      } else {
-        // Count all modes
-        const summary = trip.tripDistanceSummary;
-        if (summary?.totalDistance) {
-          distanceForMode = summary.totalDistance;
-        }
-      }
-
-      // Distribute proportionally by days
-      const distributedDistance = (distanceForMode * daysInYear) / totalDays;
-      distanceByYear[year] = (distanceByYear[year] || 0) + distributedDistance;
-    }
-  });
-
-  return Array.from(yearSet)
-    .sort((a, b) => a - b)
-    .map(year => ({ year, distance: distanceByYear[year] || 0 }));
-}
-
-function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYear, onSelectedYearChange, interactive }: { yearDistances: YearDistance[]; maxDistance: number; modeColor?: string; selectedYear: number | null; onSelectedYearChange: (year: number | null) => void; interactive: boolean }) {
+function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYear, onSelectedYearChange, interactive, climate = false }: { climate?: boolean; yearDistances: YearDistance[]; maxDistance: number; modeColor?: string; selectedYear: number | null; onSelectedYearChange: (year: number | null) => void; interactive: boolean }) {
   const [hoveredYear, setHoveredYear] = useState<number | null>(null);
   const [tooltipXPosition, setTooltipXPosition] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -302,7 +246,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'inherit' }}>Distance per Year</h3>
+      <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'inherit' }}>{climate ? 'Climate Impact per Year (kg CO₂e)' : 'Distance per Year'}</h3>
       {yearDistances.length === 0 ? (
         <div 
           style={{ 
@@ -317,7 +261,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
             fontSize: '0.9rem'
           }}
         >
-          No dated distance data.
+          {climate ? 'No dated climate data.' : 'No dated distance data.'}
         </div>
       ) : (
       <div className="analytics-chart" 
@@ -446,7 +390,7 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
             }}
           >
             <div style={{ fontWeight: 'bold', lineHeight: '1.4' }}>{hoveredYear}</div>
-            <div style={{ lineHeight: '1.4' }}>{hoveredData.distance.toFixed(1)} km</div>
+            <div style={{ lineHeight: '1.4' }}>{hoveredData.distance.toFixed(1)} {climate ? 'kg CO₂e' : 'km'}</div>
           </div>
         )}
       </div>
@@ -456,62 +400,86 @@ function YearlyDistanceChart({ yearDistances, maxDistance, modeColor, selectedYe
 }
 
 export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOpenSegmentInfo, onFocusSegment, timeSliderVisible, onToggleTimeSlider, selection, onSelectionChange, countryData, countryLoading, countryCurrentTrip, countryError, onRetryCountries }: AnalyticsPanelProps) {
+  const climateSettings = useClimateSettings();
+  const grouping = analyticsGrouping(selection);
+  const climateValues = useMemo(() => {
+    const values = new Map<string, number | undefined>();
+    if (!selection.climate && grouping !== 'trips') return values;
+    for (const trip of trips) for (const segment of trip.segments) {
+      values.set(segmentKey(trip.id, segment.id), segmentClimate(trip, segment, climateSettings).result?.co2eKg);
+    }
+    return values;
+  }, [trips, climateSettings, selection.climate, grouping]);
+  const unavailableClimateCount = selection.climate || grouping === 'trips'
+    ? trips.reduce((count, trip) => count + trip.segments.filter(segment => matchesAnalyticsSegment(trip, segment, { ...selection, climate: false }, countryData) && climateValues.get(segmentKey(trip.id, segment.id)) === undefined).length, 0) : 0;
+  const metric = useCallback((trip: Trip, segment: Segment, country: string | null, data?: CountryData) => {
+    if (!selection.climate) return selectedDistance(trip, segment, country, data);
+    return selectedClimate(trip, segment, climateValues.get(segmentKey(trip.id, segment.id)) || 0, country, data);
+  }, [selection.climate, climateValues]);
+  const eligible = useCallback((trip: Trip, segment: Segment, filters = selection) => matchesAnalyticsSegment(trip, segment, filters, countryData, climateValues.get(segmentKey(trip.id, segment.id))), [selection, countryData, climateValues]);
+  const toggleMetric = () => onSelectionChange({ ...selection, groupBy: grouping, climate: !selection.climate }, true);
+  const cycleGrouping = () => {
+    const views = ['modes', 'trips', 'countries'] as const;
+    const next = views[(views.indexOf(grouping) + 1) % views.length];
+    onSelectionChange({ ...selection, groupBy: next, countries: next === 'countries', trip: null, country: null, mode: null }, true);
+  };
+  const metricLabel = selection.climate ? 'Climate impact (kg CO₂e)' : 'Distance (km)';
   const selectedModeKey = selection.mode;
   const onSelectedModeKeyChange = (mode: string | null) => onSelectionChange({ ...selection, mode });
   const selectedYear = selection.year;
   const timeRange = selection.range;
   const [customModes] = useState<CustomOtherMode[]>(() => getCustomOtherModes());
-  const yearlyDistances = useMemo(() => selection.countries ? countryYearDistances(trips, selection, countryData) : getDistancePerYear(trips, selectedModeKey), [trips, selection, countryData, selectedModeKey]);
+  const yearlyDistances = useMemo(() => countryYearDistances(trips, selection, countryData, metric), [trips, selection, countryData, metric]);
   const maxYearlyDistance = Math.max(1, ...yearlyDistances.map(d => d.distance));
+  const tripRows = useMemo(() => trips.map(trip => {
+    let distance = 0, impact = 0, hasSegments = false, available = true;
+    for (const segment of trip.segments) {
+      const kg = climateValues.get(segmentKey(trip.id, segment.id));
+      if (kg === undefined && matchesAnalyticsSegment(trip, segment, { ...selection, trip: null, climate: false }, countryData)) available = false;
+      if (!eligible(trip, segment, { ...selection, trip: null })) continue;
+      const fraction = tripFraction(trip, timeRange);
+      if (fraction <= 0) continue;
+      hasSegments = true;
+      distance += selectedDistance(trip, segment, selection.country, countryData) * fraction;
+
+      impact += selectedClimate(trip, segment, kg || 0, selection.country, countryData) * fraction;
+    }
+    return { trip, distance, impact, available, hasSegments };
+  }).filter(row => row.trip.id === selection.trip || (row.hasSegments && (!selection.climate || row.impact > 0)))
+    .sort((a, b) => (selection.climate ? b.impact - a.impact : b.distance - a.distance) || a.trip.name.localeCompare(b.trip.name)), [trips, eligible, selection, timeRange, countryData, climateValues]);
   const countryRows = useMemo(() => {
     const totals: Record<string, number> = {};
-    for (const trip of trips) {
-      if (!tripIntersects(trip, timeRange)) continue;
-      for (const segment of trip.segments) {
-        const result = countryData?.results[segmentKey(trip.id, segment.id)];
-        for (const [code, distance] of Object.entries(result?.distanceKmByCountry || countryDistances(segment))) {
-          if (distance > 0) totals[code] = (totals[code] || 0) + distance * tripFraction(trip, timeRange);
-        }
+    for (const trip of trips) for (const segment of trip.segments) {
+      if (!eligible(trip, segment, { ...selection, country: null })) continue;
+      const result = countryData?.results[segmentKey(trip.id, segment.id)];
+      for (const [code, distance] of Object.entries(result?.distanceKmByCountry || countryDistances(segment))) {
+        if (distance > 0) totals[code] = (totals[code] || 0) + metric(trip, segment, code, countryData) * tripFraction(trip, timeRange);
       }
     }
-    if (selection.country && !totals[selection.country]) totals[selection.country] = 0;
-    return Object.entries(totals).sort(([a, distanceA], [b, distanceB]) => a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : distanceB - distanceA).map(([code, distance]) => {
-      const country = countryData?.index.countries.find(c => c.code === code);
-      return { code, distance, name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
-    });
-  }, [trips, countryData, timeRange, selection.country]);
-
+    if (selection.country && totals[selection.country] === undefined) totals[selection.country] = 0;
+    return Object.entries(totals).filter(([code, distance]) => distance > 0 || code === selection.country)
+      .sort(([a, distanceA], [b, distanceB]) => a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : distanceB - distanceA).map(([code, distance]) => {
+        const country = countryData?.index.countries.find(c => c.code === code);
+        return { code, distance, name: code === UNASSIGNED ? 'Unassigned' : country ? countryName(country) : code };
+      });
+  }, [trips, eligible, selection, countryData, timeRange, metric]);
   const { globalDistanceByMode, segmentsByMode } = useMemo(() => {
     const distanceByMode: Record<string, number> = {};
     const segmentsByModeLocal: Record<string, SegmentEntry[]> = {};
-
-    trips.forEach(trip => {
-      const summary = trip.tripDistanceSummary;
-      if (!selection.countries && summary?.distanceByMode) {
-        for (const [mode, dist] of Object.entries(summary.distanceByMode)) {
-           distanceByMode[mode] = (distanceByMode[mode] || 0) + (dist as number);
-        }
-      }
-
-      trip.segments.forEach(segment => {
-        if (segment.routingProfile === 'teleport') return;
-        if (selection.countries && (!tripIntersects(trip, timeRange) || !selectedDistance(trip, segment, selection.country, countryData))) return;
-        const key = getModeKeyForSegment(segment);
-        if (selection.countries) distanceByMode[key] = (distanceByMode[key] || 0) + selectedDistance(trip, segment, selection.country, countryData) * tripFraction(trip, timeRange);
-        if (!segmentsByModeLocal[key]) {
-          segmentsByModeLocal[key] = [];
-        }
-        segmentsByModeLocal[key].push({ trip, segment });
-      });
-    });
-
+    for (const trip of trips) for (const segment of trip.segments) {
+      if (!eligible(trip, segment, { ...selection, mode: null })) continue;
+      const key = getModeKeyForSegment(segment);
+      distanceByMode[key] = (distanceByMode[key] || 0) + metric(trip, segment, selection.country, countryData) * tripFraction(trip, timeRange);
+      (segmentsByModeLocal[key] ||= []).push({ trip, segment });
+    }
     return { globalDistanceByMode: distanceByMode, segmentsByMode: segmentsByModeLocal };
-  }, [trips, selection.countries, selection.country, timeRange, countryData]);
+  }, [trips, eligible, selection, timeRange, countryData, metric]);
 
   const modeRows = useMemo(() => {
     const entries = Object.entries(globalDistanceByMode);
     if (selectedModeKey && !entries.some(([key]) => key === selectedModeKey)) entries.push([selectedModeKey, 0]);
     return entries
+      .filter(([, value]) => !selection.climate || Number(value.toFixed(1)) > 0)
       .sort(([, a], [, b]) => b - a)
       .map(([modeKey, distance]) => {
         const isOther = modeKey.startsWith('other:');
@@ -539,7 +507,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           segmentEntries
         };
       });
-  }, [customModes, globalDistanceByMode, segmentsByMode, selectedModeKey]);
+  }, [customModes, globalDistanceByMode, segmentsByMode, selectedModeKey, selection.climate]);
 
   const selectedSegments = useMemo(() => {
     if (!selectedModeKey) return [] as SegmentEntry[];
@@ -550,7 +518,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       return date ? new Date(date).getTime() : Number.NEGATIVE_INFINITY;
     };
 
-    const yearFiltered = selected.filter(({ trip }) => tripIntersects(trip, timeRange));
+    const yearFiltered = selected;
 
     yearFiltered.sort((left, right) => {
       const tripTimeDelta = getTripSortTime(right.trip) - getTripSortTime(left.trip);
@@ -566,7 +534,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
     });
 
     return yearFiltered;
-  }, [selectedModeKey, timeRange, segmentsByMode]);
+  }, [selectedModeKey, segmentsByMode]);
 
   const clearModeFilter = () => {
     onSelectedModeKeyChange(null);
@@ -616,7 +584,7 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
     return () => {
       clearTransientStyleConfig();
     };
-  }, [selectedModeKey, setTransientStyleConfig, clearTransientStyleConfig]);
+  }, [selectedModeKey]);
 
   return (
     <>
@@ -625,8 +593,9 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
           <MaterialIcon name="arrow_back" size={20} />
         </button>
         <h2 style={{ margin: 0, fontSize: '1.1rem', flex: 1, textAlign: 'center' }}>Analytics</h2>
-        <button className={`iconButton ${selection.countries ? 'active' : ''}`} aria-label="Group by country" aria-pressed={selection.countries} onClick={() => onSelectionChange({ ...selection, countries: !selection.countries, country: null, mode: null })} title="Group by country">
-          <MaterialIcon name="public" size={20} />
+        <button className="iconButton" aria-label={selection.climate ? 'Show distance' : 'Show climate impact'} aria-pressed={!!selection.climate} title={selection.climate ? 'Climate impact — switch to distance' : 'Distance — switch to climate impact'} onClick={toggleMetric}><MaterialIcon name={selection.climate ? 'eco' : 'straighten'} size={20} /></button>
+        <button className="iconButton" data-analytics-grouping={grouping} aria-label={`Analytics grouping: ${grouping === 'modes' ? 'Transport modes' : grouping === 'trips' ? 'Trips' : 'Countries'}`} title={`Group by ${grouping === 'modes' ? 'trip' : grouping === 'trips' ? 'country' : 'transport mode'}`} onClick={cycleGrouping}>
+          <MaterialIcon name={grouping === 'modes' ? 'commute' : grouping === 'trips' ? 'route' : 'public'} size={20} />
         </button>
         <button className={`iconButton ${timeSliderVisible ? 'active' : ''}`} onClick={onToggleTimeSlider} title="Toggle time filter">
           <MaterialIcon name="line_end_circle" size={20} />
@@ -634,40 +603,53 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
       </div>
 
       <div className="content" style={{ padding: '16px', overflowY: 'auto' }}>
-        {selection.countries && (
-          <div className="country-list" aria-label="Countries">
-            {countryLoading && countryCurrentTrip && <p role="status">Calculating country distances for {countryCurrentTrip}…</p>}
-            {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
-            <div className="trip-summary-table analytics-summary-table">
-              <div className="analytics-summary-header">
-                <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED && row.distance > 0).length})</div><div className="analytics-summary-distance">Distance (km)</div>
-              </div>
-              <div className="analytics-summary-rows">
-                {countryRows.filter(row => !selection.country || selection.country === row.code).map(row => (
-                  <button type="button" className="trip-summary-row analytics-summary-row country-row" key={row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, mode: null })}>
-                    <span className="trip-summary-td analytics-summary-cell">{row.name}</span><span className="trip-summary-td right analytics-summary-cell">{row.distance.toFixed(1)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {!countryLoading && !countryError && countryRows.length === 0 && <p>No countries in this period.</p>}
-          </div>
-        )}
+        {unavailableClimateCount > 0 && <p role="status">Climate totals exclude {unavailableClimateCount} unavailable segment estimates. Open their Climate Impact cards for details.</p>}
         {(
           <>
-            {(!selection.countries || selection.country) && (
-            <div className="trip-summary-table analytics-summary-table">
+            {grouping === 'trips' && <div className="trip-summary-table analytics-summary-table" aria-label={selection.climate ? 'Trip climate impacts' : 'Trip distances'}>
+              <div className="analytics-summary-header"><div>Trip</div><div className="analytics-summary-distance">{metricLabel}</div></div>
+              <div className="analytics-summary-rows">{tripRows.map(({ trip, distance, impact }) => <button type="button" className={`trip-summary-row analytics-summary-row climate-trip-analytics-row${selection.trip && trip.id !== selection.trip ? ' is-collapsed' : ''}`} key={trip.id}
+                inert={!!selection.trip && trip.id !== selection.trip} aria-hidden={!!selection.trip && trip.id !== selection.trip}
+                aria-pressed={selection.trip === trip.id} onClick={() => onSelectionChange({ ...selection, trip: selection.trip === trip.id ? null : trip.id, country: null, mode: null })}>
+                <span className="trip-summary-td analytics-summary-cell">{trip.name || 'Untitled trip'}</span>
+                <span className="trip-summary-td right analytics-summary-cell">{(selection.climate ? impact : distance).toFixed(1)}</span>
+              </button>)}</div>
+              {tripRows.length === 0 && <p>No trips match these filters.</p>}
+            </div>}
+            {(grouping === 'countries' || (grouping === 'trips' && selection.trip)) && (
+              <div className="country-list" aria-label="Countries">
+                {countryLoading && countryCurrentTrip && <p role="status">Calculating country distances for {countryCurrentTrip}…</p>}
+                {countryError && <p role="alert">Could not calculate country distances. <button type="button" onClick={onRetryCountries}>Retry</button></p>}
+                <div className="trip-summary-table analytics-summary-table">
+                  <div className="analytics-summary-header">
+                    <div>Country ({countryRows.filter(row => row.code !== UNASSIGNED).length})</div><div className="analytics-summary-distance">{metricLabel}</div>
+                  </div>
+                  <div className="analytics-summary-rows">
+                    {countryRows.map(row => (
+                      <button type="button" className={`trip-summary-row analytics-summary-row country-row${selection.country && selection.country !== row.code ? ' is-collapsed' : ''}`} key={row.code} inert={!!selection.country && selection.country !== row.code} aria-hidden={!!selection.country && selection.country !== row.code} aria-pressed={selection.country === row.code} onClick={() => onSelectionChange({ ...selection, country: selection.country === row.code ? null : row.code, ...(grouping === 'countries' ? { mode: null } : {}) })}>
+                        <span className="analytics-country-flag" aria-hidden="true">{climateCountryCodes[row.code] && <img src={`https://flagcdn.com/w40/${row.code.toLowerCase()}.png`} srcSet={`https://flagcdn.com/w80/${row.code.toLowerCase()}.png 2x`} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} />}</span>
+                        <span className="trip-summary-td analytics-summary-cell">{row.name}</span><span className="trip-summary-td right analytics-summary-cell">{row.distance.toFixed(1)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {!countryLoading && !countryError && countryRows.length === 0 && <p>No countries in this period.</p>}
+              </div>
+            )}
+            {grouping === 'trips' && !selection.trip && <TripScatterPlot points={tripRows.filter(row => row.available).map(row => ({ id: row.trip.id, name: row.trip.name || 'Untitled trip', distance: row.distance, impact: row.impact }))} />}
+            {(grouping === 'modes' || (grouping === 'countries' && selection.country) || (grouping === 'trips' && selection.trip)) && (
+            <div className="trip-summary-table analytics-summary-table" aria-label="Transport modes">
               <div className="analytics-summary-header">
                 <div>Mode</div>
-                <div className="analytics-summary-distance">Distance (km)</div>
+                <div className="analytics-summary-distance">{metricLabel}</div>
               </div>
               <div className="analytics-summary-rows">
                 {modeRows.map(row => {
                   const collapsed = selectedModeKey !== null && selectedModeKey !== row.modeKey;
 
                   return (
-                    <div
-                      key={row.modeKey}
+                    <button type="button" aria-pressed={selectedModeKey === row.modeKey}
+                      key={row.modeKey} inert={collapsed} aria-hidden={collapsed}
                       className={`trip-summary-row analytics-summary-row${collapsed ? ' is-collapsed' : ''}`}
                       onClick={() => handleModeClick(row.modeKey)}
                     >
@@ -680,25 +662,26 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
                       <div className="trip-summary-td right analytics-summary-cell">
                         {row.distance.toFixed(1)}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+              {modeRows.length === 0 && <p>No transport modes match these filters.</p>}
             </div>
             )}
 
-            <YearlyDistanceChart yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
+            {!selection.trip && <YearlyDistanceChart climate={selection.climate} yearDistances={yearlyDistances} maxDistance={maxYearlyDistance} modeColor={getSelectedModeColor()} selectedYear={selectedYear} onSelectedYearChange={year => {
               const range: [number, number] | null = year === null ? null : [new Date(year, 0, 1).getTime(), new Date(year, 11, 31, 23, 59, 59, 999).getTime()];
               onSelectionChange({ ...selection, year, range }, true);
-            }} interactive />
+            }} interactive />}
 
             {selectedModeKey && (
               <div style={{ marginTop: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', color: 'inherit', textTransform: 'capitalize' }}>{modeRows.find(row => row.modeKey === selectedModeKey)?.displayName} Segments</h3>
+                  <h3 style={{ margin: 0, fontSize: '1rem', color: 'inherit', textTransform: 'capitalize' }}>{getModeLabel(selectedModeKey, customModes)} Segments</h3>
                   <button
                     type="button"
-                    onClick={clearModeFilter}
+                    aria-label="Clear transport mode filter" onClick={clearModeFilter}
                     style={{ border: 'none', background: 'none', color: '#1976d2', cursor: 'pointer', padding: 0, fontSize: '0.9rem' }}
                   >
                     <MaterialIcon name="close" size={16} />

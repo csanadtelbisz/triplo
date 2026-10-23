@@ -1,4 +1,7 @@
-﻿import { useEffect, Fragment, useRef, useCallback, useState } from 'react';
+﻿import { tripClimate } from '../climate/profiles';
+import { useClimateSettings } from '../climate/useClimateSettings';
+import { TripClimateSettings } from './TripClimateSettings';
+import { useEffect, Fragment, useRef, useCallback, useState, useMemo } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -56,6 +59,9 @@ export function TripEditor({
   onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference,
   onRequestSetup
 }: TripEditorProps) {
+  const climateSettings = useClimateSettings();
+  const climateSummary = useMemo(() => tripClimate(trip, climateSettings), [trip, climateSettings]);
+  const [climateSettingsOpen, setClimateSettingsOpen] = useState(false);
   const isSavedSharedTrip = !!trip.metadata?.isSharedTripReference;
   const isSharedTrip = isSharedTripView || isSavedSharedTrip;
   const isReadOnly = propIsReadOnly || isSharedTrip;
@@ -1502,17 +1508,20 @@ export function TripEditor({
          <div className="trip-summary">
            <h3 className="trip-summary-title">
              <MaterialIcon name="finance" size={18} /> Trip Summary
+             <button className="iconButton climate-settings-button" aria-label="Trip climate profile defaults" title="Trip climate profile defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
            </h3>
            <div className="trip-summary-total">
              <strong>Total Distance:</strong> {tripSummary.totalDistance.toFixed(1)} km
            </div>
+           <div className="trip-summary-total"><strong>Total Climate Impact:</strong> {climateSummary.totalKg.toFixed(1)} kg CO₂e{climateSummary.unavailable > 0 && <small> ({climateSummary.unavailable} segment estimates unavailable)</small>}</div>
            
            {Object.keys(tripSummary.distanceByMode).length > 0 && (
              <table className="trip-summary-table">
                <thead>
                  <tr style={{ borderBottom: '1px solid #dee2e6', textAlign: 'left' }}>
                    <th style={{ padding: '4px 8px 4px 0' }}>Mode</th>
-                   <th style={{ padding: '4px 0', textAlign: 'right' }}>Distance (km)</th>
+                   <th style={{ padding: '4px 0', textAlign: 'right' }} title="Kilometres (km)">Distance</th>
+                   <th style={{ padding: '4px 0 4px 8px', textAlign: 'right' }} title="Kilograms CO₂e per traveller">Climate impact</th>
                  </tr>
                </thead>
                <tbody>
@@ -1550,6 +1559,7 @@ export function TripEditor({
                          <td className="trip-summary-td right">
                            {(dist as number).toFixed(1)}
                          </td>
+                         <td className="trip-summary-td right" title={climateSummary.unavailableByMode[mode] ? 'Some segment estimates are unavailable' : undefined}>{climateSummary.byMode[mode] === undefined && climateSummary.unavailableByMode[mode] ? 'Unavailable' : `${(climateSummary.byMode[mode] || 0).toFixed(1)}${climateSummary.unavailableByMode[mode] ? '*' : ''}`}</td>
                        </tr>
                      );
                    })}
@@ -1559,6 +1569,9 @@ export function TripEditor({
          </div>
       </div>
 
+      {climateSettingsOpen && <TripClimateSettings key={trip.id} trip={trip} onClose={() => setClimateSettingsOpen(false)} onSave={climateProfiles => {
+        onUpdateTrip({ ...trip, climateProfiles }); setClimateSettingsOpen(false);
+      }} />}
       <Dialog
         isOpen={isShareDialogOpen}
         title="Share Trip"

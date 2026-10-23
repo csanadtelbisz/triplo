@@ -2,6 +2,7 @@ import type { TransportMode } from "../../../shared/types";
 import { getModeColor } from "./builtInModesPreferences";
 
 export interface CustomOtherMode {
+  climateProfileId?: string;
   icon: string;
   name: string;
   color: string;
@@ -17,6 +18,7 @@ export const getCustomOtherModes = (): CustomOtherMode[] => {
     return Array.isArray(parsed)
       ? parsed.map((m: Partial<CustomOtherMode>) => ({
           icon: m.icon || '',
+          climateProfileId: m.climateProfileId,
           name: m.name || '',
           color: m.color || '#000000',
           routingProfile: m.routingProfile || 'Straight Line Router|straight_line',

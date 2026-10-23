@@ -17,7 +17,8 @@ there is no application backend to run.
 - Import GPX or GeoJSON tracks into segments and export trips or segments as GPX.
 - Search for places and points of interest, switch base maps, and customize
   transport icons, route styling, and light/dark appearance.
-- View distance analytics by year and transport mode, and filter trips by date.
+- View distance and climate-impact analytics by year, country and transport mode, and filter trips by date.
+- Define reusable climate profiles, choose transport-mode and trip defaults, and customize segment estimates in kg CO₂e per traveller.
 - Save trips and preferences to Google Drive or GitHub, resolve sync conflicts,
   and share read-only trip links.
 
@@ -43,9 +44,17 @@ country code, GeoJSON `geometry`, and `distanceStats` (kilometres and elevation)
 Together the parts replace the segment's full `geometry`, aggregate
 `distanceStats`, and old `countryDistances`; the full route is not duplicated.
 Re-entry stays in route order, for example HU → SK → HU. Waypoints and their
-`waypointDistances` remain unchanged. Imported GPX tracks retain their full
+`waypointDistances` remain in the trip. Imported GPX tracks retain their full
 source geometry, including portions outside the current waypoints; only the
 traversed portions contribute country statistics and map cropping.
+
+Saved JSON keeps two-space indentation, with geometry objects, coordinate
+arrays, and individual distance-stat blocks on one line. Waypoint coordinates
+are rounded to at most 7 decimal places; distances (kilometres), including
+country/mode totals, to 5; and elevation totals (metres) to 2. Elevation up/down
+are omitted when `hasElevation` is false and restored as zero when caches load.
+Rounding happens only during serialization; runtime measurements and segment
+geometry coordinates retain their existing precision.
 
 A bounded A → B → A excursion is attributed entirely to A when its whole path
 stays within 10 metres of A. The check includes the interiors of sparse edges,
@@ -108,6 +117,20 @@ want to keep.
   that repository. Trip files are saved under `trips/<id>.triplo.json`. For
   sharing through Gists, configure a share token with Gist access in the GitHub
   storage settings.
+
+**Save All** uses each provider's batch operation. GitHub publishes changed trip
+files in one commit on the repository's default branch, preserving unrelated
+files. It uploads file blobs in groups of four, then creates a tree/commit and
+advances the branch without force; a concurrent push leaves trips unsaved so
+the save can be retried. Identical contents produce no new commit. Single-trip
+batches use the normal one-file save. Completely empty repositories use the
+default loop until GitHub's Git object API can work with an initialized branch.
+
+`PersistingService.saveAll` provides a sequential `save` loop that providers can
+override. Google Drive inherits it because its
+[batch API excludes file-content uploads](https://developers.google.com/workspace/drive/api/guides/performance#batch_requests).
+An error leaves the batch marked unsaved, including when a provider's loop
+partly succeeded; saving across providers is not a shared transaction.
 
 Both providers can also store preferences and custom style scripts. The native
 trip format is the `Trip` object defined in [shared/types.ts](shared/types.ts),

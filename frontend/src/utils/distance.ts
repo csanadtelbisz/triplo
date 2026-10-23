@@ -3,12 +3,20 @@ import type { Waypoint, Trip } from '../../../shared/types';
 import { copyEffectiveGeometryCache, getEffectiveGeometry, geometryDistance } from './effectiveGeometry';
 import { compactCountryData } from '../countries/cache';
 import { countryPartStats, getSegmentGeometry } from './segmentGeometry';
+import { withClimateCache } from '../climate/profiles';
 
 export interface DistanceStats {
   distanceKm: number;
   hasElevation: boolean;
   elevationUp: number;
   elevationDown: number;
+}
+
+/** Saved stats omit elevation totals when no elevation data is available. */
+function restoreElevationTotals<T extends { elevationUp: number; elevationDown: number }>(stats: T): T {
+  return stats.elevationUp === undefined || stats.elevationDown === undefined
+    ? { ...stats, elevationUp: stats.elevationUp ?? 0, elevationDown: stats.elevationDown ?? 0 }
+    : stats;
 }
 
 // A path along the geometry between two waypoints should essentially never be shorter
@@ -235,7 +243,7 @@ function getDistanceStats(idx1: number, idx2: number, geometry: GeoJSON.LineStri
     }
 
     return { distanceKm, hasElevation, elevationUp, elevationDown };
-  } catch (e) {
+  } catch {
     return { distanceKm: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 };
   }
 }
@@ -327,8 +335,9 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
 
   const newSegments = newTrip.segments.map(seg => {
     // If affectedSegmentIds is provided and this segment is not in it, use existing caches if available
-    let segDistStats = seg.distanceStats;
+    let segDistStats = seg.distanceStats && restoreElevationTotals(seg.distanceStats);
     let wpStats = seg.waypointDistances;
+    if (wpStats?.some(stats => stats.elevationUp === undefined || stats.elevationDown === undefined)) wpStats = wpStats.map(restoreElevationTotals);
     
     // Check if computation is actually needed
     const needsComputation = !affectedSegmentIds || affectedSegmentIds.includes(seg.id) || !segDistStats || !wpStats;
@@ -363,5 +372,5 @@ export function computeTripCaches(trip: Trip, affectedSegmentIds?: string[]): Tr
     distanceByMode
   };
 
-  return newTrip;
+  return withClimateCache(newTrip);
 }

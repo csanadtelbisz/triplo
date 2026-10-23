@@ -1,0 +1,8 @@
+{
+  "_source": "French transport-reporting order of 10 April 2012, Annex II, version in force from 1 June 2017. Electric grandes lignes (inter-city) and high-speed passenger rail, Level 1 defaults. Average passenger counts account for empty running.",
+  "_sourceUrl": "https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000034554253",
+  "year": 2017,
+  "source": "French transport reporting",
+  "inter_city": { "kwhPerTrainKm": 20, "passengers": 188 },
+  "high_speed": { "kwhPerTrainKm": 20, "passengers": 285 }
+}

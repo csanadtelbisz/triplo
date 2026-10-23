@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "climate:generate": "python3 -I ../climate/scripts/build-json.py ../climate/data ../climate/src/generated/data.ts",
+    "prebuild": "npm run climate:generate",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "playwright test",

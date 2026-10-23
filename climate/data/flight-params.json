@@ -1,0 +1,16 @@
+{
+  "_source": "DEFRA/DESNZ 2026 GHG Conversion Factors methodology paper (OGL v3.0): paragraphs 8.8-8.9, 8.37-8.43; Tables 36-37",
+  "year": 2026,
+  "distanceUplift": 0.08,
+  "rfMultiplier": 1.7,
+  "shortHaulMaxKm": 3700,
+  "defaultLoadFactorByBand": { "dom": 0.749, "short": 0.833, "long": 0.813 },
+  "classWeights": {
+    "narrow": { "economy": 1, "premium_economy": 1, "business": 1.5, "first": 1.5 },
+    "wide": { "economy": 1, "premium_economy": 1.6, "business": 2.9, "first": 4.0 }
+  },
+  "classSeatShares": {
+    "narrow": { "economy": 0.967, "premium_economy": 0, "business": 0.033, "first": 0 },
+    "wide": { "economy": 0.83, "premium_economy": 0.03, "business": 0.119, "first": 0.02 }
+  }
+}

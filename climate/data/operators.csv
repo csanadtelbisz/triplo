@@ -1,0 +1,28 @@
+operator,name,load_factor,source,year
+WZZ,Wizz Air,0.907,Wizz Air March 2026 Traffic and CO2 Emission Statistics: load factor 90.7% rolling 12 months to March 2026 — https://s204.q4cdn.com/169340705/files/doc_news/March-2026-Traffic-and-CO2-Emission-Statistics-2026.pdf,2026
+RYR,Ryanair,0.94,Ryanair Holdings plc Form 20-F FY ended 31 Mar 2026: booked passenger load factor 94% (SEC EDGAR 0001104659-26-076131) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+RUK,Ryanair UK,0.94,Same as RYR (group figure) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+LDM,Lauda Europe,0.94,Same as RYR (group figure) — https://www.sec.gov/Archives/edgar/data/1038683/000110465926076131/tmb-20260331x20f.htm,2026
+EZY,easyJet,0.898,easyJet FY25 Investor Presentation: seat load factor 89.8% (year to 30 Sep 2025) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+EJU,easyJet Europe,0.898,Same as EZY (group figure) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+EZS,easyJet Switzerland,0.898,Same as EZY (group figure) — https://s203.q4cdn.com/522538739/files/doc_financials/2025/q4/FY25-Investor-Presentation-vf.pdf,2025
+THY,Turkish Airlines,0.832,Total passenger load factor Jan-Nov 2025 as reported by Caspian Post from Turkish Airlines traffic data — https://caspianpost.com/economics/turkish-airlines-sees-boost-in-passengers-cargo-in-2025,2025
+AUA,Austrian Airlines,0.816,"Lufthansa Group Annual Report 2025, Austrian Airlines: passenger load factor 81.6% — https://report.lufthansagroup.com/2025/annual-report/en/combined-management-report/business-segments/passenger-airlines-business-segment/austrian-airlines/",2025
+ACA,Air Canada,0.846,Air Canada Q4 and full-year 2025 results release (total incl. capacity-purchase carriers; RPM/ASM) — https://seekingalpha.com/pr/20398692,2025
+PGT,Pegasus,0.877,Pegasus December 2025 traffic data (Jan-Dec 2025 load factor) — https://www.pegasusinvestorrelations.com/medium/image/pegasus-december-2025-traffic-data_1570/view.aspx,2025
+KZR,Air Astana,0.827,Air Astana Group Q4 and FY2025 results (GROUP-level incl. FlyArystan; no per-brand figure published) — https://www.stockopedia.com/share-prices/air-astana-ao-LON:AIRA/news/air-astana-jsc-results-for-the-q4-and-fy-ended-31-december-2025-019e6a14-a227-7c51-920a-517c45d1ef20/,2025
+FAR,FlyArystan,0.827,Air Astana Group Q4 and FY2025 results (GROUP-level; no FlyArystan-only figure found) — https://www.stockopedia.com/share-prices/air-astana-ao-LON:AIRA/news/air-astana-jsc-results-for-the-q4-and-fy-ended-31-december-2025-019e6a14-a227-7c51-920a-517c45d1ef20/,2025
+ETH,Ethiopian Airlines,0.778,Ethiopian Group FY2025/26 (Jul 2025-Jun 2026) annual highlights: RPK 72.10bn / ASK 92.71bn = 0.778 (computed by me; LF not stated) — https://theaviator.co.ug/ethiopian-airlines-group-releases-annual-performance-highlights-for-the-fy-2025-26/,2026
+DLH,Lufthansa,0.834,"Lufthansa Group Annual Report 2025, Lufthansa Airlines segment page: PLF 83.4% (incl. regional partners and Discover Airlines); Group 83.2% — https://report.lufthansagroup.com/2025/annual-report/en/combined-management-report/business-segments/passenger-airlines-business-segment/lufthansa-airlines/",2025
+LOT,LOT Polish Airlines,0.805,"Pasazer.com top-15 airlines report: LOT 2024 PLF implied ~80.5% (Southwest 80.4% stated as 0.1pp worse than LOT); LOT does not publish 2025 PLF, so this is an implied 2024 figure — https://www.pasazer.com/news/468595/raport,top15,linii,lotniczych,swiata,w,2024,i,lot.html",2024
+KLM,KLM,0.88,"Air France-KLM Full Year 2025 results press release, KLM passenger load factor 88.0% — https://www.nasdaq.com/press-release/full-year-2025-2026-02-19",2025
+AFR,Air France,0.867,"Air France-KLM Full Year 2025 results press release, Air France passenger load factor 86.7% — https://www.nasdaq.com/press-release/full-year-2025-2026-02-19",2025
+BAW,British Airways,0.838,"IAG Full Year 2025 results, traffic and capacity statistics by airline: BA passenger load factor 83.8% — https://www.iairgroup.com/press-releases/2026/iag-full-year-results-2025",2025
+IBE,Iberia,0.886,"IAG Full Year 2025 results, traffic and capacity statistics by airline: Iberia passenger load factor 88.6% — https://www.iairgroup.com/press-releases/2026/iag-full-year-results-2025",2025
+UAE,Emirates,0.784,"Emirates Group FY2025-26 results, passenger seat factor 78.4% (FY to 31 Mar 2026) — https://mediaoffice.ae/en/news/2026/may/07-05/emirates-group-achieves-record-profit-in-2025-26",2025-26
+QTR,Qatar Airways,0.85,Qatar Airways Group FY2024-25 average load factor 85% (FY2025-26 LF not found in press coverage) — https://onemileatatime.com/news/qatar-airways-group-record-profit/,2024-25
+ETD,Etihad Airways,0.883,Etihad 2025 full-year passenger load factor 88.3% — https://www.etihad.com/en/news/etihad-airways-delivers-record-passenger-numbers-and-growth-in-2025,2025
+DAL,Delta Air Lines,0.84,"Delta Dec quarter & full year 2025 results, system passenger load factor 84% (RPM 249,578m / ASM 298,045m) — https://news.delta.com/sites/default/files/2026-01/delta-air-lines-announces-december-quarter-and-full-year-2025-results-vf.pdf",2025
+ITY,ITA Airways,0.834,"ITA Airways 2025 results, load factor 83.4% (secondary report) — https://flightsmilesandpoints.com/aviation/industry-analysis/ita-airways-2025-financial-results/",2025
+ROT,TAROM,,,
+SEH,SKY express,,,

@@ -1,3 +1,4 @@
+import { groupAnalyticsBy } from './analytics-test-helpers';
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { gzipSync } from 'node:zlib';
@@ -86,7 +87,7 @@ test.beforeEach(async ({ page, context }) => {
 });
 
 test('country → mode → details supports Back/Forward and crops disconnected pieces', async ({ page }) => {
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
   await expect(page.getByRole('button', { name: /Country B/ })).toHaveCount(0);
   await expect.poll(async () => (await routes(page)).flatMap(f => (f.geometry as GeoJSON.MultiLineString).coordinates).length).toBe(2);
@@ -110,7 +111,7 @@ test('country → mode → details supports Back/Forward and crops disconnected 
 });
 
 test('Unassigned exposes flights and slider changes replace history entries', async ({ page }) => {
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Unassigned/ }).click();
   await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['flight']);
   await page.getByTitle('Toggle time filter', { exact: true }).click();
@@ -128,7 +129,7 @@ test('Unassigned exposes flights and slider changes replace history entries', as
 });
 
 test('clearing a country returns to the list and Back leaves Analytics without reactivating it', async ({ page }) => {
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
   await page.getByRole('button', { name: /Country A/ }).click();
   await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
@@ -159,8 +160,8 @@ test('clearing a transport selection skips the old mode on Back', async ({ page 
 });
 
 test('country and mode deselection, view toggles, and panel arrows preserve logical parents', async ({ page }) => {
-  const globe = page.getByRole('button', { name: 'Group by country' });
-  await globe.click();
+  const globe = page.locator('[data-analytics-grouping]');
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
   const car = page.locator('.analytics-summary-row').filter({ hasText: 'car' });
   await car.click();
@@ -168,17 +169,17 @@ test('country and mode deselection, view toggles, and panel arrows preserve logi
   await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
   await page.getByTitle('Close Analytics', { exact: true }).click();
   await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
-  await globe.click();
-  await globe.click();
-  await globe.click();
+  await groupAnalyticsBy(page, 'modes');
+  await groupAnalyticsBy(page, 'countries');
+  await groupAnalyticsBy(page, 'modes');
   await page.goBack();
   await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
   await page.goForward();
-  await expect(globe).toHaveAttribute('aria-pressed', 'false');
-  await globe.click();
+  await expect(globe).toHaveAttribute('data-analytics-grouping', 'modes');
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country B/ }).click();
-  await globe.click();
-  await expect(globe).toHaveAttribute('aria-pressed', 'false');
+  await groupAnalyticsBy(page, 'modes');
+  await expect(globe).toHaveAttribute('data-analytics-grouping', 'modes');
   await page.getByTitle('Close Analytics', { exact: true }).click();
   await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
 });
@@ -189,7 +190,7 @@ test('country cropping keeps outside waypoint markers hidden after camera moveme
     localStorage.setItem('activeRenderStyleConfigId', 'all-markers');
     window.dispatchEvent(new Event('preferences-updated'));
   });
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
   await expect(page.locator('.maplibregl-marker')).toHaveCount(1);
   await page.evaluate(() => {
@@ -214,7 +215,7 @@ test('failed boundary downloads show retry instead of inventing Unassigned kilom
   });
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('alert')).toHaveText('Could not calculate country distances. Retry');
   await expect.poll(() => errors.some(error => error.includes('Country distance calculation failed:') && error.includes('Cannot load boundaries'))).toBe(true);
   await expect(page.getByRole('button', { name: /Unassigned/ })).toHaveCount(0);
@@ -313,7 +314,7 @@ test('saved country parts crop immediately without boundary downloads in a cold 
   });
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   expect(downloads).toEqual([]);
@@ -336,7 +337,7 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
       await route.fulfill({ status: 200, json: { content: { sha: 'saved' } } });
     } else await route.fulfill({ status: 404, json: {} });
   });
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await page.getByTitle('Close Analytics', { exact: true }).click();
   await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
@@ -353,7 +354,9 @@ for (const saveAll of [false, true]) test(`${saveAll ? 'Save All' : 'Save'} writ
     expect(segment).not.toHaveProperty('geometry');
     expect(segment).not.toHaveProperty('distanceStats');
     expect(segment).not.toHaveProperty('countryDistances');
-    expect(Object.values(countryDistances(segment)).reduce((sum, distance) => sum + distance, 0)).toBeCloseTo(computeTripCaches(trip).segments.find(source => source.id === segment.id)!.distanceStats!.totalDistance, 8);
+    const storedDistance = Object.values(countryDistances(segment)).reduce((sum, distance) => sum + distance, 0);
+    const originalDistance = computeTripCaches(trip).segments.find(source => source.id === segment.id)!.distanceStats!.totalDistance;
+    expect(Math.abs(storedDistance - originalDistance)).toBeLessThanOrEqual(segment.countryParts!.length * .000005 + 1e-9);
     expect(segment).not.toHaveProperty('countryCache');
     for (const part of segment.countryParts!) expect(part.distanceStats).not.toHaveProperty('geometryVersion');
   }
@@ -427,7 +430,7 @@ for (const shared of [false, true]) test(`country caches remain unsaved across r
   await context.route('https://api.github.com/gists/owned-share', route => route.fulfill({ json: {} }));
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   await page.getByTitle('Close Analytics', { exact: true }).click();
@@ -440,7 +443,7 @@ for (const shared of [false, true]) test(`country caches remain unsaved across r
   await page.reload();
   await expect(page.getByTitle('Unsaved changes', { exact: true })).toBeVisible();
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -456,7 +459,7 @@ for (const shared of [false, true]) test(`country caches remain unsaved across r
   await expect(page.getByTitle('Unsaved changes', { exact: true })).toHaveCount(0);
   await expect(page.getByTitle('Save All Unsaved Trips', { exact: true })).toHaveCount(0);
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -563,7 +566,7 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
   try {
     await page.goto('/tests/country-app.html');
     await page.getByTitle('Analytics', { exact: true }).click();
-    await page.getByRole('button', { name: 'Group by country' }).click();
+    await groupAnalyticsBy(page, 'countries');
     await expect(page.getByRole('status')).toHaveText('Calculating country distances for Pending route…');
     await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('222.4');
     await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
@@ -584,7 +587,7 @@ for (const changeRoute of [false, true]) test(changeRoute ? 'routing changes rep
       release();
       await page.goBack();
       await page.getByTitle('Analytics', { exact: true }).click();
-      await page.getByRole('button', { name: 'Group by country' }).click();
+      await groupAnalyticsBy(page, 'countries');
       await expect(page.getByRole('status')).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Unassigned/ })).toContainText('444.8');
       await expect(page.getByRole('button', { name: /Country A/ })).toHaveCount(0);
@@ -744,9 +747,9 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
   await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: fixture }));
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
-  await expect(page.locator('.country-row')).toHaveCount(3);
-  await expect(page.locator('.country-row').last()).toContainText('Unassigned');
+  await groupAnalyticsBy(page, 'countries');
+  await expect(page.locator('.country-row:not(.is-collapsed)')).toHaveCount(3);
+  await expect(page.locator('.country-row:not(.is-collapsed)').last()).toContainText('Unassigned');
   await expect(page.locator('.country-list .analytics-summary-header')).toContainText('Country (2)');
   await expect(page.locator('.country-list')).toContainText('Distance (km)');
   await expect(page.locator('.country-list a')).toHaveCount(0);
@@ -760,14 +763,17 @@ test('country and transport tables share sizing, Unassigned is last, and attribu
     return { row: styles(row), header: styles(header) };
   });
   const country = await sizing();
-  await page.getByRole('button', { name: 'Group by country' }).click();
-  expect(await sizing()).toEqual(country);
+  await groupAnalyticsBy(page, 'modes');
+  const mode = await sizing();
+  expect(country.row.columns.split(' ')).toHaveLength(3);
+  expect(mode.row.columns.split(' ')).toHaveLength(2);
+  expect({ ...mode, row: { ...mode.row, columns: country.row.columns } }).toEqual(country);
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Status', { exact: true }).click();
   const providers = page.getByRole('region', { name: 'Other providers' });
   const logo = providers.getByRole('img', { name: 'Overture Maps logo' });
   await expect(logo).toBeVisible();
-  expect(await logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
   await expect(providers.getByRole('link', { name: '© Overture Maps Foundation' })).toHaveAttribute('href', 'https://docs.overturemaps.org/attribution/');
   await expect(providers.getByRole('link', { name: 'ODbL 1.0' })).toBeVisible();
   await expect(providers).not.toContainText('OpenStreetMap');
@@ -787,9 +793,91 @@ test('country labels use Overture English names including synthetic territory co
   await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: { ...trip, id: 'english-names' } }));
   await page.goto('/tests/country-app.html');
   await page.getByTitle('Analytics', { exact: true }).click();
-  await page.getByRole('button', { name: 'Group by country' }).click();
+  await groupAnalyticsBy(page, 'countries');
   await expect(page.getByRole('button', { name: /Austria/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Habomai Islands/ })).toBeVisible();
   await expect(page.locator('.country-list')).not.toContainText('Österreich');
   await expect(page.locator('.country-list')).not.toContainText('Хабомаи');
+});
+
+test('metric switching preserves country/mode filters and trip grouping clears them in the real app', async ({ page }) => {
+  await groupAnalyticsBy(page, 'countries');
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
+  await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive']);
+  for (const line of ((await routes(page))[0].geometry as GeoJSON.MultiLineString).coordinates) for (const point of line) expect(point[0]).toBeLessThanOrEqual(0);
+  await groupAnalyticsBy(page, 'trips');
+  await expect(page.getByLabel('Trip climate impacts', { exact: true })).toContainText('Cross-year crossing');
+  await expect.poll(async () => (await routes(page)).flatMap(f => (f.geometry as GeoJSON.MultiLineString).coordinates.flat()).some(point => point[0] > 0)).toBe(true);
+  await page.getByLabel('Trip climate impacts', { exact: true }).getByRole('button', { name: /Cross-year crossing/ }).click();
+  await expect(page.getByLabel('Countries', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Transport modes', { exact: true })).toBeVisible();
+  await page.getByLabel('Transport modes', { exact: true }).getByRole('button', { name: /flight/ }).click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['flight']);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Show distance', exact: true }).click();
+  await expect(page.getByLabel('Trip distances', { exact: true })).toContainText('Cross-year crossing');
+});
+
+test('trip and eco filters restrict real map routes and exclude a no-emission car segment', async ({ page, context }) => {
+  const zero = { ...segment('zero-drive', 'car', [[-.8, .6], [.8, .6]]), climateProfile: { mode: 'none' as const } };
+  const first = { ...trip, id: 'first-with-zero', segments: [...trip.segments, zero] };
+  const second: Trip = { ...trip, id: 'second', name: 'Second trip', segments: [segment('second-drive', 'car', [[.2, 1], [.8, 1]])] };
+  await context.route('https://api.github.com/repos/test/trips/contents/trips', route => route.fulfill({ json: [
+    { name: 'first.triplo.json', download_url: 'https://fixtures.test/first-with-zero.json' },
+    { name: 'second.triplo.json', download_url: 'https://fixtures.test/second.json' },
+  ] }));
+  await context.route('https://fixtures.test/first-with-zero.json', route => route.fulfill({ json: first }));
+  await context.route('https://fixtures.test/second.json', route => route.fulfill({ json: second }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
+  await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
+  await groupAnalyticsBy(page, 'trips');
+  await page.getByLabel('Trip climate impacts', { exact: true }).getByRole('button', { name: /Cross-year crossing/ }).click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(['drive', 'flight']);
+  await page.getByLabel('Transport modes', { exact: true }).getByRole('button', { name: /car/ }).click();
+  await expect(page.getByRole('textbox', { name: 'Segment title' })).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Segment title' })).toHaveValue('drive');
+  await page.getByLabel('Countries', { exact: true }).getByRole('button', { name: /Country A/ }).click();
+  await expect.poll(async () => (await routes(page)).flatMap(feature => (feature.geometry as GeoJSON.MultiLineString).coordinates.flat()).every(point => point[0] <= 0)).toBe(true);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /Cross-border trip|Cross-year crossing/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.goBack();
+  await expect(page.getByLabel('Trip comparison', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId).sort()).toEqual(['drive', 'second-drive', 'zero-drive']);
+});
+
+for (const climate of [false, true]) test(`analytics trip selection uses selected-trip styles in ${climate ? 'climate' : 'distance'} mode`, async ({ page, context }) => {
+  const selected: Trip = { ...trip, id: 'selected-trip-test', segments: [
+    ...trip.segments,
+    { ...segment('zero-drive', 'car', [[-.8, .6], [.8, .6]]), climateProfile: { mode: 'none' } },
+    { ...segment('hidden-drive', 'car', [[-.8, .8], [.8, .8]]), isHidden: true },
+  ] };
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: selected }));
+  await page.addInitScript(() => {
+    localStorage.setItem('renderStyleConfigs', JSON.stringify([{ id: 'selected-trip', name: 'Selected trip', script: `return {
+      getSegmentStyle: (segment, color, context) => ({ hidden: context.isNoTripSelected || !!segment.isHidden }),
+      getWaypointStyle: (waypoint, segments, colors, context) => ({ hidden: context.isNoTripSelected, type: 'dot' })
+    };` }]));
+    localStorage.setItem('activeRenderStyleConfigId', 'selected-trip');
+  });
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  if (climate) await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
+  await groupAnalyticsBy(page, 'trips');
+  const selectedRow = page.getByLabel(climate ? 'Trip climate impacts' : 'Trip distances', { exact: true }).getByRole('button', { name: /Cross-year crossing/ });
+  await selectedRow.click();
+  await expect.poll(async () => (await routes(page)).map(f => f.properties?.segmentId)).toEqual(climate ? ['drive', 'flight'] : ['drive', 'flight', 'zero-drive']);
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
+  await selectedRow.click();
+  await expect.poll(() => routes(page)).toEqual([]);
+  await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
 });
