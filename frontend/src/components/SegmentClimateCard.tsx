@@ -7,6 +7,7 @@ import { countryDistances } from '../countries/parts';
 import { defaultData } from '../../../climate/src/generated/data';
 import { MaterialIcon } from './MaterialIcon';
 import { climateCountryCodes } from '../climate/countryCodes';
+import { segmentKey } from '../countries/types';
 
 const countryCodes = Object.fromEntries(Object.entries(climateCountryCodes).map(([alpha2, alpha3]) => [alpha3, alpha2]));
 const gridLabel = (code: string) => countryCodes[code] || (code.startsWith('_')
@@ -44,6 +45,7 @@ export function SegmentClimateCard({ trip, segment, isReadOnly, onUpdateTrip }: 
     <label className="climate-radio"><input type="radio" name={id} checked={!segment.climateProfile} disabled={isReadOnly} onChange={() => update()} />Use transport mode default: {inherited.name}</label>
     <label className="climate-radio"><input type="radio" name={id} checked={!!segment.climateProfile} disabled={isReadOnly} onChange={() => update(structuredClone(inherited.profile))} />Custom</label>
     <ClimateProfileEditor value={segment.climateProfile || inherited.profile} onChange={update} disabled={isReadOnly || !segment.climateProfile}
+      excludeSegment={segmentKey(trip.id, segment.id)}
       distanceKm={segment.distanceStats?.totalDistance ?? Object.values(countryDistances(segment)).reduce((sum, km) => sum + km, 0)}
       flightGeometry={segment.source === 'gpx' ? 'exact' : 'great_circle'} />
     {error && <p role="alert">Climate impact could not be calculated: {error}</p>}

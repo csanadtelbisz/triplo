@@ -385,6 +385,8 @@ export function calculateMany(inputs: TravelInput[]): BatchItem[];     // BatchI
 | ferry | `{ mode: "ferry" }` |
 | other | whatever the user configured; if nothing: `{ mode: "none" }` |
 
+Flight profile hints use the aircraft/operator pairs recorded in `operator-layouts.csv`. Empty fields suggest only pairs compatible with the other selected value. Typing searches all matching ICAO codes and names, with compatible pairs first, followed by descending usage in other loaded segments' effective flight profiles and alphabetical ties. Inherited preference/trip profiles count once per segment using them; the segment being edited is excluded. Rankings are derived in memory and do not change saved profiles or reject manually entered codes.
+
 ---
 
 ## 10. Repository layout
