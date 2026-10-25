@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useContext, useId, useMemo, useState } from 'react';
 import type { ClimateProfile } from '../../../shared/types';
 import type { SeatClass } from '../../../climate/src/types';
 import { defaultData } from '../../../climate/src/generated/data';
@@ -7,20 +7,25 @@ import { getFlightDefaults } from '../../../climate/src/flight';
 import { defaultBusType } from '../../../climate/src/bus';
 import { defaultRailType, resolveRailTraction } from '../../../climate/src/rail';
 import { CAR_SIZE_EXAMPLES } from '../../../climate/src/examples';
+import { FlightProfileTripsContext } from '../climate/flightProfileTrips';
+import { countFlightProfileUsage, flightProfileHints } from '../climate/flightHints';
+import { useClimateSettings } from '../climate/useClimateSettings';
 import { Dialog } from './Dialog';
 import '../styles/Climate.css';
 
 const text = (value: string) => value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 const classes: SeatClass[] = ['economy', 'premium_economy', 'business', 'first'];
-const airlines = [...new Set([...Object.keys(defaultData.operators), ...defaultData.layouts.map(layout => layout.operator)])]
-  .map(code => ({ code, name: defaultData.operators[code]?.name || code }))
-  .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
-export function ClimateProfileEditor({ value, onChange, name, onNameChange, disabled = false, distanceKm, flightGeometry }: {
+export function ClimateProfileEditor({ value, onChange, name, onNameChange, disabled = false, distanceKm, flightGeometry, excludeSegment }: {
   value: ClimateProfile; onChange: (profile: ClimateProfile) => void;
   distanceKm?: number; flightGeometry?: 'exact' | 'great_circle';
   name?: string; onNameChange?: (name: string) => void; disabled?: boolean;
+  excludeSegment?: string;
 }) {
   const id = useId();
+  const trips = useContext(FlightProfileTripsContext);
+  const settings = useClimateSettings();
+  const usage = useMemo(() => countFlightProfileUsage(trips, settings, excludeSegment), [trips, settings, excludeSegment]);
+  const hints = value.mode === 'flight' ? flightProfileHints(value, usage) : undefined;
   const flightDefaults = value.mode === 'flight' && distanceKm !== undefined
     ? getFlightDefaults({ ...value, distanceKm, geometry: value.geometry || flightGeometry }, defaultData) : undefined;
   const automatic = (value: string | number) => `Automatic (${value})`;
@@ -67,9 +72,9 @@ export function ClimateProfileEditor({ value, onChange, name, onNameChange, disa
       {select('Distance basis', 'geometry', value.geometry || '', ['', 'great_circle', 'exact'], ['Automatic (track or great circle)', 'Great circle (+8% flown distance)', 'Exact flown track'])}
       {select('Cabin class', 'cabinClass', value.cabinClass || 'average', ['average', ...classes])}
       <label>Aircraft type (ICAO)<input list={`${id}-aircraft`} placeholder="Automatic (DEFRA average)" value={value.aircraftType || ''} onChange={e => patch({ aircraftType: e.target.value.toUpperCase() || undefined })} /></label>
-      <datalist id={`${id}-aircraft`}>{[...new Map(defaultData.aircraft.flatMap(a => a.icao.map(code => [code, a.model] as const))).entries()].map(([code, model]) => <option key={code} value={code}>{model}</option>)}</datalist>
+      <datalist id={`${id}-aircraft`}>{hints?.aircraft.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</datalist>
       <label>Airline (ICAO)<input list={`${id}-operators`} placeholder="Automatic (UK-airline average)" value={value.operator || ''} onChange={e => patch({ operator: e.target.value.toUpperCase() || undefined })} /></label>
-      <datalist id={`${id}-operators`}>{airlines.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</datalist>
+      <datalist id={`${id}-operators`}>{hints?.airlines.map(({ code, name }) => <option key={code} value={code}>{name}</option>)}</datalist>
       {number('Passenger load factor (%)', 'loadFactor', value.loadFactor, 0.01, 100, 100, flightDefaults?.loadFactor, value.aircraftType ? 'aircraft average' : 'DEFRA average')}
       <label className="climate-check"><input type="checkbox" checked={!!value.seats} onChange={e => patch({ seats: e.target.checked ? { economy: 180 } : undefined })} />Override seat configuration</label>
       {value.seats && classes.map(c => <label key={c}>{text(c)} seats<input type="number" min="0" step="1" value={value.seats?.[c] ?? 0} onChange={e => {

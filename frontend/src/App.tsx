@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
+import { FlightProfileTripsContext } from './climate/flightProfileTrips';
 import './styles/App.css';
 import './styles/Shared.css';
 import './styles/TripManager.css';
@@ -1481,7 +1482,7 @@ export default function App() {
   ) : null;
 
   return (
-    <>
+    <FlightProfileTripsContext value={trips}>
       <div className="layout">
       <div {...sidebarProps}>
         <div className="mobile-drag-handle"></div>
@@ -1954,6 +1955,6 @@ export default function App() {
         : undefined}
       onClose={() => setApiKeyConfiguration(null)}
     />
-    </>
+    </FlightProfileTripsContext>
   );
 }
