@@ -12,7 +12,7 @@ async function open(page: Page, seed = false) {
 const dialog = (page: Page) => page.locator('.climate-dialog').last();
 const climateCard = (page: Page) => page.locator('.trip-summary').filter({ has: page.getByRole('heading', { name: 'Climate Impact', exact: true }) });
 
-test('new segments use mode defaults after customizing the preceding segment', async ({ page }) => {
+test('splitting preserves custom climate profiles until the transport mode changes', async ({ page }) => {
   await open(page, true);
   await page.getByRole('button', { name: 'segment', exact: true }).click();
   const card = climateCard(page);
@@ -23,19 +23,89 @@ test('new segments use mode defaults after customizing the preceding segment', a
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments.length)).toBe(2);
   const segments = await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments);
   expect(segments[0].climateProfile.occupancy).toBe(4);
-  expect(segments[1].climateProfile).toBeUndefined();
+  expect(segments[1].climateProfile).toEqual(segments[0].climateProfile);
   expect(segments[1].climateImpact).toBeUndefined();
   await page.getByTitle('Segment Info', { exact: true }).last().click();
-  await expect(card.getByRole('radio', { name: /Use transport mode default: My car/ })).toBeChecked();
-  await expect(card.getByRole('radio', { name: 'Custom', exact: true })).not.toBeChecked();
-  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('2');
-  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toBeDisabled();
+  await expect(card.getByRole('radio', { name: 'Custom', exact: true })).toBeChecked();
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('4');
+  await card.getByLabel('Occupancy (people)', { exact: true }).fill('3');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[0].climateProfile.occupancy)).toBe(4);
   await page.getByRole('button', { name: 'trip', exact: true }).click();
   await page.getByTitle('Select transport mode', { exact: true }).last().click();
   await page.getByTitle('Bus', { exact: true }).click();
   await page.getByTitle('Segment Info', { exact: true }).last().click();
   await expect(card.getByRole('radio', { name: /Use transport mode default: Bus/ })).toBeChecked();
   await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue('bus');
+  await expect(card.getByLabel('Base algorithm', { exact: true })).toBeDisabled();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[1].climateProfile)).toBeUndefined();
+});
+
+for (const panel of ['trip', 'segment'] as const) test(`${panel} mode changes restore automatic profiles, including custom modes`, async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('builtInModeOverrides', JSON.stringify({ car: { routingProfile: 'Straight Router|straight' } }));
+    localStorage.setItem('customOtherModes', JSON.stringify([
+      { icon: 'airport_shuttle', name: 'Shuttle', color: '#339933', routingProfile: 'Straight Router|straight', climateProfileId: 'builtin:bus' },
+      { icon: 'tram', name: 'Tram', color: '#993333', routingProfile: 'Straight Router|straight', climateProfileId: 'builtin:rail' },
+    ]));
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  const customize = async () => {
+    await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+    await card.getByLabel('Base algorithm', { exact: true }).selectOption('flight');
+  };
+  const choose = async (name: string, custom = false) => {
+    if (panel === 'trip') {
+      await page.getByRole('button', { name: 'trip', exact: true }).click();
+      await page.getByTitle('Select transport mode', { exact: true }).click();
+      await page.getByTitle(name, { exact: true }).click();
+      await page.getByTitle('Segment Info', { exact: true }).click();
+    } else {
+      await page.locator('.mode-selector').getByTitle(custom ? name.toLowerCase() : name, { exact: true }).click();
+    }
+  };
+  await customize();
+  await choose('Car');
+  await expect(card.getByRole('radio', { name: 'Custom', exact: true })).toBeChecked();
+  await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue('flight');
+  for (const [name, mode] of [['Shuttle', 'bus'], ['Tram', 'rail'], ['Car', 'car']]) {
+    await choose(name, name !== 'Car');
+    await expect(card.getByRole('radio', { name: /Use transport mode default:/ })).toBeChecked();
+    await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue(mode);
+    await expect(card.getByLabel('Base algorithm', { exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[0].climateProfile)).toBeUndefined();
+    await customize();
+  }
+});
+
+test('copying a style resets climate only when its transport mode changes', async ({ page }) => {
+  await open(page, true);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Occupancy (people)', { exact: true }).fill('4');
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await page.getByTitle('Split segment', { exact: true }).last().click();
+  const rename = async () => {
+    await page.locator('.segment-title-textarea').last().fill('Drive');
+    await page.locator('.segment-title-textarea').last().blur();
+    await page.getByRole('button', { name: 'Apply Style', exact: true }).click();
+  };
+  await page.getByTitle('Segment Info', { exact: true }).last().click();
+  await page.locator('input[type="color"]').fill('#123456');
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await rename();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[1].climateProfile.occupancy)).toBe(4);
+  await page.getByTitle('Select transport mode', { exact: true }).last().click();
+  await page.getByTitle('Bus', { exact: true }).click();
+  await page.getByTitle('Segment Info', { exact: true }).last().click();
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await page.locator('.segment-title-textarea').last().fill('Return');
+  await page.locator('.segment-title-textarea').last().blur();
+  await rename();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments[1].climateProfile)).toBeUndefined();
 });
 
 test('automatic bus profiles show resolved defaults and change at the 10 km boundary', async ({ page }) => {

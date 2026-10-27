@@ -20,6 +20,7 @@ import { slugify } from '../utils/slugify';
 import { persistingManager } from '../persisting/PersistingManager';
 import { ThemedServiceIcon } from './ThemedServiceIcon';
 import { tripCountrySummary } from '../countries/summary';
+import { resetClimateForModeChange } from '../utils/segmentMode';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -808,7 +809,7 @@ export function TripEditor({
       routingProfile = assignedProfile || defaultRouter.profile;
     }
 
-    newSegments[segIndex] = await updateSegmentRoute({
+    newSegments[segIndex] = await updateSegmentRoute(resetClimateForModeChange(seg, {
       ...seg,
       transportMode: customMode ? 'other' : mode,
       customIcon: customMode?.icon,
@@ -816,7 +817,7 @@ export function TripEditor({
       routingService,
       routingProfile,
       source: 'router' as const
-    });
+    }));
 
     onUpdateTrip({ ...trip, segments: newSegments });
   };
@@ -928,7 +929,6 @@ export function TripEditor({
       ...seg,
       id: newId,
       name: '',
-      climateProfile: undefined,
       climateImpact: undefined,
       waypoints: seg.waypoints.slice(wpIndex)
     };

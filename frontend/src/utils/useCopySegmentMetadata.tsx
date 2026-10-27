@@ -3,6 +3,7 @@ import type { Trip, TransportMode } from '../../../shared/types';
 import { getModeColor } from './builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
 import { getCustomOtherModes } from './customModesPreferences';
+import { resetClimateForModeChange } from './segmentMode';
 
 export interface CopySegmentMetadataData {
   color: string;
@@ -108,7 +109,7 @@ export function useCopySegmentMetadata(trip: Trip, allTrips: Trip[] | undefined,
     if (sectionMetadataOffer) {
       const newSegments = trip.segments.map(s => {
         if (s.id === (targetSegmentId || sectionMetadataOffer.segmentId)) {
-          return { 
+          return resetClimateForModeChange(s, {
             ...s, 
             customColor: sectionMetadataOffer.color,
             ...(sectionMetadataOffer.newName ? {
@@ -118,7 +119,7 @@ export function useCopySegmentMetadata(trip: Trip, allTrips: Trip[] | undefined,
               ...(sectionMetadataOffer.routingService ? { routingService: sectionMetadataOffer.routingService, source: (sectionMetadataOffer.routingService === 'gpx' ? 'gpx' : 'router') as 'gpx' | 'router' } : {}),
               ...(sectionMetadataOffer.routingProfile ? { routingProfile: sectionMetadataOffer.routingProfile } : {})
             } : {})
-          };
+          });
         }
         return s;
       });

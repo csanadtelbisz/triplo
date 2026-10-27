@@ -13,6 +13,7 @@ import { CopySegmentMetadataDialog } from './CopySegmentMetadataDialog';
 import { getCustomOtherModes } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import { IconPickerDialog } from './IconPickerDialog';
+import { resetClimateForModeChange } from '../utils/segmentMode';
 
 interface SegmentInfoProps {
   isReadOnly?: boolean;
@@ -263,14 +264,14 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
 
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
-                        const updatedSeg = {
+                        const updatedSeg = resetClimateForModeChange(seg, {
                           ...newSegments[segIndex],
                           customColor: undefined,
                           transportMode: m,
                           routingService: svc || defRouter.serviceName,
                           routingProfile: prof || defRouter.profile,
                           source: 'router' as const
-                        };
+                        });
                         setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
@@ -320,7 +321,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                           profile = cm.routingProfile; // Fallback
                         }
 
-                        const updatedSeg = {
+                        const updatedSeg = resetClimateForModeChange(seg, {
                           ...newSegments[segIndex],
                           customColor: cm.color,
                           transportMode: 'other' as const,
@@ -328,7 +329,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                           routingService: service,
                           routingProfile: profile,
                           source: 'router' as const
-                        };
+                        });
                         setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
@@ -378,7 +379,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
 
                         const newSegments = [...trip.segments];
                         const segIndex = newSegments.findIndex(s => s.id === segmentId);
-                        const updatedSeg = {
+                        const updatedSeg = resetClimateForModeChange(seg, {
                           ...newSegments[segIndex],
                           customColor: undefined,
                           transportMode: m,
@@ -386,7 +387,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                           routingService: svc || defRouter.serviceName,
                           routingProfile: prof || defRouter.profile,
                           source: 'router' as const
-                        };
+                        });
                         setShowAllProfiles(false);
 
                         if (updatedSeg.source === 'router') {
@@ -570,7 +571,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                          if (matchedMode) {
                            updates.customColor = matchedMode.color;
                          }
-                         return { ...s, ...updates };
+                         return resetClimateForModeChange(s, { ...s, ...updates });
                        }
                        return s;
                      });
@@ -607,7 +608,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                      const newSegments = trip.segments.map(s => {
                        if (s.id === segmentId) {
                          const { customIcon, ...rest } = s;
-                         return rest;
+                         return resetClimateForModeChange(s, rest);
                        }
                        return s;
                      });
@@ -681,7 +682,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
               if (matchedMode) {
                 updates.customColor = matchedMode.color;
               }
-              return { ...s, ...updates };
+              return resetClimateForModeChange(s, { ...s, ...updates });
             }
             return s;
           });
