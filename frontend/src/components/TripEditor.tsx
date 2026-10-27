@@ -19,6 +19,7 @@ import type { TransportMode } from '../../../shared/types';
 import { slugify } from '../utils/slugify';
 import { persistingManager } from '../persisting/PersistingManager';
 import { ThemedServiceIcon } from './ThemedServiceIcon';
+import { tripCountrySummary } from '../countries/summary';
 
 interface TripEditorProps {
   isReadOnly?: boolean;
@@ -61,6 +62,7 @@ export function TripEditor({
 }: TripEditorProps) {
   const climateSettings = useClimateSettings();
   const climateSummary = useMemo(() => tripClimate(trip, climateSettings), [trip, climateSettings]);
+  const countrySummary = useMemo(() => tripCountrySummary(trip, climateSettings), [trip, climateSettings]);
   const [climateSettingsOpen, setClimateSettingsOpen] = useState(false);
   const isSavedSharedTrip = !!trip.metadata?.isSharedTripReference;
   const isSharedTrip = isSharedTripView || isSavedSharedTrip;
@@ -926,6 +928,8 @@ export function TripEditor({
       ...seg,
       id: newId,
       name: '',
+      climateProfile: undefined,
+      climateImpact: undefined,
       waypoints: seg.waypoints.slice(wpIndex)
     };
 
@@ -1516,7 +1520,7 @@ export function TripEditor({
            <div className="trip-summary-total"><strong>Total Climate Impact:</strong> {climateSummary.totalKg.toFixed(1)} kg CO₂e{climateSummary.unavailable > 0 && <small> ({climateSummary.unavailable} segment estimates unavailable)</small>}</div>
            
            {Object.keys(tripSummary.distanceByMode).length > 0 && (
-             <table className="trip-summary-table">
+             <table className="trip-summary-table" aria-label="Transport mode summary">
                <thead>
                  <tr style={{ borderBottom: '1px solid #dee2e6', textAlign: 'left' }}>
                    <th style={{ padding: '4px 8px 4px 0' }}>Mode</th>
@@ -1563,6 +1567,28 @@ export function TripEditor({
                        </tr>
                      );
                    })}
+               </tbody>
+             </table>
+           )}
+           {countrySummary.length > 0 && (
+             <table className="trip-summary-table trip-summary-countries" aria-label="Country summary">
+               <thead>
+                 <tr>
+                   <th className="trip-summary-th">Country</th>
+                   <th className="trip-summary-th right" title="Kilometres (km)">Distance</th>
+                   <th className="trip-summary-th right" title="Kilograms CO₂e per traveller, allocated by route distance">Climate impact</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {countrySummary.map(row => (
+                   <tr key={row.code} className="trip-summary-row">
+                     <td className="trip-summary-td">{row.name}</td>
+                     <td className="trip-summary-td right">{row.distance.toFixed(1)}</td>
+                     <td className="trip-summary-td right" title={row.unavailable ? 'Some segment estimates are unavailable' : undefined}>
+                       {row.impact === undefined ? 'Unavailable' : `${row.impact.toFixed(1)}${row.unavailable ? '*' : ''}`}
+                     </td>
+                   </tr>
+                 ))}
                </tbody>
              </table>
            )}

@@ -12,6 +12,53 @@ async function open(page: Page, seed = false) {
 const dialog = (page: Page) => page.locator('.climate-dialog').last();
 const climateCard = (page: Page) => page.locator('.trip-summary').filter({ has: page.getByRole('heading', { name: 'Climate Impact', exact: true }) });
 
+test('new segments use mode defaults after customizing the preceding segment', async ({ page }) => {
+  await open(page, true);
+  await page.getByRole('button', { name: 'segment', exact: true }).click();
+  const card = climateCard(page);
+  await card.getByRole('radio', { name: 'Custom', exact: true }).check();
+  await card.getByLabel('Occupancy (people)', { exact: true }).fill('4');
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await page.getByTitle('Split segment', { exact: true }).last().click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments.length)).toBe(2);
+  const segments = await page.evaluate(() => JSON.parse(localStorage.getItem('climate-test-trip')!).segments);
+  expect(segments[0].climateProfile.occupancy).toBe(4);
+  expect(segments[1].climateProfile).toBeUndefined();
+  expect(segments[1].climateImpact).toBeUndefined();
+  await page.getByTitle('Segment Info', { exact: true }).last().click();
+  await expect(card.getByRole('radio', { name: /Use transport mode default: My car/ })).toBeChecked();
+  await expect(card.getByRole('radio', { name: 'Custom', exact: true })).not.toBeChecked();
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toHaveValue('2');
+  await expect(card.getByLabel('Occupancy (people)', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await page.getByTitle('Select transport mode', { exact: true }).last().click();
+  await page.getByTitle('Bus', { exact: true }).click();
+  await page.getByTitle('Segment Info', { exact: true }).last().click();
+  await expect(card.getByRole('radio', { name: /Use transport mode default: Bus/ })).toBeChecked();
+  await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue('bus');
+});
+
+test('copy segment style preview follows light and dark themes', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'trip', exact: true }).click();
+  await page.getByTitle('Split segment', { exact: true }).last().click();
+  await page.getByTitle('Select transport mode', { exact: true }).last().click();
+  await page.getByTitle('Bus', { exact: true }).click();
+  const name = page.locator('.segment-title-textarea').last();
+  await name.fill('Drive');
+  await name.blur();
+  const preview = page.locator('.copy-segment-style-card');
+  await expect(preview).toBeVisible();
+  for (const dark of [false, true]) {
+    await page.evaluate(dark => document.body.classList.toggle('dark-mode', dark), dark);
+    await expect(preview).toHaveCSS('background-color', dark ? 'rgb(42, 46, 51)' : 'rgb(245, 245, 245)');
+    await expect(preview).toHaveCSS('color', dark ? 'rgb(230, 232, 235)' : 'rgb(51, 51, 51)');
+    await expect(preview.locator('.copy-segment-style-routing')).toHaveCSS('color', dark ? 'rgb(174, 183, 194)' : 'rgb(102, 102, 102)');
+    const message = page.locator('.dialog-message');
+    await expect(message.locator('strong').first()).toHaveCSS('color', await message.evaluate(element => getComputedStyle(element).color));
+  }
+});
+
 test('automatic bus profiles show resolved defaults and change at the 10 km boundary', async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem('climate-test-trip')) return;
@@ -253,7 +300,7 @@ test('trip custom defaults use unnamed dialogs and update summary, segments and 
   await expect(page.getByRole('heading', { name: 'Trip climate profile defaults', exact: true })).toBeVisible();
   await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Total Climate Impact:', { exact: true }).locator('..')).toContainText('4.6 kg CO₂e');
-  await expect(page.getByRole('columnheader', { name: 'Climate impact', exact: true })).toHaveAttribute('title', 'Kilograms CO₂e per traveller');
+  await expect(page.getByRole('table', { name: 'Transport mode summary', exact: true }).getByRole('columnheader', { name: 'Climate impact', exact: true })).toHaveAttribute('title', 'Kilograms CO₂e per traveller');
   await page.getByRole('button', { name: 'segment', exact: true }).click();
   await expect(climateCard(page)).toContainText('Use transport mode default: Car (trip default)');
   await expect(climateCard(page)).toContainText('4.6 kg CO₂e');

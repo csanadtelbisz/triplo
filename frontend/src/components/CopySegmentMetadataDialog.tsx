@@ -27,15 +27,15 @@ export function CopySegmentMetadataDialog({ offer, onConfirm, onCancel }: CopySe
         offer.newName ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start", marginTop: "12px" }}>
             <div>
-              A segment with the name <strong style={{ color: "#111" }}>{offer.newName}</strong> already exists.
+              A segment with the name <strong>{offer.newName}</strong> already exists.
             </div>
-            <div style={{ marginBottom: "8px", color: "#555" }}>
+            <div style={{ marginBottom: "8px" }}>
               {offer.routingProfile
                 ? "Would you like to copy its icon, mode, color, and routing profile?"
                 : "Would you like to copy its icon, mode, and color?"}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", border: "1px solid #ddd", padding: "12px", borderRadius: "8px", backgroundColor: "#f5f5f5", width: "100%", boxSizing: "border-box" }}>
+            <div className="copy-segment-style-card" style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "8px", width: "100%", boxSizing: "border-box" }}>
               <span style={{ color: offer.color, display: "flex", justifySelf: "center" }}>
                 {offer.mode === 'other' && offer.icon ? <MaterialIcon name={offer.icon} size={28} /> : getModeIcon((offer.mode as any) || 'other', 28)}
               </span>
@@ -44,7 +44,7 @@ export function CopySegmentMetadataDialog({ offer, onConfirm, onCancel }: CopySe
                   {displayMode}
                 </div>
                 {offer.routingProfile && (
-                  <div style={{ fontSize: "12px", color: "#666", marginTop: "2px" }}>
+                  <div className="copy-segment-style-routing" style={{ fontSize: "12px", marginTop: "2px" }}>
                     Routing: {offer.routingService ? `${offer.routingService.replace(' Router', '')} [${offer.routingProfile}]` : offer.routingProfile}
                   </div>
                 )}
