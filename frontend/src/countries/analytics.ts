@@ -2,6 +2,8 @@ import { countryDistances } from './parts';
 import type { Segment, Trip } from '../../../shared/types';
 import { segmentKey } from './types';
 import type { CountryData } from './types';
+import type { ClimateResult } from '../../../climate/src/types';
+import { climateCountryCodes } from '../climate/countryCodes';
 
 export interface AnalyticsSelection {
   climate?: boolean;
@@ -53,9 +55,19 @@ export function matchesAnalyticsSegment(trip: Trip, segment: Segment, selection:
     && (!selection.country || selectedDistance(trip, segment, selection.country, data) > 0)
     && (!selection.climate || (climateKg !== undefined && climateKg > 0));
 }
-/** Country attribution follows route-distance shares; the calculator returns a segment total. */
-export function selectedClimate(trip: Trip, segment: Segment, kg: number, country: string | null, data?: CountryData): number {
+/** Grid-dependent models retain the calculator's exact country contributions.
+ * Uniform per-km models use distance shares; international flights stay Unassigned.
+ */
+export function selectedClimate(trip: Trip, segment: Segment, result: ClimateResult | number, country: string | null, data?: CountryData): number {
+  const kg = typeof result === 'number' ? result : result.co2eKg;
   if (!country) return kg;
+  if (typeof result !== 'number' && result.byCountry) {
+    const iso = climateCountryCodes[country] || '_WORLD';
+    const distances = data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry || countryDistances(segment);
+    // Several territory/Unassigned codes may share one world fallback bucket.
+    const groupDistance = Object.entries(distances).reduce((sum, [code, km]) => sum + ((climateCountryCodes[code] || '_WORLD') === iso ? km : 0), 0);
+    return groupDistance > 0 ? (result.byCountry[iso]?.co2eKg || 0) * (distances[country] || 0) / groupDistance : 0;
+  }
   const total = selectedDistance(trip, segment, null, data);
   return total > 0 ? kg * Math.min(1, selectedDistance(trip, segment, country, data) / total) : 0;
 }

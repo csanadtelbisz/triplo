@@ -100,6 +100,10 @@ export interface ClimateResult {
   directKg: number;
   /** Fuel supply chain, grid generation lifecycle and grid losses. */
   upstreamKg: number;
+  /** Contributions by requested electricity-country code, including fallback countries.
+   * Present for grid-dependent models; values sum to the segment totals.
+   */
+  byCountry?: Record<Iso3, { co2eKg: number; directKg: number; upstreamKg: number }>;
   method: "none" | "defra_per_pkm" | "defra_per_vkm" | "fuel_consumption" | "grid_kwh" | "aircraft_model";
   scope: "wtw";
   includesRadiativeForcing: boolean;

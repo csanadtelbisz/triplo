@@ -14,8 +14,11 @@ import { getCustomOtherModes } from '../utils/customModesPreferences';
 import type { CustomOtherMode } from '../utils/customModesPreferences';
 import { IconPickerDialog } from './IconPickerDialog';
 import { resetClimateForModeChange } from '../utils/segmentMode';
+import { importSegmentTrack } from '../utils/importSegmentTrack';
+import type { CountryData } from '../countries/types';
 
 interface SegmentInfoProps {
+  countryData?: CountryData;
   isReadOnly?: boolean;
   segmentId: string;
   trip: Trip;
@@ -26,9 +29,9 @@ interface SegmentInfoProps {
   onZoomToSegment?: (segment: Segment) => void;
 }
 
-export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, onUpdateTrip, onHoverCoordinate, onZoomToSegment }: SegmentInfoProps) {
+export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, onUpdateTrip, onHoverCoordinate, onZoomToSegment, countryData }: SegmentInfoProps) {
   const seg = trip.segments.find(s => s.id === segmentId);
-  const [gpxImportData, setGpxImportData] = useState<{ updatedSeg: Segment, coords: [number, number, number][], segIndex: number, newSegments: Segment[] } | null>(null);
+  const [gpxImportData, setGpxImportData] = useState<{ segmentId: string; coords: [number, number, number][] } | null>(null);
   
   const { sectionMetadataOffer, applySectionMetadataOffer, cancelSectionMetadataOffer, handleNameChange, handleIconChange } = useCopySegmentMetadata(trip, allTrips, onUpdateTrip);
   const [showAllProfiles, setShowAllProfiles] = useState(false);
@@ -126,42 +129,18 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
         return;
       }
 
-      const newSegments = [...trip.segments];
-      const segIndex = newSegments.findIndex(s => s.id === segmentId);
-      const updatedSeg = { 
-          ...newSegments[segIndex], 
-          routingService: 'gpx', 
-          routingProfile: 'Imported Track',
-          source: 'gpx' as const,
-          geometry: { type: 'LineString' as const, coordinates: coords }
-      };
-      
-      setGpxImportData({ updatedSeg, coords, segIndex, newSegments });
+      setGpxImportData({ segmentId, coords });
     };
     fileInput.click();
   };
 
   const handleConfirmGPXWaypoints = (adjust: boolean) => {
     if (!gpxImportData) return;
-    const { updatedSeg, coords, segIndex, newSegments } = gpxImportData;
-
-    if (adjust) {
-      const firstCoord: [number, number] = [coords[0][0], coords[0][1]];
-      const lastCoord: [number, number] = [coords[coords.length - 1][0], coords[coords.length - 1][1]];
-      
-      if (updatedSeg.waypoints.length === 1) {
-        updatedSeg.waypoints[0].coordinates = firstCoord;
-        updatedSeg.waypoints.push({
-          id: 'wp-' + Date.now().toString(),
-          coordinates: lastCoord,
-        });
-      } else if (updatedSeg.waypoints.length > 1) {
-        updatedSeg.waypoints[0].coordinates = firstCoord;
-        updatedSeg.waypoints[updatedSeg.waypoints.length - 1].coordinates = lastCoord;
-      }
-    }
-
-    newSegments[segIndex] = updatedSeg;
+    const { coords, segmentId: importedId } = gpxImportData;
+    const current = trip.segments.find(segment => segment.id === importedId);
+    if (!current) { setGpxImportData(null); return; }
+    const updatedSeg = importSegmentTrack(current, coords, adjust);
+    const newSegments = trip.segments.map(segment => segment.id === importedId ? updatedSeg : segment);
     onUpdateTrip({ ...trip, segments: newSegments });
     onZoomToSegment?.(updatedSeg);
     setGpxImportData(null);
@@ -645,7 +624,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
            )}
         </div>
 
-        <SegmentClimateCard key={seg.id} trip={trip} segment={seg} isReadOnly={isReadOnly} onUpdateTrip={onUpdateTrip} />
+        <SegmentClimateCard key={seg.id} trip={trip} segment={seg} countryData={countryData} isReadOnly={isReadOnly} onUpdateTrip={onUpdateTrip} />
 
         {/* <div className="form-group" style={{ marginTop: 24 }}>
           <label className="form-label">ID (Read-only)</label>

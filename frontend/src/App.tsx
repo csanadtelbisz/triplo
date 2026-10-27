@@ -1543,6 +1543,7 @@ export default function App() {
               if (!targetTrip) return null;
               return (
                 <SegmentInfo
+                  countryData={countries.data}
                   isReadOnly={isReadOnly}
                   segmentId={analyticsSegmentInfo.segmentId}
                   trip={targetTrip}
@@ -1588,6 +1589,7 @@ export default function App() {
           poiInfoPanel
         ) : selectedSegmentId && selectedTrip ? (
           <SegmentInfo isReadOnly={isReadOnly} 
+            countryData={countries.data}
             segmentId={selectedSegmentId} 
             trip={selectedTrip} 
             allTrips={trips}
@@ -1657,6 +1659,7 @@ export default function App() {
           />
         ) : (
           <TripEditor isReadOnly={isReadOnly}
+            countryData={countries.data}
             onToggleReadOnly={selectedTrip.metadata?.isSharedTripReference || isViewingSharedTrip ? undefined : () => setIsReadOnly(!isReadOnly)}
             trip={selectedTrip}
             allTrips={trips}

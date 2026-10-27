@@ -1,6 +1,7 @@
 import { segmentClimate } from '../climate/profiles';
 import { useClimateSettings } from '../climate/useClimateSettings';
 import { climateCountryCodes } from '../climate/countryCodes';
+import type { ClimateResult } from '../../../climate/src/types';
 import { countryDistances } from '../countries/parts';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import type { Segment, Trip, TransportMode } from '../../../shared/types';
@@ -403,20 +404,21 @@ export function AnalyticsPanel({ onGoBack, trips, isReadOnly, onUpdateTrip, onOp
   const climateSettings = useClimateSettings();
   const grouping = analyticsGrouping(selection);
   const climateValues = useMemo(() => {
-    const values = new Map<string, number | undefined>();
+    const values = new Map<string, ClimateResult | undefined>();
     if (!selection.climate && grouping !== 'trips') return values;
     for (const trip of trips) for (const segment of trip.segments) {
-      values.set(segmentKey(trip.id, segment.id), segmentClimate(trip, segment, climateSettings).result?.co2eKg);
+      const key = segmentKey(trip.id, segment.id);
+      values.set(key, segmentClimate(trip, segment, climateSettings, countryData?.results[key]?.distanceKmByCountry).result);
     }
     return values;
-  }, [trips, climateSettings, selection.climate, grouping]);
+  }, [trips, climateSettings, selection.climate, grouping, countryData]);
   const unavailableClimateCount = selection.climate || grouping === 'trips'
     ? trips.reduce((count, trip) => count + trip.segments.filter(segment => matchesAnalyticsSegment(trip, segment, { ...selection, climate: false }, countryData) && climateValues.get(segmentKey(trip.id, segment.id)) === undefined).length, 0) : 0;
   const metric = useCallback((trip: Trip, segment: Segment, country: string | null, data?: CountryData) => {
     if (!selection.climate) return selectedDistance(trip, segment, country, data);
     return selectedClimate(trip, segment, climateValues.get(segmentKey(trip.id, segment.id)) || 0, country, data);
   }, [selection.climate, climateValues]);
-  const eligible = useCallback((trip: Trip, segment: Segment, filters = selection) => matchesAnalyticsSegment(trip, segment, filters, countryData, climateValues.get(segmentKey(trip.id, segment.id))), [selection, countryData, climateValues]);
+  const eligible = useCallback((trip: Trip, segment: Segment, filters = selection) => matchesAnalyticsSegment(trip, segment, filters, countryData, climateValues.get(segmentKey(trip.id, segment.id))?.co2eKg), [selection, countryData, climateValues]);
   const toggleMetric = () => onSelectionChange({ ...selection, groupBy: grouping, climate: !selection.climate }, true);
   const cycleGrouping = () => {
     const views = ['modes', 'trips', 'countries'] as const;

@@ -61,6 +61,19 @@ test('GPX flights use exact distances and explicit distance settings override au
   expect(segmentClimate(trip, { ...flight, climateProfile: { mode: 'flight', geometry: 'great_circle' } }, clean).result?.distanceKmUsed).toBe(108);
 });
 
+test('live country-worker results replace world factors without writing caches into shared segments', () => {
+  const train: Segment = { ...segment, transportMode: 'rail', countryDistances: undefined, climateProfile: undefined };
+  const clean = { profiles: [], builtIn: {}, custom: [] };
+  const before = JSON.stringify(train);
+  const world = segmentClimate(trip, train, clean).result!;
+  expect(world.factorSets.grid?.level).toBe('world');
+  const result = segmentClimate(trip, train, clean, { HU: 75, DE: 25 }).result!;
+  expect(result.factorSets.grid?.countries.map(factor => factor.country)).toEqual(['HUN', 'DEU']);
+  expect(result.byCountry!.HUN.co2eKg + result.byCountry!.DEU.co2eKg).toBeCloseTo(result.co2eKg, 12);
+  expect(result.co2eKg).not.toBeCloseTo(world.co2eKg, 6);
+  expect(JSON.stringify(train)).toBe(before);
+});
+
 test('both electric rail types use the calculator benchmarks with cached route-country shares', () => {
   const results = (['inter_city', 'high_speed'] as const).map(railType => {
     const train: Segment = { ...segment, transportMode: 'rail', countryDistances: { HU: 75, DE: 25 }, climateProfile: { mode: 'rail', railType, traction: 'electric' } };

@@ -21,8 +21,10 @@ import { persistingManager } from '../persisting/PersistingManager';
 import { ThemedServiceIcon } from './ThemedServiceIcon';
 import { tripCountrySummary } from '../countries/summary';
 import { resetClimateForModeChange } from '../utils/segmentMode';
+import type { CountryData } from '../countries/types';
 
 interface TripEditorProps {
+  countryData?: CountryData;
   isReadOnly?: boolean;
   onToggleReadOnly?: () => void;
   trip: Trip;
@@ -59,11 +61,11 @@ export function TripEditor({
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
   onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference,
-  onRequestSetup
+  onRequestSetup, countryData
 }: TripEditorProps) {
   const climateSettings = useClimateSettings();
-  const climateSummary = useMemo(() => tripClimate(trip, climateSettings), [trip, climateSettings]);
-  const countrySummary = useMemo(() => tripCountrySummary(trip, climateSettings), [trip, climateSettings]);
+  const climateSummary = useMemo(() => tripClimate(trip, climateSettings, countryData), [trip, climateSettings, countryData]);
+  const countrySummary = useMemo(() => tripCountrySummary(trip, climateSettings, countryData), [trip, climateSettings, countryData]);
   const [climateSettingsOpen, setClimateSettingsOpen] = useState(false);
   const isSavedSharedTrip = !!trip.metadata?.isSharedTripReference;
   const isSharedTrip = isSharedTripView || isSavedSharedTrip;

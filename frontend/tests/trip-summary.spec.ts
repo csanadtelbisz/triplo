@@ -65,3 +65,18 @@ test('trip summary shows country table below modes with units and partial-estima
   await expect(rows.nth(2).locator('td')).toHaveText(['Åland Islands', '6.0', 'Unavailable']);
   await expect(rows.last().locator('td').nth(1)).toHaveText('30.0');
 });
+
+test('electric country summaries use country-specific impacts and keep unknown-country fallbacks distinct', () => {
+  for (const climateProfile of [{ mode: 'rail' }, { mode: 'car', fuelType: 'bev' }, { mode: 'car', fuelType: 'phev', occupancy: 2 }] as const) {
+    const train: Segment = { ...drive, transportMode: 'rail', climateProfile, countryDistances: { HU: 25, DE: 25, XX: 20, [UNASSIGNED]: 30 } };
+    const total = segmentClimate(trip, train, settings).result!;
+    const rows = tripCountrySummary({ ...trip, segments: [train] }, settings);
+    const row = (code: string) => rows.find(row => row.code === code)!;
+    expect(row('HU').impact).toBeCloseTo(total.byCountry!.HUN.co2eKg, 12);
+    expect(row('DE').impact).toBeCloseTo(total.byCountry!.DEU.co2eKg, 12);
+    expect(row('DE').impact).toBeGreaterThan(row('HU').impact!);
+    expect(row('XX').impact).toBeCloseTo(total.byCountry!._WORLD.co2eKg * .4, 12);
+    expect(row(UNASSIGNED).impact).toBeCloseTo(total.byCountry!._WORLD.co2eKg * .6, 12);
+    expect(rows.reduce((sum, row) => sum + row.impact!, 0)).toBeCloseTo(total.co2eKg, 12);
+  }
+});

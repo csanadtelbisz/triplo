@@ -3,6 +3,7 @@ import type { Segment, Trip } from '../../shared/types';
 import type { Page } from '@playwright/test';
 import { groupAnalyticsBy } from './analytics-test-helpers';
 import { emptyAnalyticsSelection, matchesAnalyticsSegment, selectedClimate } from '../src/countries/analytics';
+import { calculate } from '../../climate/src/calculate';
 
 test.beforeEach(async ({ context }) => {
   await context.route('https://flagcdn.com/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') }));
@@ -19,11 +20,11 @@ const first = trip('first', 'Cross-border trip', [segment('drive', 'car', 100, {
 const second = trip('second', 'Second trip', [segment('coach', 'bus', 40, { HU: 40 }), segment('walk', 'walk', 300, { HU: 300 }, false)]);
 const walking = trip('walk', 'Walking trip', [segment('long-walk', 'walk', 500, { DE: 500 }, false)]);
 
-async function open(page: Page, climate = false, displayed: Trip = first) {
+async function open(page: Page, climate = false, displayed: Trip = first, additional = [second, walking]) {
   await page.addInitScript(({ first, additional }) => {
     localStorage.setItem('climate-test-trip', JSON.stringify(first));
     localStorage.setItem('climate-test-additional-trips', JSON.stringify(additional));
-  }, { first: displayed, additional: [second, walking] });
+  }, { first: displayed, additional });
   await page.goto('/tests/climate-app.html');
   await page.getByRole('button', { name: 'analytics', exact: true }).click();
   if (climate) await page.getByRole('button', { name: 'Show climate impact', exact: true }).click();
@@ -39,6 +40,24 @@ test('shared filters combine trip, country, mode, date and actual emitting segme
   expect(matchesAnalyticsSegment(first, first.segments[0], { ...filters, range: [Date.parse('2025-01-01'), Date.parse('2025-12-31')] }, undefined, 4.604)).toBe(false);
   expect(selectedClimate(first, first.segments[0], 4.604, 'HU')).toBeCloseTo(2.7624, 10);
   expect(selectedClimate(first, first.segments[0], 4.604, 'DE')).toBeCloseTo(1.8416, 10);
+});
+
+test('electric rail analytics retain exact country emissions through country, mode and trip filters', async ({ page }) => {
+  const train = { ...segment('car', 'rail', 100, { HU: 50, DE: 50 }), climateProfile: { mode: 'rail' as const } };
+  const displayed = trip('electric', 'Electric railway', [train]);
+  const expected = (country: string) => calculate({ mode: 'rail', railType: 'inter_city', date: '2026-05-01', distanceKm: 50, countryShares: { [country]: 1 } }).co2eKg;
+  await open(page, true, displayed, []);
+  await groupAnalyticsBy(page, 'countries');
+  const hungary = page.locator('.country-row').filter({ hasText: 'HU' });
+  const germany = page.locator('.country-row').filter({ hasText: 'DE' });
+  await expect(hungary).toContainText(expected('HUN').toFixed(1));
+  await expect(germany).toContainText(expected('DEU').toFixed(1));
+  await hungary.click();
+  await expect(page.locator('.analytics-summary-row').filter({ hasText: 'rail' })).toContainText(expected('HUN').toFixed(1));
+  await groupAnalyticsBy(page, 'trips');
+  await page.getByLabel('Trip climate impacts', { exact: true }).getByRole('button', { name: /Electric railway/ }).click();
+  await page.getByLabel('Countries', { exact: true }).getByRole('button', { name: /DE/ }).click();
+  await expect(page.getByLabel('Transport modes', { exact: true })).toContainText(expected('DEU').toFixed(1));
 });
 
 for (const climate of [false, true]) test(`trip, country and transport filters intersect in ${climate ? 'climate' : 'distance'} mode`, async ({ page }) => {

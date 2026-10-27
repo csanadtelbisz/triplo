@@ -111,3 +111,23 @@ test('dateline and flight parts preserve source geometry and render without conn
   }
   expect(comparisonGeometry({ type: 'LineString', coordinates: [[-1, 0], [0.5, 0], [-1, 0]] })).not.toEqual(comparisonGeometry({ type: 'LineString', coordinates: [[-1, 0], [1, 0], [-1, 0]] }));
 });
+
+test('replacing GPX clears country and climate caches without mutating the original segment or its waypoints', async () => {
+  const { importSegmentTrack } = await import('../src/utils/importSegmentTrack');
+  const original = computeTripCaches({ id: 'gpx', name: 'GPX', createdAt: '2026-05-01', updatedAt: '', segments: [split(segment([[-1, 0], [1, 0]], { transportMode: 'rail', climateProfile: { mode: 'rail', railType: 'high_speed' } }), [rectangle('HU', -2, 0), rectangle('DE', 0, 2)])] }).segments[0];
+  const snapshot = JSON.stringify(original);
+  const coordinates = [[-.5, .1, 0], [0, .1, 0], [.5, .1, 0]];
+  for (const adjust of [true, false]) {
+    const imported = importSegmentTrack(original, coordinates, adjust);
+    for (const field of ['countryParts', 'countryDistances', 'distanceStats', 'waypointDistances', 'climateImpact']) expect(imported).not.toHaveProperty(field);
+    expect(imported.climateProfile).toEqual(original.climateProfile);
+    expect(sameCountryInputs(original, imported)).toBe(false);
+    expect(imported.waypoints.map(w => w.coordinates)).toEqual(adjust ? [[-.5, .1], [.5, .1]] : original.waypoints.map(w => w.coordinates));
+    expect(JSON.stringify(original)).toBe(snapshot);
+    const splitAgain = split(imported, [rectangle('HU', -2, 0), rectangle('DE', 0, 2)]);
+    expect(Object.keys(countryDistances(splitAgain))).toEqual(['HU', 'DE']);
+  }
+  const single = { ...original, waypoints: [original.waypoints[0]] };
+  expect(importSegmentTrack(single, coordinates, true).waypoints).toHaveLength(2);
+  expect(single.waypoints).toHaveLength(1);
+});

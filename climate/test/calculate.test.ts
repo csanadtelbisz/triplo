@@ -436,3 +436,41 @@ test("operator codes are case-insensitive and unknown operators fall back silent
   const d = calculate({ mode: "flight", date: D, distanceKm: 1500, aircraftType: "B738" });
   near(c.co2eKg, d.co2eKg, 1e-12);
 });
+
+test('grid models return country emissions using each grid factor, including PHEV fuel emissions', () => {
+  const c = makeCalculator({ ...defaultData, grid: { AAA: [[2026, 100]], BBB: [[2026, 500]] } });
+  for (const profile of [
+    { mode: 'rail', railType: 'inter_city' },
+    { mode: 'rail', railType: 'high_speed' },
+    { mode: 'rail', railType: 'light_rail' },
+    { mode: 'car', fuelType: 'bev', occupancy: 2 },
+    { mode: 'car', fuelType: 'phev', occupancy: 3 },
+  ] as const) {
+    const shares = profile.mode === 'car' ? 'gridShares' : 'countryShares';
+    const input = { ...profile, date: D, distanceKm: 100 };
+    const total = c.calculate({ ...input, [shares]: { AAA: 1, BBB: 1 } });
+    for (const country of ['AAA', 'BBB']) {
+      const expected = c.calculate({ ...input, distanceKm: 50, [shares]: { [country]: 1 } });
+      const part = total.byCountry![country];
+      near(part.directKg, expected.directKg, 1e-12);
+      near(part.upstreamKg, expected.upstreamKg, 1e-12);
+      near(part.co2eKg, expected.co2eKg, 1e-12);
+    }
+    assert.ok(total.byCountry!.BBB.co2eKg > total.byCountry!.AAA.co2eKg);
+    for (const key of ['directKg', 'upstreamKg', 'co2eKg'] as const) near(Object.values(total.byCountry!).reduce((sum, part) => sum + part[key], 0), total[key], 1e-12);
+  }
+});
+
+test('country results retain fallback country identity and a zero-carbon grid contributes zero', () => {
+  const c = makeCalculator({ ...defaultData, regions: { LIE: 'Europe' }, grid: { ZERO: [[2026, 0]], _EUROPE: [[2026, 200]], _WORLD: [[2026, 400]] } });
+  const result = c.calculate({ mode: 'rail', date: D, distanceKm: 100, countryShares: { ZERO: 1, LIE: 1, ZZZ: 2 } });
+  assert.deepEqual(result.byCountry!.ZERO, { co2eKg: 0, directKg: 0, upstreamKg: 0 });
+  near(result.byCountry!.ZZZ.co2eKg, 4 * result.byCountry!.LIE.co2eKg, 1e-12);
+  near(Object.values(result.byCountry!).reduce((sum, part) => sum + part.co2eKg, 0), result.co2eKg, 1e-12);
+});
+
+test('country contributions preserve the whole-segment automatic rail type across short country sections', () => {
+  const input = { mode: 'rail', date: D, distanceKm: 40, countryShares: { HUN: 1, DEU: 1 } } as const;
+  const result = calculate(input);
+  for (const country of ['HUN', 'DEU']) near(result.byCountry![country].co2eKg, calculate({ ...input, distanceKm: 20, railType: 'inter_city', countryShares: { [country]: 1 } }).co2eKg, 1e-12);
+});

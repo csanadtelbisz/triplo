@@ -10,10 +10,13 @@ import type { Bounds, CountryAsset, CountryPiece, CountryResult } from './types'
 type Edge = { country: string; a: GeoJSON.Position; b: GeoJSON.Position; bounds: Bounds };
 const boundsFor = (a: GeoJSON.Position, b: GeoJSON.Position): Bounds => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 export const overlaps = (a: Bounds, b: Bounds) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
-const cells = (bounds: Bounds) => {
+// Dense GPX tracks otherwise scan a two-degree bucket of border edges for
+// every short step. Keep polygon lookup coarse, but index edges more finely.
+const EDGE_CELL_DEGREES = 0.1;
+const cells = (bounds: Bounds, size = 2) => {
   const keys: string[] = [];
-  for (let x = Math.floor(bounds[0] / 2); x <= Math.floor(bounds[2] / 2); x++)
-    for (let y = Math.floor(bounds[1] / 2); y <= Math.floor(bounds[3] / 2); y++) keys.push(`${x}:${y}`);
+  for (let x = Math.floor(bounds[0] / size); x <= Math.floor(bounds[2] / size); x++)
+    for (let y = Math.floor(bounds[1] / size); y <= Math.floor(bounds[3] / size); y++) keys.push(`${x}:${y}`);
   return keys;
 };
 const cross = (a: number[], b: number[]) => a[0] * b[1] - a[1] * b[0];
@@ -39,7 +42,7 @@ export class CountryPartitioner {
         }
         for (const ring of coords) for (let i = 1; i < ring.length; i++) {
           const edge = { country: asset.code, a: ring[i - 1], b: ring[i], bounds: boundsFor(ring[i - 1], ring[i]) };
-          for (const key of cells(edge.bounds)) {
+          for (const key of cells(edge.bounds, EDGE_CELL_DEGREES)) {
             const bucket = this.edges.get(key) || [];
             bucket.push(edge);
             this.edges.set(key, bucket);
@@ -79,7 +82,7 @@ export class CountryPartitioner {
     const dx = this.borderToleranceMetres / xScale, dy = this.borderToleranceMetres / metres;
     const bounds: Bounds = [coordinate[0] - dx, coordinate[1] - dy, coordinate[0] + dx, coordinate[1] + dy];
     let closest = Infinity;
-    for (const edge of new Set(cells(bounds).flatMap(key => this.edges.get(key) || []))) {
+    for (const edge of new Set(cells(bounds, EDGE_CELL_DEGREES).flatMap(key => this.edges.get(key) || []))) {
       if (edge.country !== country || !overlaps(bounds, edge.bounds)) continue;
       const ax = (edge.a[0] - coordinate[0]) * xScale, ay = (edge.a[1] - coordinate[1]) * metres;
       const bx = (edge.b[0] - coordinate[0]) * xScale, by = (edge.b[1] - coordinate[1]) * metres;
@@ -131,10 +134,12 @@ export class CountryPartitioner {
         }
         const bounds = boundsFor(a, b);
         const cuts = [0, 1];
+        let nearBorder = false;
         if (!flight) {
-          const candidates = new Set(cells(bounds).flatMap(key => this.edges.get(key) || []));
+          const candidates = new Set(cells(bounds, EDGE_CELL_DEGREES).flatMap(key => this.edges.get(key) || []));
           for (const edge of candidates) {
             if (!overlaps(bounds, edge.bounds)) continue;
+            nearBorder = true;
             const s = [edge.b[0] - edge.a[0], edge.b[1] - edge.a[1]], q = [edge.a[0] - a[0], edge.a[1] - a[1]];
             const denominator = cross(r, s);
             if (Math.abs(denominator) > 1e-15) {
@@ -156,9 +161,14 @@ export class CountryPartitioner {
         const splitTotal = lengths.reduce((sum, value) => sum + value, 0);
         for (let j = 1; j < unique.length; j++) {
           const start = at(unique[j - 1]), end = at(unique[j]);
-          const country = flight ? UNASSIGNED : this.countryAt(at((unique[j - 1] + unique[j]) / 2));
-          const distanceKm = total * lengths[j - 1] / splitTotal;
           const previous = pieces.at(-1);
+          // A connected step cannot change country without intersecting a
+          // border. Avoid scanning whole country polygons for every GPX point.
+          // Any overlapping border-edge bounds still require a fresh lookup,
+          // preserving endpoint, shared-border and overlap handling.
+          const country = flight ? UNASSIGNED : !nearBorder && previous && samePosition(previous.coordinates.at(-1)!, start)
+            ? previous.country : this.countryAt(at((unique[j - 1] + unique[j]) / 2));
+          const distanceKm = total * lengths[j - 1] / splitTotal;
           if (previous?.country === country && samePosition(previous.coordinates.at(-1)!, start)) {
             previous.coordinates.push(end);
             previous.distanceKm += distanceKm;
