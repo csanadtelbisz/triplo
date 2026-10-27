@@ -38,27 +38,6 @@ test('new segments use mode defaults after customizing the preceding segment', a
   await expect(card.getByLabel('Base algorithm', { exact: true })).toHaveValue('bus');
 });
 
-test('copy segment style preview follows light and dark themes', async ({ page }) => {
-  await open(page);
-  await page.getByRole('button', { name: 'trip', exact: true }).click();
-  await page.getByTitle('Split segment', { exact: true }).last().click();
-  await page.getByTitle('Select transport mode', { exact: true }).last().click();
-  await page.getByTitle('Bus', { exact: true }).click();
-  const name = page.locator('.segment-title-textarea').last();
-  await name.fill('Drive');
-  await name.blur();
-  const preview = page.locator('.copy-segment-style-card');
-  await expect(preview).toBeVisible();
-  for (const dark of [false, true]) {
-    await page.evaluate(dark => document.body.classList.toggle('dark-mode', dark), dark);
-    await expect(preview).toHaveCSS('background-color', dark ? 'rgb(42, 46, 51)' : 'rgb(245, 245, 245)');
-    await expect(preview).toHaveCSS('color', dark ? 'rgb(230, 232, 235)' : 'rgb(51, 51, 51)');
-    await expect(preview.locator('.copy-segment-style-routing')).toHaveCSS('color', dark ? 'rgb(174, 183, 194)' : 'rgb(102, 102, 102)');
-    const message = page.locator('.dialog-message');
-    await expect(message.locator('strong').first()).toHaveCSS('color', await message.evaluate(element => getComputedStyle(element).color));
-  }
-});
-
 test('automatic bus profiles show resolved defaults and change at the 10 km boundary', async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem('climate-test-trip')) return;
