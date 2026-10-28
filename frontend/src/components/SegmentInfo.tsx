@@ -227,6 +227,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                     key={m}
                     title={getModeName(m)}
                     disabled={isReadOnly}
+                    aria-pressed={isSelected}
                     className="mode-button"
                     style={{
                       border: isSelected ? `2px solid ${themeColor || '#007bff'}` : '1px solid #ddd',
@@ -279,6 +280,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                     key={`custom-${cm.icon}`}
                     title={cm.name.toLowerCase() || cm.icon.replaceAll("_", " ").toLowerCase()}
                     disabled={isReadOnly}
+                    aria-pressed={isSelected}
                     className="mode-button"
                     style={{
                       border: isSelected ? `2px solid ${cm.color || '#007bff'}` : '1px solid #ddd',
@@ -342,6 +344,7 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                     key={m}
                     title={getModeName(m)}
                     disabled={isReadOnly}
+                    aria-pressed={isBuiltinSelected}
                     className="mode-button"
                     style={{
                       border: isBuiltinSelected ? `2px solid ${themeColor || '#007bff'}` : '1px solid #ddd',
