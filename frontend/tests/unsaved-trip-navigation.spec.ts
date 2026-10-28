@@ -82,9 +82,14 @@ test('a failed Save & Exit keeps the unsaved trip and dialog open', async ({ pag
 
 test('browser Back within a new trip preserves it and prompts only when leaving the trip', async ({ page }) => {
   await newTrip(page);
+  const editorEntry = await page.evaluate(() => history.state.triploHistoryId);
   await page.getByTitle('Segment Info', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Segment Info', exact: true })).toBeVisible();
+  // Panel rendering can precede the effect that writes its history entry.
+  // Wait for that entry before starting another browser traversal.
+  await expect.poll(() => page.evaluate(() => history.state?.triploPanel?.panel)).toBe('segment');
   await page.goBack();
+  await expect.poll(() => page.evaluate(() => history.state?.triploHistoryId)).toBe(editorEntry);
   await expect(page.locator('.title-input')).toHaveValue('Unsaved browser trip');
   await expect(unsavedDialog(page)).toHaveCount(0);
   await page.goBack();
