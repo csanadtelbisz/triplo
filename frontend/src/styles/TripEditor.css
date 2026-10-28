@@ -392,10 +392,6 @@ body.dark-mode .trip-summary td {
   color: #c8cdd3;
 }
 
-body.dark-mode .trip-summary-th {
-  border-color: #36393d;
-}
-
 body.dark-mode .trip-summary-row {
   border-color: #343a40;
 }
