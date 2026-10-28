@@ -245,6 +245,7 @@ export default function App() {
   const [apiKeyWarningConfiguration, setApiKeyWarningConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const [apiKeyConfiguration, setApiKeyConfiguration] = useState<ApiKeyServiceConfiguration | null>(null);
   const tripsRef = useRef(trips);
+  const selectedTripRef = useRef(selectedTrip);
   const serializedTripVersionsRef = useRef<Trip[]>([]);
   const historyInitializedRef = useRef(false);
   const historyUpdateModeRef = useRef<'replace' | null>(null);
@@ -252,10 +253,15 @@ export default function App() {
   const panelHistoryEntriesRef = useRef<{ id: string; panel: PanelHistoryState }[]>([]);
   const panelHistoryIndexRef = useRef(0);
   const pendingPanelHistoryRef = useRef<{ id: string; panel: PanelHistoryState } | null>(null);
+  const tempTripExitHistoryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
+
+  useEffect(() => {
+    selectedTripRef.current = selectedTrip;
+  }, [selectedTrip]);
 
   useEffect(() => {
     const live = new Set(selectedTrip ? [...trips, selectedTrip] : trips);
@@ -393,9 +399,24 @@ export default function App() {
       const panelState = pending && pending.id === browserState?.triploHistoryId ? pending.panel : browserState?.triploPanel;
       if (!panelState) return;
 
+      if (tempTripExitHistoryIdRef.current && tempTripExitHistoryIdRef.current === browserState?.triploHistoryId) {
+        tempTripExitHistoryIdRef.current = null;
+        setExitingTempTripAlert(true);
+        return;
+      }
+
+      const index = panelHistoryEntriesRef.current.findIndex(entry => entry.id === browserState?.triploHistoryId);
+      const current = currentPanelHistoryRef.current;
+      if (current?.tripId?.startsWith('temp_trip_') && current.tripId !== panelState.tripId && index >= 0 && index !== panelHistoryIndexRef.current) {
+        // popstate cannot be cancelled. Restore the editor's history entry
+        // before showing the same save/discard dialog as the panel back arrow.
+        tempTripExitHistoryIdRef.current = panelHistoryEntriesRef.current[panelHistoryIndexRef.current].id;
+        window.history.go(panelHistoryIndexRef.current - index);
+        return;
+      }
+
       pendingPanelHistoryRef.current = null;
       historyUpdateModeRef.current = null;
-      const index = panelHistoryEntriesRef.current.findIndex(entry => entry.id === browserState?.triploHistoryId);
       if (index >= 0) {
         panelHistoryIndexRef.current = index;
         panelHistoryEntriesRef.current[index].panel = panelState;
@@ -404,7 +425,8 @@ export default function App() {
         window.history.replaceState({ ...browserState, triploPanel: panelState }, '', window.location.href);
       }
       currentPanelHistoryRef.current = panelState;
-      const trip = panelState.tripId ? tripsRef.current.find(item => item.id === panelState.tripId) || null : null;
+      const trip = panelState.tripId ? tripsRef.current.find(item => item.id === panelState.tripId)
+        || (selectedTripRef.current?.id === panelState.tripId ? selectedTripRef.current : null) : null;
       flushSync(() => {
         setSelectedTrip(trip);
         setSelectedSegmentId(panelState.panel === 'segment' ? panelState.segmentId || null : null);
