@@ -365,7 +365,7 @@ body.dark-mode .mode-button:disabled {
 }
 
 body.dark-mode .mode-button[aria-pressed='true'] {
-  background: color-mix(in srgb, currentColor 24%, #252a30) !important;
+  background: color-mix(in srgb, currentColor 10%, #252a30) !important;
   border-color: currentColor !important;
 }
 
