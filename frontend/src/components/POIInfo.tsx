@@ -21,7 +21,7 @@ interface POIInfoProps {
 
 export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAddedToTrip, onStartNewTrip, selectedWaypointId, onAttachToWaypoint }: POIInfoProps) => {
   const [details, setDetails] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -182,23 +182,25 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
             </div>
         )}
 
-        {loading ? (
-            <div className="form-group"><p className="form-text-value">Loading OpenStreetMap details...</p></div>
-        ) : details && (
-            <>
-              {details.address && (
-                  <div className="form-group">
-                    <label className="form-label">Address</label>
-                    <div className="form-text-value">
-                        {[details.address.road, details.address.house_number].filter(Boolean).join(' ')}
-                        {([details.address.road, details.address.house_number].some(Boolean)) ? <br/> : null}
-                        {[details.address.postcode, details.address.city || details.address.town || details.address.village].filter(Boolean).join(' ')}
-                        {([details.address.postcode, details.address.city || details.address.town || details.address.village].some(Boolean)) ? <br/> : null}
-                        {details.address.country}
-                    </div>
-                  </div>
+        {(loading || details?.address) && (
+            <div className="form-group">
+              <label className="form-label">Address</label>
+              {loading ? (
+                <div className="form-text-value poi-address poi-address-placeholder" role="status" aria-label="Loading address" aria-busy="true">
+                  {[0, 1, 2].map(line => (
+                    <div className="poi-address-placeholder-line" key={line}><span /></div>
+                  ))}
+                </div>
+              ) : (
+                <div className="form-text-value poi-address">
+                  {[details.address.road, details.address.house_number].filter(Boolean).join(' ')}
+                  {([details.address.road, details.address.house_number].some(Boolean)) ? <br/> : null}
+                  {[details.address.postcode, details.address.city || details.address.town || details.address.village].filter(Boolean).join(' ')}
+                  {([details.address.postcode, details.address.city || details.address.town || details.address.village].some(Boolean)) ? <br/> : null}
+                  {details.address.country}
+                </div>
               )}
-            </>
+            </div>
         )}
 
         {trip && !isReadOnly && (

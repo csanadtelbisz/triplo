@@ -58,6 +58,7 @@ export function calcRail(run: Run, input: RailInput): ClimateResult {
     run.assume(`Implied energy use ${kwhPerPkm.toFixed(3)} kWh per passenger-km (DEFRA UK factor divided by UK generation plus T&D factor)`);
   }
   const g = run.grid(input.countryShares, false);
-  const upstream = km * kwhPerPkm * (g / 1000) * (1 + run.tdUplift());
-  return run.finish({ directKg: 0, upstreamKg: upstream, method: "grid_kwh", includesRadiativeForcing: false, distanceKmUsed: km, railEnergy: benchmark });
+  const gridKwh = km * kwhPerPkm * (1 + run.tdUplift());
+  const upstream = gridKwh * (g / 1000);
+  return run.finish({ directKg: 0, upstreamKg: upstream, method: "grid_kwh", includesRadiativeForcing: false, distanceKmUsed: km, railEnergy: benchmark, gridKwh });
 }

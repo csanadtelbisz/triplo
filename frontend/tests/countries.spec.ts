@@ -65,6 +65,12 @@ test('overlaps, shared-border travel and uncovered waters stay Unassigned', () =
   expect(partition(segment([[-0.5, 0], [0.5, 0]]), [rectangle('AA', -2, 2), rectangle('BB', -1, 1)]).shares[UNASSIGNED]).toBe(1);
 });
 
+test('border vertices, repeated points, border travel and returning inland retain the right countries', () => {
+  const result = partition(segment([[-1, 0], [-.5, 0], [0, 0], [0, 0], [.5, 0], [1, 0], [0, 0], [0, 1], [-1, 1], [-1.5, 1]]));
+  expect(result.pieces.filter(piece => piece.distanceKm > 0).map(piece => piece.country)).toEqual(['AA', 'BB', UNASSIGNED, 'AA']);
+  expect(Object.values(result.distanceKmByCountry).reduce((sum, km) => sum + km, 0)).toBeCloseTo(result.totalDistanceKm, 9);
+});
+
 test('flights bypass attribution; teleport and zero distances do not contribute', () => {
   const flight = partition(segment([[-1, 0], [1, 0]], { transportMode: 'flight' }));
   expect(Object.keys(flight.distanceKmByCountry)).toEqual([UNASSIGNED]);

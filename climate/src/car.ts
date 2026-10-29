@@ -43,14 +43,15 @@ export function calcCar(run: Run, input: CarInput): ClimateResult {
     const kwhKey = `car.${size}.${fuel}.kwh`;
     const kwhPerKm = run.factor(kwhKey);
     const uplift = run.tdUplift();
-    const elecKg = km * kwhPerKm * (g / 1000) * (1 + uplift);
+    const gridKwh = km * kwhPerKm * (1 + uplift);
+    const elecKg = gridKwh * (g / 1000);
     let direct = 0, upstream = elecKg;
     if (fuel === "phev") {
       direct = km * run.factor(`car.${size}.phev.ttw`);
       upstream += km * run.factor(`car.${size}.phev.wtt`);
       run.assume("PHEV: DEFRA liquid-fuel part plus electric part priced at the given grid");
     }
-    return run.finish({ directKg: direct / occ, upstreamKg: upstream / occ, method: fuel === "bev" ? "grid_kwh" : "defra_per_vkm", includesRadiativeForcing: false, distanceKmUsed: km });
+    return run.finish({ directKg: direct / occ, upstreamKg: upstream / occ, method: fuel === "bev" ? "grid_kwh" : "defra_per_vkm", includesRadiativeForcing: false, distanceKmUsed: km, gridKwh: gridKwh / occ });
   }
 
   // ---- DEFRA per vehicle-km

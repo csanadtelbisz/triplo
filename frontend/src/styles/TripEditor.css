@@ -269,6 +269,12 @@ body.dark-mode .timeline-plus .triplo-icon {
   font-size: 0.85rem;
   border-collapse: collapse;
 }
+.trip-summary-countries {
+  margin-top: 16px;
+}
+.trip-summary-countries .trip-summary-td:first-child {
+  text-transform: none;
+}
 .trip-summary-th {
   border-bottom: 1px solid #dee2e6;
   text-align: left;
@@ -384,10 +390,6 @@ body.dark-mode .trip-summary-total,
 body.dark-mode .trip-summary th,
 body.dark-mode .trip-summary td {
   color: #c8cdd3;
-}
-
-body.dark-mode .trip-summary-th {
-  border-color: #36393d;
 }
 
 body.dark-mode .trip-summary-row {

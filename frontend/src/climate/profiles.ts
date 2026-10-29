@@ -11,9 +11,11 @@ import { modeKey } from '../countries/analytics';
 import { climateCountryCodes } from './countryCodes';
 import { copyEffectiveGeometryCache } from '../utils/effectiveGeometry';
 import { noEmissionResult } from './cache';
+import { segmentKey } from '../countries/types';
+import type { CountryData } from '../countries/types';
 
 // Bump when calculator rules, adapter rules, or country-code mappings change.
-const CLIMATE_CALCULATION_VERSION = 9;
+const CLIMATE_CALCULATION_VERSION = 10;
 const climateRevision = `${CLIMATE_CALCULATION_VERSION}:${climateDataRevision}`;
 const computed = new WeakMap<Segment, SegmentClimateImpact>();
 
@@ -81,9 +83,9 @@ export function resolveClimateProfile(trip: Trip, segment: Segment, settings: Cl
 }
 
 /** Unknown country pieces retain their weight and use the calculator's world fallback. */
-export function routeCountryShares(segment: Segment): CountryShares | undefined {
+export function routeCountryShares(segment: Segment, distances = countryDistances(segment)): CountryShares | undefined {
   const shares: CountryShares = {};
-  for (const [code, distance] of Object.entries(countryDistances(segment))) {
+  for (const [code, distance] of Object.entries(distances)) {
     if (distance > 0) {
       const iso3 = climateCountryCodes[code] || '_WORLD';
       shares[iso3] = (shares[iso3] || 0) + distance;
@@ -97,14 +99,14 @@ export interface SegmentClimate {
   result?: ClimateResult;
   error?: string;
 }
-function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): { input: TravelInput; undated?: boolean } {
+function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings, distances = countryDistances(segment)): { input: TravelInput; undated?: boolean } {
   if (segment.routingProfile === 'teleport') return { input: { mode: 'none' } };
   const profile = resolveClimateProfile(trip, segment, settings).profile;
-  const km = segment.distanceStats?.totalDistance ?? Object.values(countryDistances(segment)).reduce((a, b) => a + b, 0);
+  const km = segment.distanceStats?.totalDistance ?? Object.values(distances).reduce((a, b) => a + b, 0);
   if (profile.mode === 'none' || km === 0) return { input: { mode: 'none' } };
   const date = segment.waypoints.find(w => w.date)?.date || trip.startDate || trip.endDate || trip.createdAt;
   const dated = date?.slice(0, 10) || `${new Date().getFullYear()}-01-01`;
-  const shares = routeCountryShares(segment);
+  const shares = routeCountryShares(segment, distances);
   let options = profile;
   // Keep the resolved bus type in the cache key even when distance rounding crosses 10 km.
   if (options.mode === 'bus') options = { ...options, busType: options.busType ?? defaultBusType(km) };
@@ -119,8 +121,8 @@ function climateInput(trip: Trip, segment: Segment, settings: ClimateSettings): 
   return { input: { ...options, date: dated, distanceKm: km }, undated: !date };
 }
 
-function segmentClimateCache(trip: Trip, segment: Segment, settings: ClimateSettings): SegmentClimateImpact {
-  const { input, undated } = climateInput(trip, segment, settings);
+function segmentClimateCache(trip: Trip, segment: Segment, settings: ClimateSettings, distances?: Record<string, number>): SegmentClimateImpact {
+  const { input, undated } = climateInput(trip, segment, settings, distances);
   const inputKey = input.mode === 'none' ? 'none' : canonical({ revision: climateRevision, input, undated });
   // Only trust results calculated in this session, never legacy saved entries.
   const cached = computed.get(segment);
@@ -137,8 +139,8 @@ function segmentClimateCache(trip: Trip, segment: Segment, settings: ClimateSett
   return next;
 }
 
-export function segmentClimate(trip: Trip, segment: Segment, settings: ClimateSettings): SegmentClimate {
-  return segmentClimateCache(trip, segment, settings);
+export function segmentClimate(trip: Trip, segment: Segment, settings: ClimateSettings, distances?: Record<string, number>): SegmentClimate {
+  return segmentClimateCache(trip, segment, settings, distances);
 }
 
 /** Refresh transient results; preserve identities when current inputs are unchanged. */
@@ -157,12 +159,12 @@ export function withClimateCache(trip: Trip, settings: ClimateSettings = getClim
   return changed ? { ...trip, segments } : trip;
 }
 
-export function tripClimate(trip: Trip, settings: ClimateSettings) {
+export function tripClimate(trip: Trip, settings: ClimateSettings, data?: CountryData) {
   const byMode: Record<string, number> = {};
   const unavailableByMode: Record<string, number> = {};
   let totalKg = 0, unavailable = 0;
   for (const segment of trip.segments) {
-    const { result } = segmentClimate(trip, segment, settings);
+    const { result } = segmentClimate(trip, segment, settings, data?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry);
     if (!result) {
       unavailable++;
       const key = modeKey(segment);

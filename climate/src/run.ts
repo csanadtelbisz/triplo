@@ -115,7 +115,7 @@ export class Run {
     return v;
   }
 
-  finish(r: { directKg: number; upstreamKg: number; method: ClimateResult["method"]; includesRadiativeForcing: boolean; distanceKmUsed: number; aircraftTable?: boolean; railEnergy?: boolean }): ClimateResult {
+  finish(r: { directKg: number; upstreamKg: number; method: ClimateResult["method"]; includesRadiativeForcing: boolean; distanceKmUsed: number; aircraftTable?: boolean; railEnergy?: boolean; gridKwh?: number }): ClimateResult {
     const factorSets: ClimateResult["factorSets"] = {};
     if (this.defraYears.size) factorSets.defra = { yearUsed: Math.max(...this.defraYears) };
     if (this.gridYears.length) {
@@ -127,10 +127,29 @@ export class Run {
     }
     if (r.aircraftTable) factorSets.aircraft = { tableVersion: String(this.data.flight.year) };
     if (r.railEnergy) factorSets.railEnergy = { yearUsed: this.data.railEnergy.year, source: this.data.railEnergy.source };
+    let byCountry: ClimateResult['byCountry'];
+    if (r.gridKwh !== undefined && this.gridFactors.length) {
+      byCountry = {};
+      // Grid energy includes losses and occupancy scaling. Keep non-electric
+      // PHEV fuel emissions separate: only that part follows distance shares.
+      const electricityKg = this.gridFactors.reduce((sum, factor) => sum + r.gridKwh! * factor.share * factor.intensityGCo2ePerKwh / 1000, 0);
+      const fuelUpstreamKg = Math.max(0, r.upstreamKg - electricityKg);
+      for (const factor of this.gridFactors) {
+        const directKg = r.directKg * factor.share;
+        const upstreamKg = fuelUpstreamKg * factor.share + r.gridKwh * factor.share * factor.intensityGCo2ePerKwh / 1000;
+        const previous = byCountry[factor.country];
+        byCountry[factor.country] = {
+          directKg: (previous?.directKg || 0) + directKg,
+          upstreamKg: (previous?.upstreamKg || 0) + upstreamKg,
+          co2eKg: (previous?.co2eKg || 0) + directKg + upstreamKg,
+        };
+      }
+    }
     return {
       co2eKg: r.directKg + r.upstreamKg,
       directKg: r.directKg,
       upstreamKg: r.upstreamKg,
+      ...(byCountry ? { byCountry } : {}),
       method: r.method,
       scope: "wtw",
       includesRadiativeForcing: r.includesRadiativeForcing,

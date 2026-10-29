@@ -7,6 +7,8 @@ import { calculate } from "./src";
 calculate({ mode: "car", date: "2026-06-01", distanceKm: 100, fuelType: "bev", gridShares: { HUN: 1 } });
 ```
 
+Grid-dependent results include `byCountry` entries with direct, upstream and total kg CO₂e per requested country code. Contributions use each country’s grid factor (including continent/world fallbacks) and sum to the segment totals. PHEV fuel emissions remain proportional to distance; electricity contributions use local grid intensity. Non-electric uniform per-kilometre models do not need a country breakdown from the calculator.
+
 ## Data and yearly update
 All numbers come from `data/*` and are compiled into `src/generated/data.ts`, including a content revision used to invalidate in-memory segment climate caches when the data changes. Climate results are recalculated after trips load and are excluded from saved trips and offline browser storage.
 

@@ -9,6 +9,59 @@
   overflow-y: auto;
   min-height: 0;
 }
+
+.poi-address {
+    line-height: 1.5;
+    min-height: 4.5em;
+}
+
+.poi-address-placeholder {
+    --address-placeholder-base: #e4e6e8;
+    --address-placeholder-highlight: #f1f2f3;
+}
+
+.poi-address-placeholder-line {
+    height: 1.5em;
+    display: flex;
+    align-items: center;
+}
+
+.poi-address-placeholder-line span {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    width: 100px;
+    max-width: 100%;
+    height: 0.75em;
+    border-radius: 3px;
+    background: var(--address-placeholder-base);
+}
+
+.poi-address-placeholder-line span::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--address-placeholder-highlight), transparent);
+    animation: poi-address-shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes poi-address-shimmer {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+body.dark-mode .poi-address-placeholder {
+    --address-placeholder-base: #363b42;
+    --address-placeholder-highlight: #464d56;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .poi-address-placeholder-line span::after {
+        animation: none;
+        background: none;
+    }
+}
+
 .poi-alt-name-label {
     display: flex;
     align-items: center;

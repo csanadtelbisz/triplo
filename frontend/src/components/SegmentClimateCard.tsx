@@ -8,6 +8,7 @@ import { defaultData } from '../../../climate/src/generated/data';
 import { MaterialIcon } from './MaterialIcon';
 import { climateCountryCodes } from '../climate/countryCodes';
 import { segmentKey } from '../countries/types';
+import type { CountryData } from '../countries/types';
 
 const countryCodes = Object.fromEntries(Object.entries(climateCountryCodes).map(([alpha2, alpha3]) => [alpha3, alpha2]));
 const gridLabel = (code: string) => countryCodes[code] || (code.startsWith('_')
@@ -25,11 +26,11 @@ function ClimateInfo({ label, text }: { label: string; text: string }) {
   </>;
 }
 
-export function SegmentClimateCard({ trip, segment, isReadOnly, onUpdateTrip }: { trip: Trip; segment: Segment; isReadOnly?: boolean; onUpdateTrip: (trip: Trip) => void }) {
+export function SegmentClimateCard({ trip, segment, isReadOnly, onUpdateTrip, countryData }: { trip: Trip; segment: Segment; isReadOnly?: boolean; onUpdateTrip: (trip: Trip) => void; countryData?: CountryData }) {
   const settings = useClimateSettings();
   const id = useId();
   const inherited = resolveClimateProfile(trip, segment, settings, false);
-  const { result, error } = segmentClimate(trip, segment, settings);
+  const { result, error } = segmentClimate(trip, segment, settings, countryData?.results[segmentKey(trip.id, segment.id)]?.distanceKmByCountry);
   const update = (climateProfile?: ClimateProfile) => {
     if (isReadOnly) return;
     onUpdateTrip({ ...trip, segments: trip.segments.map(s => {

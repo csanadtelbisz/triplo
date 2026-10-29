@@ -881,3 +881,43 @@ for (const climate of [false, true]) test(`analytics trip selection uses selecte
   await expect.poll(() => routes(page)).toEqual([]);
   await expect(page.locator('.maplibregl-marker')).toHaveCount(0);
 });
+
+for (const real of [false, true]) for (const adjust of [false, true]) test(`imported rail GPX refreshes country parts and electricity factors with ${real ? 'real' : 'fixture'} borders and ${adjust ? 'adjusted' : 'kept'} waypoints`, async ({ page, context }) => {
+  test.setTimeout(60000);
+  const assets = countries.map((item, i) => {
+    const code = i ? 'DE' : 'HU';
+    const west = i ? 0 : -2, east = i ? 2 : 0;
+    const geometry = { type: 'Polygon', coordinates: [[[west, -2], [east, -2], [east, 2], [west, 2], [west, -2]]] };
+    const body = gzipSync(JSON.stringify({ code, territorial: geometry, land: geometry }));
+    return { body, entry: { ...item.entry, code, name: code, file: `${code}.json.gz`, sha256: createHash('sha256').update(body).digest('hex') } };
+  });
+  const imported = real ? Array.from({ length: 1001 }, (_, i) => [11.4 + .18 * i / 1000, 47.26 + .88 * i / 1000 + Math.sin(Math.PI * i / 1000) * .01]) : [[-1, .2], [0, .2], [1, .2]];
+  const expectedCodes = real ? ['AT', 'DE'] : ['HU', 'DE'];
+  const waypoints = real ? [[11.43, 47.41], [11.55, 48.01]] : [[-.8, -.2], [.8, -.2]];
+  const train = { ...trip, id: 'gpx-rail', startDate: '2026-05-01', endDate: '2026-05-01', segments: [segment('train', 'rail', waypoints)] };
+  await context.route('https://fixtures.test/trip.json', route => route.fulfill({ json: train }));
+  await context.route('**/countries/index.json', route => route.fulfill({ json: { version: 'gpx-grid', countries: assets.map(a => a.entry), attribution: 'Test' } }));
+  if (!real) for (const asset of assets) await context.route(`**/countries/${asset.entry.file}*`, route => route.fulfill({ contentType: 'application/gzip', body: asset.body }));
+  if (real) await context.unroute('**/countries/index.json');
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  if (real) await groupAnalyticsBy(page, 'countries');
+  await expect.poll(async () => (await cachedTrips(page)).find(t => t.id === train.id)?.segments[0].countryParts?.map(p => p.country), { timeout: 15000 }).toEqual(expectedCodes);
+  if (real) await groupAnalyticsBy(page, 'modes');
+  await page.getByRole('button', { name: /rail/ }).click();
+  await page.getByTitle('Open segment info', { exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByTitle('Import Track', { exact: true }).click();
+  const gpx = `<gpx><trk><trkseg>${imported.map(([lon, lat]) => `<trkpt lat="${lat}" lon="${lon}"/>`).join('')}</trkseg></trk></gpx>`;
+  await (await chooser).setFiles({ name: 'train.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx) });
+  await page.getByRole('button', { name: adjust ? 'Yes, adjust them' : 'No, keep them', exact: true }).click();
+  await expect.poll(async () => {
+    const trainSegment = (await cachedTrips(page)).find(t => t.id === train.id)?.segments[0];
+    return trainSegment?.source === 'gpx' ? trainSegment.countryParts?.map(p => p.country) : undefined;
+  }, { timeout: 15000 }).toEqual(expectedCodes);
+  await page.getByText('Calculation details', { exact: true }).click();
+  const factors = page.getByRole('table', { name: 'Electricity emission factors' });
+  await expect(factors.locator('tbody tr td:first-child')).toHaveText(expectedCodes);
+  await expect(factors).not.toContainText('World');
+  if (!adjust) expect((await cachedTrips(page)).find(t => t.id === train.id)?.segments[0].waypoints.map(w => w.coordinates)).toEqual(waypoints);
+});

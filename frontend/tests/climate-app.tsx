@@ -24,6 +24,7 @@ const fixture: Trip = {
 };
 export default function ClimateApp() {
   const [panel, setPanel] = useState('preferences');
+  const [segmentId, setSegmentId] = useState('car');
   const [readOnly, setReadOnly] = useState(false);
   const [selection, setSelection] = useState(emptyAnalyticsSelection);
   const [additionalTrips] = useState<Trip[]>(() => JSON.parse(localStorage.getItem('climate-test-additional-trips') || '[]'));
@@ -32,8 +33,8 @@ export default function ClimateApp() {
   return <FlightProfileTripsContext value={[trip, ...additionalTrips]}><div className="sidebar" style={{ width: 390, height: '100vh', maxWidth: '100%' }}>
     <nav>{['preferences', 'trip', 'segment', 'analytics'].map(p => <button key={p} onClick={() => setPanel(p)}>{p}</button>)}<label><input type="checkbox" checked={readOnly} onChange={e => setReadOnly(e.target.checked)} />Read only</label></nav>
     {panel === 'preferences' && <PreferencesPanel onGoBack={() => {}} onSetHome={() => {}} onZoomHome={() => {}} editingConfigId={null} onEditingConfigChange={() => {}} />}
-    {panel === 'segment' && <SegmentInfo trip={trip} segmentId="car" isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} />}
-    {panel === 'trip' && <TripEditor trip={trip} isReadOnly={readOnly} onGoBack={() => {}} onSelectSegment={() => setPanel('segment')} onSelectWaypoint={() => {}} onZoomToTrip={() => {}} onZoomToSegment={() => {}} onJumpToWaypoint={() => {}} onUndo={() => {}} onRedo={() => {}} canUndo={false} canRedo={false} onSave={() => {}} canSave={false} onUpdateTrip={update} onWaitingForCoords={() => {}} />}
+    {panel === 'segment' && <SegmentInfo trip={trip} segmentId={segmentId} isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} />}
+    {panel === 'trip' && <TripEditor trip={trip} isReadOnly={readOnly} onGoBack={() => {}} onSelectSegment={id => { setSegmentId(id); setPanel('segment'); }} onSelectWaypoint={() => {}} onZoomToTrip={() => {}} onZoomToSegment={() => {}} onJumpToWaypoint={() => {}} onUndo={() => {}} onRedo={() => {}} canUndo={false} canRedo={false} onSave={() => {}} canSave={false} onUpdateTrip={update} onWaitingForCoords={() => {}} />}
     {panel === 'analytics' && <AnalyticsPanel trips={[trip, ...additionalTrips]} isReadOnly={readOnly} onGoBack={() => {}} onUpdateTrip={update} onOpenSegmentInfo={() => setPanel('segment')} onFocusSegment={() => {}} timeSliderVisible={false} onToggleTimeSlider={() => {}} selection={selection} onSelectionChange={setSelection} countryLoading={false} onRetryCountries={() => {}} />}
   </div></FlightProfileTripsContext>;
 }
