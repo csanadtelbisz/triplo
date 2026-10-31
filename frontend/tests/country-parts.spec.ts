@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Segment, Trip } from '../../shared/types';
 import { CountryPartitioner } from '../src/countries/partition';
 import type { CountryAsset } from '../src/countries/types';
-import { attachCountryParts, sameCountryInputs, sameCountryTripInputs } from '../src/countries/cache';
+import { attachCountryParts, sameCountryInputs, sameCountryTripInputs, withSavedCountryParts } from '../src/countries/cache';
 import { countryDistances, resultFromParts } from '../src/countries/parts';
 import { computeTripCaches } from '../src/utils/distance';
 import { getEffectiveGeometry, geometryDistance } from '../src/utils/effectiveGeometry';
@@ -22,6 +22,23 @@ const split = (source: Segment, boundaries = assets, tolerance = 10): Segment =>
   const result = { ...source, countryParts: step.value }; delete result.geometry;
   return result;
 };
+
+test('rounded country parts in a saved baseline do not dirty a full-precision browser cache', () => {
+  const working = computeTripCaches({ id: 'rounded', name: 'Rounded trip', createdAt: '', updatedAt: '', segments: [
+    { ...split(segment([[-1, 0], [1, 0]])), isHidden: false },
+  ] });
+  const saved: Trip = JSON.parse(serializeTrip(working));
+  expect(saved.segments[0].countryParts).not.toEqual(working.segments[0].countryParts);
+  const snapshot = JSON.stringify(working);
+  expect(serializeTrip(withSavedCountryParts(working, saved), false)).toBe(serializeTrip(working, false));
+  expect(JSON.stringify(working)).toBe(snapshot);
+
+  // Actual country updates must still be saveable, including after a reload.
+  const changed = { ...working, segments: working.segments.map(segment => ({ ...segment,
+    countryParts: segment.countryParts!.map(part => ({ ...part, country: 'CC' })),
+  })) };
+  expect(serializeTrip(withSavedCountryParts(changed, saved), false)).not.toBe(serializeTrip(changed, false));
+});
 
 test('shallow A B A excursions merge by depth while keeping every route coordinate and total', () => {
   const source = segment([[-0.001, 0], [0.00005, 0.001], [0.00005, 0.01], [-0.001, 0.011], [0.00004, 0.012], [-0.001, 0.013]]);

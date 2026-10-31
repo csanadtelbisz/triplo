@@ -1,7 +1,7 @@
 ﻿import { tripClimate } from '../climate/profiles';
 import { useClimateSettings } from '../climate/useClimateSettings';
 import { TripClimateSettings } from './TripClimateSettings';
-import { useEffect, Fragment, useRef, useCallback, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, Fragment, useRef, useCallback, useState, useMemo } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TRANSPORT_MODES, type Trip, type Segment, type Waypoint } from '../../../shared/types';
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
@@ -73,10 +73,13 @@ export function TripEditor({
   const waypointRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (contentRef.current) {
-      contentRef.current.scrollTop = tripEditorScrollPositions[trip.id] || 0;
-    }
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    // Restore before paint, including when returning to highlight a new waypoint.
+    // The highlight's smooth scroll must start at the previous editor position.
+    content.scrollTop = tripEditorScrollPositions[trip.id] || 0;
+    return () => { tripEditorScrollPositions[trip.id] = content.scrollTop; };
   }, [trip.id]);
   const [focusedWaypointWithoutCoords, setFocusedWaypointWithoutCoords] = useState<string | null>(null);
   const [wpSearchState, setWpSearchState] = useState<{ wpId: string, query: string } | null>(null);
