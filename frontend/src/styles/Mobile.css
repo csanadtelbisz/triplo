@@ -47,7 +47,7 @@
   }
 
   .sidebar.search-maximized {
-    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+    height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
     top: env(safe-area-inset-top, 0px);
     bottom: 0;
     border-radius: 0;
@@ -60,12 +60,17 @@
   }
 
   .sidebar.collapsed {
-    transform: translateY(calc(100% - 64px));
-    bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(calc(100% - 64px - env(safe-area-inset-bottom, 0px)));
   }
 
   .sidebar.time-slider-active.collapsed {
-    transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px)));
+    transform: translateY(100%);
+  }
+
+  /* The sheet paints behind the gesture bar; only the scrollable content gets
+     extra space so its last controls can still be reached above the bar. */
+  .sidebar > .content {
+    padding-bottom: calc(1rem + env(safe-area-max-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
 
   .time-slider-toolbox {

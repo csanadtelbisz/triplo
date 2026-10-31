@@ -18,8 +18,10 @@ export function withSavedCountryParts(working: Trip, saved: Trip): Trip {
     if (JSON.stringify([segment.geometry, segment.countryParts, segment.countryDistances]) === JSON.stringify([original.geometry, original.countryParts, original.countryDistances])) return segment;
     const content = { ...segment };
     for (const field of ['geometry', 'countryParts', 'countryDistances'] as const) {
-      delete content[field];
-      if (original[field] !== undefined) Object.assign(content, { [field]: original[field] });
+      // Keep existing keys in place: dirty checks compare serialized JSON, and
+      // rounded saved parts may differ from the full-precision browser cache.
+      if (original[field] === undefined) delete content[field];
+      else Object.assign(content, { [field]: original[field] });
     }
     return content;
   });
