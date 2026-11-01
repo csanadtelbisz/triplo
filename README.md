@@ -32,8 +32,10 @@ Date filters use trip overlap; they do not infer the date of a border crossing.
 
 The full yearly chart remains visible as context. Browser Back/Forward restores
 country, mode, date, and segment-detail selections. Clearing a country or mode
-returns to its parent level; Back from an unselected list returns to the trip
-manager. View toggles and date changes replace the current entry. Calculations
+returns to its parent level; browser Back from an unselected list returns to the
+trip manager. The panel back arrow closes the current panel directly, including
+filtered Analytics, while browser Back steps through individual filter states.
+View toggles and date changes replace the current entry. Calculations
 run in a worker. Shared-trip references remain metadata-only. Country files
 load on demand and failures show a retry action instead of being counted as
 Unassigned. Disconnected route pieces retain their segment identity. Country
@@ -156,6 +158,13 @@ When a selected routing service is unavailable, the routing manager falls back
 to straight lines. A displayed rail segment therefore does not imply that its
 geometry follows railway tracks.
 
+Waypoint additions and editor route changes update the waypoints immediately.
+The map retains the last completed route until routing finishes, with pulsing
+halos around the endpoints of changed legs (static rings for reduced motion).
+Geometry and statistics update later without adding an Undo step. Late responses
+cannot overwrite newer waypoint edits or a change that was undone. Failed requests
+stop the halos and keep the last completed route visible.
+
 Triplo includes an installable web app manifest. Its current service worker does
 not cache the application or map tiles for offline use; browser trip storage
 alone does not provide a complete offline experience.
@@ -251,6 +260,10 @@ that comment. Links also appear on the deployment and in the job summary.
 GitHub Pages hosts one site per repository, so each deployment includes the
 default-branch production build and all open same-repository PR previews.
 Closing a PR removes its preview on the next successful deployment.
+For merged PRs, the push deployment handles cleanup; closing an unmerged PR
+triggers a cleanup deployment. Pages publications share a concurrency group and
+allow an active run to finish, so preview updates do not interrupt an active
+production deployment. Superseded PR validation runs may still be cancelled.
 
 For Drive support on production, configure the repository Actions secrets
 `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_DRIVE_API_KEY`. These values are omitted

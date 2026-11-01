@@ -5,7 +5,7 @@ import { TRANSPORT_MODES, type Trip, type Segment } from '../../../shared/types'
 import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getModeColor, getModeName, getModeRoutingProfile } from '../utils/builtInModesPreferences';
 import { exportGPX, downloadFile } from '../utils/exportUtils';
-import { routingManager, route } from '../routing/RoutingService';
+import { routingManager } from '../routing/RoutingService';
 import { ElevationProfile } from './ElevationProfile';
 import { ConfirmDialog } from './Dialog';
 import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
@@ -254,14 +254,6 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                         });
                         setShowAllProfiles(false);
 
-                        if (updatedSeg.source === 'router') {
-                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-                          if (coords.length >= 2) {
-                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
-                          } else {
-                            delete (updatedSeg as any).geometry;
-                          }
-                        }
                         
                         newSegments[segIndex] = updatedSeg;
                         onUpdateTrip({ ...trip, segments: newSegments });
@@ -313,14 +305,6 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                         });
                         setShowAllProfiles(false);
 
-                        if (updatedSeg.source === 'router') {
-                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-                          if (coords.length >= 2) {
-                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
-                          } else {
-                            delete (updatedSeg as any).geometry;
-                          }
-                        }
                         
                         newSegments[segIndex] = updatedSeg;
                         onUpdateTrip({ ...trip, segments: newSegments });
@@ -372,14 +356,6 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                         });
                         setShowAllProfiles(false);
 
-                        if (updatedSeg.source === 'router') {
-                          const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-                          if (coords.length >= 2) {
-                            updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
-                          } else {
-                            delete (updatedSeg as any).geometry;
-                          }
-                        }
                         
                         newSegments[segIndex] = updatedSeg;
                         onUpdateTrip({ ...trip, segments: newSegments });
@@ -413,14 +389,6 @@ export function SegmentInfo({ isReadOnly, segmentId, trip, allTrips, onGoBack, o
                const newSegments = [...trip.segments];
                const segIndex = newSegments.findIndex(s => s.id === segmentId);
                  const updatedSeg = { ...newSegments[segIndex], routingService: service, routingProfile: profile, source: 'router' as const };
-               if (updatedSeg.source === 'router') {
-                 const coords = updatedSeg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(wp => wp.coordinates);
-                 if (coords.length >= 2) {
-                   updatedSeg.geometry = await route(coords as [number, number][], updatedSeg.routingService, updatedSeg.routingProfile);
-                 } else {
-                   delete (updatedSeg as any).geometry;
-                 }
-               }
                newSegments[segIndex] = updatedSeg;
                onUpdateTrip({ ...trip, segments: newSegments });
              }}

@@ -21,9 +21,10 @@ permissions:
   id-token: write
 
 # Pages has one deployment per repository. Publish production and all open previews.
+# Let an active publication finish instead of cancelling its commit checks.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   plan:
@@ -79,10 +80,10 @@ jobs:
         run: npm ci
         working-directory: frontend
       - name: Type-check production deployments
-        if: ${{ !inputs.preview }}
+        if: ${{ !inputs.preview || !matrix.preview }}
         run: npm exec -- tsc -b
         working-directory: frontend
-      # PR validation type-checks separately. Production may predate PR tooling.
+      # PR validation type-checks separately; always check the production build.
       - name: Build site
         run: npm exec vite build -- --base="$SITE_BASE"
         working-directory: frontend

@@ -85,10 +85,14 @@ test('browser Back within a new trip preserves it and prompts only when leaving 
   const editorEntry = await page.evaluate(() => history.state.triploHistoryId);
   await page.getByTitle('Segment Info', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Segment Info', exact: true })).toBeVisible();
-  // Panel rendering can precede the effect that writes its history entry.
-  // Wait for that entry before starting another browser traversal.
+  // Traverse in the same turn as a detail edit, with a trip render pending.
+  // That render must not append another panel entry during popstate.
   await expect.poll(() => page.evaluate(() => history.state?.triploPanel?.panel)).toBe('segment');
-  await page.goBack();
+  await page.locator('.form-input').first().fill('Edited before Back');
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    history.back();
+  });
   await expect.poll(() => page.evaluate(() => history.state?.triploHistoryId)).toBe(editorEntry);
   await expect(page.locator('.title-input')).toHaveValue('Unsaved browser trip');
   await expect(unsavedDialog(page)).toHaveCount(0);

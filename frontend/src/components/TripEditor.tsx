@@ -8,7 +8,6 @@ import { MaterialIcon, getModeIcon } from './MaterialIcon';
 import { getModeColor, getModeName, getModeRoutingProfile } from '../utils/builtInModesPreferences';
 import { routingManager } from '../routing/RoutingService';
 import type { PersistingService } from '../persisting/PersistingService';
-import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { Dialog } from './Dialog';
 import { exportTripGPX, downloadFile } from '../utils/exportUtils';
 import { useCopySegmentMetadata } from '../utils/useCopySegmentMetadata';
@@ -701,7 +700,7 @@ export function TripEditor({
                         expectedWaypoints.some((w, idx) => w.id !== segToMutate.waypoints[idx].id);
 
         if (changed) {
-            newSegments.push(await updateSegmentRoute({ ...segToMutate, waypoints: expectedWaypoints }));
+            newSegments.push({ ...segToMutate, waypoints: expectedWaypoints });
         } else {
             newSegments.push(segToMutate);
         }
@@ -784,19 +783,6 @@ export function TripEditor({
     }, 100);
   };
 
-  const updateSegmentRoute = async (segment: Segment, oldSegState?: Segment): Promise<Segment> => {
-    if (segment.source === 'router') {
-        const oldSegment = oldSegState || trip.segments.find(s => s.id === segment.id);
-        const geometry = await optimizeSegmentRoute(segment, oldSegment);
-        if (!geometry) return { ...segment, geometry: undefined as any };
-        return { ...segment, geometry };
-      }
-      if (segment.waypoints.length < 2) {
-          return { ...segment, geometry: undefined as any };
-      }
-      return segment;
-    };
-
   const handleTransportModeSelect = async (segIndex: number, seg: Segment, mode: TransportMode, customMode?: CustomOtherMode) => {
     const newSegments = [...trip.segments];
     let routingService: string;
@@ -814,7 +800,7 @@ export function TripEditor({
       routingProfile = assignedProfile || defaultRouter.profile;
     }
 
-    newSegments[segIndex] = await updateSegmentRoute(resetClimateForModeChange(seg, {
+    newSegments[segIndex] = resetClimateForModeChange(seg, {
       ...seg,
       transportMode: customMode ? 'other' : mode,
       customIcon: customMode?.icon,
@@ -822,7 +808,7 @@ export function TripEditor({
       routingService,
       routingProfile,
       source: 'router' as const
-    }));
+    });
 
     onUpdateTrip({ ...trip, segments: newSegments });
   };
@@ -845,8 +831,8 @@ export function TripEditor({
         const newPrevSeg = { ...currSeg, waypoints: prevWaypoints };  
         const newCurrSeg = { ...prevSeg, waypoints: currWaypoints };  
 
-        newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);      
-        newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
+        newSegments[segIndex - 1] = newPrevSeg;
+        newSegments[segIndex] = newCurrSeg;
         onUpdateTrip({ ...trip, segments: newSegments });
         return;
     }
@@ -857,8 +843,8 @@ export function TripEditor({
     newPrevSeg.waypoints.pop();
     newCurrSeg.waypoints.unshift(boundaryWaypoint);
 
-    newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);        
-    newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
+    newSegments[segIndex - 1] = newPrevSeg;
+    newSegments[segIndex] = newCurrSeg;
     onUpdateTrip({ ...trip, segments: newSegments });
   };
 
@@ -875,8 +861,8 @@ export function TripEditor({
           const newCurrSeg = { ...nextSeg, waypoints: [...currSeg.waypoints] };
           const newNextSeg = { ...currSeg, waypoints: [...nextSeg.waypoints] };
 
-          newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);        
-          newSegments[segIndex + 1] = await updateSegmentRoute(newNextSeg);    
+          newSegments[segIndex] = newCurrSeg;
+          newSegments[segIndex + 1] = newNextSeg;
           onUpdateTrip({ ...trip, segments: newSegments });
           return;
       }
@@ -892,8 +878,8 @@ export function TripEditor({
       newPrevSeg.waypoints.push(boundaryWaypoint);
       newCurrSeg.waypoints.shift();
 
-      newSegments[segIndex - 1] = await updateSegmentRoute(newPrevSeg);        
-      newSegments[segIndex] = await updateSegmentRoute(newCurrSeg);
+      newSegments[segIndex - 1] = newPrevSeg;
+      newSegments[segIndex] = newCurrSeg;
       onUpdateTrip({ ...trip, segments: newSegments });
   };
 
@@ -904,7 +890,7 @@ export function TripEditor({
     const currSeg = newSegments[segIndex];
 
     prevSeg.waypoints.push(...currSeg.waypoints.slice(1));
-    newSegments[segIndex - 1] = await updateSegmentRoute(prevSeg);
+    newSegments[segIndex - 1] = prevSeg;
     newSegments.splice(segIndex, 1);
     onUpdateTrip({ ...trip, segments: newSegments });
   };
@@ -941,8 +927,8 @@ export function TripEditor({
     newSegments.splice(
       segIndex, 
       1, 
-      await updateSegmentRoute(firstPart), 
-      await updateSegmentRoute(secondPart)
+      firstPart,
+      secondPart
     );
     onUpdateTrip({ ...trip, segments: newSegments });
   }, [trip, onUpdateTrip]);

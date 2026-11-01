@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { FlightProfileTripsContext } from './climate/flightProfileTrips';
 import './styles/App.css';
@@ -8,10 +8,13 @@ import './styles/TripEditor.css';
 import './styles/WaypointInfo.css';
 import './styles/StatusPanel.css';
 import './styles/Mobile.css';
-import type { CountryPart, Trip } from '../../shared/types';
+import type { CountryPart, Segment, Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
+import { routingInputKey, routingWaypointIds } from './routing/pendingRoute';
+import type { PendingRouteViews } from './routing/pendingRoute';
+import { segmentKey } from './countries/types';
 import { computeTripCaches } from './utils/distance';
 import { slugify } from './utils/slugify';
 
@@ -219,7 +222,6 @@ export default function App() {
   const [analyticsSegmentInfo, setAnalyticsSegmentInfo] = useState<{ tripId: string; segmentId: string } | null>(null);
   const [analyticsSelection, setAnalyticsSelection] = useState<AnalyticsSelection>(emptyAnalyticsSelection);
   const analyticsModeFilter = analyticsSelection.mode;
-  const setAnalyticsModeFilter = (mode: string | null) => setAnalyticsSelection(value => ({ ...value, mode }));
   const analyticsStyleSegment = analyticsSegmentInfo
     ? trips.find(trip => trip.id === analyticsSegmentInfo.tripId)?.segments.find(segment => segment.id === analyticsSegmentInfo.segmentId) || null
     : null;
@@ -248,7 +250,10 @@ export default function App() {
   const selectedTripRef = useRef(selectedTrip);
   const serializedTripVersionsRef = useRef<Trip[]>([]);
   const historyInitializedRef = useRef(false);
-  const historyUpdateModeRef = useRef<'replace' | null>(null);
+  const historyUpdateModeRef = useRef<'replace' | 'close' | null>(null);
+  const pendingRoutesRef = useRef(new globalThis.Map<string, symbol>());
+  const [pendingRouteViews, setPendingRouteViews] = useState<PendingRouteViews>({});
+  const pendingRouteViewsRef = useRef<PendingRouteViews>({});
   const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
   const panelHistoryEntriesRef = useRef<{ id: string; panel: PanelHistoryState }[]>([]);
   const panelHistoryIndexRef = useRef(0);
@@ -256,10 +261,19 @@ export default function App() {
   const tempTripExitHistoryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const live = new Set([...trips, ...(selectedTrip ? [selectedTrip] : [])].flatMap(trip => trip.segments.map(segment => segmentKey(trip.id, segment.id))));
+    const views = pendingRouteViewsRef.current;
+    const entries = Object.entries(views).filter(([key]) => live.has(key));
+    if (entries.length === Object.keys(views).length) return;
+    pendingRouteViewsRef.current = Object.fromEntries(entries);
+    setPendingRouteViews(pendingRouteViewsRef.current);
+  }, [trips, selectedTrip]);
+
+  useLayoutEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     selectedTripRef.current = selectedTrip;
   }, [selectedTrip]);
 
@@ -303,6 +317,8 @@ export default function App() {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
+    if (isSearchOpen && !isAnalyticsOpen) return { panel: 'search', tripId: selectedTrip?.id,
+      segmentId: selectedSegmentId || undefined, waypointId: selectedWaypointId || undefined, poi: selectedPOI || undefined };
     if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id, ...(isAnalyticsOpen ? { analyticsSelection, analyticsSegmentInfo: analyticsSegmentInfo || undefined } : {}) };
     if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter, analyticsSelection };
     if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter, analyticsSelection };
@@ -325,7 +341,10 @@ export default function App() {
     JSON.stringify(a?.analyticsSelection) === JSON.stringify(b.analyticsSelection) &&
     a?.styleConfigId === b.styleConfigId;
 
-  useEffect(() => {
+  // History must match the committed panel before paint. A deferred effect from
+  // the old panel can otherwise run during popstate's flushSync and push an
+  // extra entry after the browser has already traversed Back or Forward.
+  useLayoutEffect(() => {
     const panelState = getPanelHistoryState();
     const updateMode = historyUpdateModeRef.current;
 
@@ -338,7 +357,7 @@ export default function App() {
     const entries = panelHistoryEntriesRef.current;
     const index = panelHistoryIndexRef.current;
     const key = panelHistoryKey(panelState);
-    if (analyticsTransition && nextPath.length < previousPath.length) {
+    if (updateMode === 'close' || (analyticsTransition && nextPath.length < previousPath.length)) {
       const ancestor = entries.slice(0, index).findLastIndex(entry => panelHistoryKey(entry.panel) === key);
       if (ancestor >= 0) {
         pendingPanelHistoryRef.current = { id: entries[ancestor].id, panel: panelState };
@@ -348,7 +367,7 @@ export default function App() {
       }
     }
 
-    const replace = !historyInitializedRef.current || updateMode === 'replace' || !!(analyticsTransition && nextPath.length <= previousPath.length);
+    const replace = !historyInitializedRef.current || !!updateMode || !!(analyticsTransition && nextPath.length <= previousPath.length);
     const entry = { id: replace && entries[index] ? entries[index].id : crypto.randomUUID(), panel: panelState };
     const browserState = { triploPanel: panelState, triploHistoryId: entry.id } satisfies AppHistoryState;
     if (replace) {
@@ -366,29 +385,34 @@ export default function App() {
   const replacePanelHistoryOnNextRender = () => {
     historyUpdateModeRef.current = 'replace';
   };
+  const closePanelHistoryOnNextRender = () => {
+    historyUpdateModeRef.current = 'close';
+  };
 
   const goBackPanel = () => {
-    if (isAnalyticsOpen) { window.history.back(); return; }
-    replacePanelHistoryOnNextRender();
-    if (isSearchOpen) {
+    closePanelHistoryOnNextRender();
+    if (isPreferencesOpen) {
+      if (editingStyleConfigId) setEditingStyleConfigId(null);
+      else setIsPreferencesOpen(false);
+    } else if (isStatusOpen) {
+      setIsStatusOpen(false);
+    } else if (isSearchOpen && !isAnalyticsOpen) {
       setIsSearchOpen(false);
     } else if (selectedPOI) {
       setSelectedPOI(null);
+    } else if (isAnalyticsOpen) {
+      if (analyticsSegmentInfo) setAnalyticsSegmentInfo(null);
+      else {
+        setIsAnalyticsOpen(false);
+        setAnalyticsSelection(emptyAnalyticsSelection);
+      }
+    } else if (isSearchOpen) {
+      setIsSearchOpen(false);
     } else if (selectedSegmentId) {
       setSelectedSegmentId(null);
     } else if (selectedWaypointId) {
       setSelectedWaypointId(null);
       setAttachingPoiToWaypointId(null);
-    } else if (isPreferencesOpen || isStatusOpen || isAnalyticsOpen) {
-      if (analyticsSegmentInfo) {
-        setAnalyticsSegmentInfo(null);
-      } else {
-        setIsPreferencesOpen(false);
-        setIsStatusOpen(false);
-        setIsAnalyticsOpen(false);
-        setEditingStyleConfigId(null);
-        setAnalyticsModeFilter(null);
-      }
     }
   };
 
@@ -429,9 +453,9 @@ export default function App() {
         || (selectedTripRef.current?.id === panelState.tripId ? selectedTripRef.current : null) : null;
       flushSync(() => {
         setSelectedTrip(trip);
-        setSelectedSegmentId(panelState.panel === 'segment' ? panelState.segmentId || null : null);
-        setSelectedWaypointId(panelState.panel === 'waypoint' ? panelState.waypointId || null : null);
-        setSelectedPOI(panelState.panel === 'poi' ? panelState.poi || null : null);
+        setSelectedSegmentId(panelState.panel === 'segment' || panelState.panel === 'search' ? panelState.segmentId || null : null);
+        setSelectedWaypointId(panelState.panel === 'waypoint' || panelState.panel === 'search' ? panelState.waypointId || null : null);
+        setSelectedPOI(panelState.panel === 'poi' || panelState.panel === 'search' ? panelState.poi || null : null);
         setIsSearchOpen(panelState.panel === 'search');
         setIsStatusOpen(panelState.panel === 'status');
         setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
@@ -674,10 +698,10 @@ export default function App() {
     setSelectedTrip(savedTrip);
   };
 
-  const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean = false, affectedSegmentIds?: string[]) => {
+  const updateTripState = (tripId: string, newTrip: Trip, replaceLastHistory: boolean | 'background' = false, affectedSegmentIds?: string[]) => {
+    const currentTrip = tripsRef.current.find(t => t.id === tripId) || (selectedTripRef.current?.id === tripId ? selectedTripRef.current : null);
     let affectedSegments = affectedSegmentIds;
     if (!affectedSegments) {
-      const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
       if (currentTrip && currentTrip.segments.length > 0) {
         affectedSegments = newTrip.segments
           .filter(newSeg => {
@@ -688,7 +712,6 @@ export default function App() {
       }
     }
 
-    const currentTrip = trips.find(t => t.id === tripId) || selectedTrip;
     const segments = newTrip.segments.map(segment => {
       const previous = currentTrip?.segments.find(old => old.id === segment.id);
       if ((!segment.countryParts && !segment.countryDistances) || (previous && sameCountryInputs(previous, segment) && !(segment.countryParts && segment.geometry))) return segment;
@@ -699,24 +722,128 @@ export default function App() {
       return content;
     });
     const cachedTrip = computeTripCaches({ ...newTrip, segments }, affectedSegments);
+    tripsRef.current = tripsRef.current.map(t => t.id === tripId ? cachedTrip : t);
     setTrips(prev => prev.map(t => t.id === tripId ? cachedTrip : t));
 
-    setHistories(prev => {
+    if (replaceLastHistory !== 'background') setHistories(prev => {
       const h = prev[tripId] || { past: [], future: [], lastSavedStr: '' };
-      const currentTrip = trips.find(t => t.id === tripId) || (selectedTrip?.id === tripId ? selectedTrip : cachedTrip);
       return {
         ...prev,
         [tripId]: {
-          past: replaceLastHistory ? h.past : [...h.past, currentTrip],
+          past: replaceLastHistory ? h.past : [...h.past, currentTrip || cachedTrip],
           future: [],
           lastSavedStr: h.lastSavedStr
         }
       };
     });
     
-    if (selectedTrip?.id === tripId) {
+    if (selectedTripRef.current?.id === tripId) {
+      selectedTripRef.current = cachedTrip;
       setSelectedTrip(cachedTrip);
     }
+  };
+
+  const updateTripAndRoute = (newTrip: Trip, replaceLastHistory = false) => {
+    const current = tripsRef.current.find(trip => trip.id === newTrip.id) || selectedTripRef.current;
+    const requests: { segment: Segment; previous?: Segment; key: string; token: symbol }[] = [];
+    const pendingSegmentIds = new Set<string>();
+    let views = pendingRouteViewsRef.current;
+    const segments = newTrip.segments.map(segment => {
+      const previous = current?.segments.find(old => old.id === segment.id);
+      if (segment.source !== 'router' || segment.routingService === 'gpx' || segment.routingProfile === 'Imported GPX'
+        || (previous && routingInputKey(previous) === routingInputKey(segment))) return segment;
+      // Keep completed geometry and cached distances while waypoints change.
+      // Re-snapping distances to the edited waypoints waits for the routing result.
+      const coordinates = segment.waypoints.filter(waypoint => waypoint.coordinates?.length === 2).map(waypoint => waypoint.coordinates);
+      const pending: Segment = { ...segment, geometry: undefined };
+      delete pending.countryParts;
+      delete pending.countryDistances;
+      delete pending.distanceStats;
+      delete pending.waypointDistances;
+      delete pending.climateImpact;
+      // Flight geometry is already generated from waypoints by getEffectiveGeometry.
+      // A second routing result would only restart country calculation needlessly.
+      const key = segmentKey(newTrip.id, segment.id);
+      if (segment.transportMode === 'flight' || coordinates.length < 2) {
+        if (coordinates.length >= 2) pending.geometry = { type: 'LineString', coordinates };
+        if (views[key]) { const next = { ...views }; delete next[key]; views = next; }
+        pendingRoutesRef.current.delete(key);
+        return pending;
+      }
+      const existing = views[key];
+      const retained = existing && previous && existing.inputKey === routingInputKey(previous) ? existing : undefined;
+      const original = retained ? retained.original : previous;
+      pending.geometry = original ? getSegmentGeometry(original) : undefined;
+      pending.distanceStats = previous?.distanceStats || { totalDistance: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 };
+      pending.waypointDistances = previous?.waypointDistances || [];
+      pendingSegmentIds.add(pending.id);
+      views = { ...views, [key]: {
+        inputKey: routingInputKey(pending), original,
+        geometry: retained?.geometry || (original ? getEffectiveGeometry(original) : { type: 'MultiLineString', coordinates: [] }),
+        countryPieces: retained?.countryPieces || countries.data?.results[key]?.pieces,
+        waypointIds: routingWaypointIds(pending, original), pending: true,
+      } };
+      const token = Symbol();
+      pendingRoutesRef.current.set(key, token);
+      requests.push({ segment: pending, previous: original, key, token });
+      return pending;
+    });
+    if (views !== pendingRouteViewsRef.current) {
+      pendingRouteViewsRef.current = views;
+      setPendingRouteViews(views);
+    }
+    const affected = segments.filter(segment => !pendingSegmentIds.has(segment.id)
+      && current?.segments.find(previous => previous.id === segment.id) !== segment).map(segment => segment.id);
+    updateTripState(newTrip.id, { ...newTrip, segments }, replaceLastHistory, affected);
+    // Give the new editor and highlight a frame before routing/post-processing.
+    if (requests.length) requestAnimationFrame(() => setTimeout(() => {
+      for (const request of requests) {
+        let completed = false;
+        void optimizeSegmentRoute(request.segment, request.previous).then(geometry => {
+          if (!geometry) return;
+          const latest = tripsRef.current.find(trip => trip.id === newTrip.id)
+            || (selectedTripRef.current?.id === newTrip.id ? selectedTripRef.current : null);
+          const target = latest?.segments.find(segment => segment.id === request.segment.id);
+          const inputKey = routingInputKey(request.segment);
+          if (latest && target && pendingRoutesRef.current.get(request.key) === request.token && routingInputKey(target) === inputKey) {
+            updateTripState(latest.id, { ...latest, segments: latest.segments.map(segment => segment === target ? { ...segment, geometry } : segment) }, 'background', [target.id]);
+          }
+          // Resolve matching undo/redo snapshots too. In particular, Undo while a
+          // request is pending must not leave Redo with a provisional line forever.
+          setHistories(previous => {
+            const history = previous[newTrip.id];
+            if (!history) return previous;
+            const resolve = (snapshot: Trip): Trip => {
+              let changed = false;
+              const segments = snapshot.segments.map(segment => {
+                if (segment.id !== request.segment.id || routingInputKey(segment) !== inputKey || segment.geometry === geometry) return segment;
+                changed = true;
+                const resolved = { ...segment, geometry };
+                delete resolved.countryParts;
+                delete resolved.countryDistances;
+                delete resolved.distanceStats;
+                delete resolved.waypointDistances;
+                delete resolved.climateImpact;
+                return resolved;
+              });
+              return changed ? { ...snapshot, segments, tripDistanceSummary: undefined } : snapshot;
+            };
+            return { ...previous, [newTrip.id]: { ...history, past: history.past.map(resolve), future: history.future.map(resolve) } };
+          });
+          completed = true;
+        }).catch(error => console.error('Failed to update route', error)).finally(() => {
+          if (pendingRoutesRef.current.get(request.key) !== request.token) return;
+          pendingRoutesRef.current.delete(request.key);
+          const view = pendingRouteViewsRef.current[request.key];
+          if (!view) return;
+          const next = { ...pendingRouteViewsRef.current };
+          if (completed) delete next[request.key];
+          else next[request.key] = { ...view, pending: false };
+          pendingRouteViewsRef.current = next;
+          setPendingRouteViews(next);
+        });
+      }
+    }, 0));
   };
 
   const handleSetHighlightedWaypointId = useCallback((id: string | null) => {
@@ -727,7 +854,6 @@ export default function App() {
   const handleCoordinateChange = async (trip: Trip, wpId: string, coords: [number, number]) => {
     const newSegments = [...trip.segments];
     let changed = false;
-    const affectedSegmentIds: string[] = [];
 
     for (let i = 0; i < newSegments.length; i++) {
       const seg = { ...newSegments[i] };
@@ -735,23 +861,13 @@ export default function App() {
       if (wpIdx > -1) {
         seg.waypoints = seg.waypoints.map(w => w.id === wpId ? { ...w, coordinates: coords } : w);
         
-        if (seg.source === 'router') {
-            const validCoords = seg.waypoints.filter(w => w.coordinates && w.coordinates.length === 2).map(w => w.coordinates);
-            if (validCoords.length >= 2) {
-              const optimizedGeometry = await optimizeSegmentRoute(seg, trip.segments[i]);
-              if (optimizedGeometry) {
-                seg.geometry = optimizedGeometry;
-              }
-            }
-        }
         newSegments[i] = seg;
         changed = true;
-        affectedSegmentIds.push(seg.id);
       }
     }
 
     if (changed) {
-      updateTripState(trip.id, { ...trip, segments: newSegments }, false, affectedSegmentIds);
+      updateTripAndRoute({ ...trip, segments: newSegments });
     }
   };
 
@@ -760,7 +876,7 @@ export default function App() {
     const h = histories[selectedTrip.id];
     if (!h || h.past.length === 0) return;
 
-    const previousTrip = withClimateCache(h.past[h.past.length - 1]);
+    const previousTrip = computeTripCaches(h.past[h.past.length - 1], []);
     setTrips(prev => prev.map(t => t.id === selectedTrip.id ? previousTrip : t));
     setSelectedTrip(previousTrip);
 
@@ -782,7 +898,7 @@ export default function App() {
     const h = histories[selectedTrip.id];
     if (!h || h.future.length === 0) return;
 
-    const nextTrip = withClimateCache(h.future[0]);
+    const nextTrip = computeTripCaches(h.future[0], []);
     setTrips(prev => prev.map(t => t.id === selectedTrip.id ? nextTrip : t));
     setSelectedTrip(nextTrip);
 
@@ -1115,7 +1231,7 @@ export default function App() {
 
     const performGoBack = () => {
       if (!getSharedTripTokenFromPath()) {
-        replacePanelHistoryOnNextRender();
+        closePanelHistoryOnNextRender();
         setSelectedTrip(null);
         setSelectedSegmentId(null);
         setSelectedWaypointId(null);
@@ -1146,16 +1262,16 @@ export default function App() {
   };
 
   const handleGoBackSegment = () => {
-    replacePanelHistoryOnNextRender();
+    closePanelHistoryOnNextRender();
     setSelectedSegmentId(null);
   };
   const handleGoBackWaypoint = () => {
-    replacePanelHistoryOnNextRender();
+    closePanelHistoryOnNextRender();
     setSelectedWaypointId(null);
     setAttachingPoiToWaypointId(null);
   };
   const handleGoBackPOI = () => {
-    replacePanelHistoryOnNextRender();
+    closePanelHistoryOnNextRender();
     setSelectedPOI(null);
   };
 
@@ -1212,13 +1328,7 @@ export default function App() {
         }
       } else if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (hotkeyRefs.current.selectedSegmentId) {
-          hotkeyRefs.current.handleGoBackSegment();
-        } else if (hotkeyRefs.current.selectedWaypointId) {
-          hotkeyRefs.current.handleGoBackWaypoint();
-        } else if (hotkeyRefs.current.selectedTrip) {
-          hotkeyRefs.current.handleGoBackTripEditor();
-        }
+        window.history.back();
       } else if (e.key === 'Escape') {
         if (hotkeyRefs.current.selectedSegmentId) {
           e.preventDefault();
@@ -1465,7 +1575,7 @@ export default function App() {
       poi={selectedPOI}
       trip={selectedTrip}
       onGoBack={handleGoBackPOI}
-      onUpdateTrip={(newTrip) => updateTripState(newTrip.id, newTrip)}
+      onUpdateTrip={updateTripAndRoute}
       onStartNewTrip={(poi, details) => {
         handleCreateTrip(poi, details);
         setSelectedPOI(null);
@@ -1571,7 +1681,7 @@ export default function App() {
                   trip={targetTrip}
                   allTrips={trips}
                   onGoBack={goBackPanel}
-                  onUpdateTrip={(newTrip) => updateTripState(targetTrip.id, newTrip)}
+                  onUpdateTrip={updateTripAndRoute}
                   onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
                   onZoomToSegment={(seg) => {
                     if (window.innerWidth <= 768) {
@@ -1616,7 +1726,7 @@ export default function App() {
             trip={selectedTrip} 
             allTrips={trips}
             onGoBack={handleGoBackSegment} 
-            onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
+            onUpdateTrip={updateTripAndRoute}
             onHoverCoordinate={(coord) => mapComponentRef.current?.setHoveredCoordinate(coord)}
             onZoomToSegment={(seg) => {
               if (window.innerWidth <= 768) {
@@ -1632,7 +1742,7 @@ export default function App() {
             waypointId={selectedWaypointId} 
             trip={selectedTrip} 
             onGoBack={handleGoBackWaypoint}
-            onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
+            onUpdateTrip={updateTripAndRoute}
             setHighlightedWaypointId={setHighlightedWaypointId}
             attachingPoiToWaypointId={attachingPoiToWaypointId}
             setAttachingPoiToWaypointId={setAttachingPoiToWaypointId}
@@ -1714,7 +1824,7 @@ export default function App() {
             canRedo={!!histories[selectedTrip.id]?.future.length}
             onSave={async () => { await handleSave(); }}
             canSave={histories[selectedTrip.id]?.lastSavedStr !== stripMeta(selectedTrip)}
-            onUpdateTrip={(newTrip) => updateTripState(selectedTrip.id, newTrip)}
+            onUpdateTrip={updateTripAndRoute}
             onWaitingForCoords={(wpId) => {
               setWaitingWaypointId(wpId);
               waitingWaypointIdRef.current = wpId;
@@ -1725,6 +1835,7 @@ export default function App() {
       </div>
       {showSetupWizard && <SetupWizard onComplete={handleSetupWizardComplete} onStartBackgroundSync={loadTrips} />}
       <Map isReadOnly={isReadOnly}
+        pendingRouteViews={pendingRouteViews}
         ref={mapComponentRef}
         trips={trips}
         selectedTrip={selectedTrip}
@@ -1735,7 +1846,7 @@ export default function App() {
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}
-        updateTripState={updateTripState}
+        updateTripState={(_tripId, trip, replaceHistory) => updateTripAndRoute(trip, replaceHistory)}
         handleCoordinateChange={handleCoordinateChange}
         setSelectedWaypointId={setSelectedWaypointId}
         setHighlightedWaypointId={handleSetHighlightedWaypointId}

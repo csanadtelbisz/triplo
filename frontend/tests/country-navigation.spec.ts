@@ -86,6 +86,31 @@ test.beforeEach(async ({ page, context }) => {
   await page.getByTitle('Analytics', { exact: true }).click();
 });
 
+test('country focus fits nearby islands along with the mainland', async ({ page, context }) => {
+  await context.route('**/countries/index.json', route => route.fulfill({ json: {
+    version: 'focus-fixture-1', attribution: 'Test boundaries',
+    countries: countries.map(country => ({ ...country.entry,
+      landParts: country.entry.code === 'AA' ? [country.entry.landBounds, [-3, -3, -2.5, -2.5]] : [country.entry.landBounds],
+    })),
+  } }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await groupAnalyticsBy(page, 'countries');
+  await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+  await page.evaluate(() => {
+    const state = window as unknown as { testMap: import('maplibre-gl').Map; countryFocusFit: number[][] };
+    const map = state.testMap;
+    const cameraForBounds = map.cameraForBounds.bind(map);
+    map.cameraForBounds = (bounds, options) => {
+      state.countryFocusFit = (bounds as import('maplibre-gl').LngLatBounds).toArray();
+      return cameraForBounds(bounds, options);
+    };
+  });
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { countryFocusFit: number[][] }).countryFocusFit))
+    .toEqual([[-3, -3], [0, 2]]);
+});
+
 test('country → mode → details supports Back/Forward and crops disconnected pieces', async ({ page }) => {
   await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
@@ -159,7 +184,42 @@ test('clearing a transport selection skips the old mode on Back', async ({ page 
   await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
 });
 
-test('country and mode deselection, view toggles, and panel arrows preserve logical parents', async ({ page }) => {
+test('panel Back closes filtered Analytics while browser Back clears one filter at a time', async ({ page }) => {
+  await groupAnalyticsBy(page, 'countries');
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.goBack();
+  await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+  const managerEntry = await page.evaluate(() => history.state.triploHistoryId);
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await groupAnalyticsBy(page, 'countries');
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => history.state.triploHistoryId)).toBe(managerEntry);
+});
+
+test('closing segment details preserves Analytics filters instead of closing Analytics', async ({ page }) => {
+  await groupAnalyticsBy(page, 'countries');
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
+  await page.getByTitle('Open segment info', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Segment Info', exact: true })).toBeVisible();
+  await page.locator('.sidebar .toolbar:visible button').first().click();
+  await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await expect(page.getByTitle('Analytics', { exact: true })).toBeVisible();
+});
+
+test('country and mode deselection and view toggles preserve logical parents', async ({ page }) => {
   const globe = page.locator('[data-analytics-grouping]');
   await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
@@ -167,7 +227,7 @@ test('country and mode deselection, view toggles, and panel arrows preserve logi
   await car.click();
   await car.click();
   await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
-  await page.getByTitle('Close Analytics', { exact: true }).click();
+  await page.getByRole('button', { name: /Country A/ }).click();
   await expect(page.getByRole('button', { name: /Country B/ })).toBeVisible();
   await groupAnalyticsBy(page, 'modes');
   await groupAnalyticsBy(page, 'countries');
