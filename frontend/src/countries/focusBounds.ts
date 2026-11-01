@@ -1,7 +1,7 @@
 import type { Bounds } from './types';
 
 const KM_PER_DEGREE = Math.PI * 6371.0088 / 180;
-const DEFAULT_ISLAND_DISTANCE_KM = 500;
+const DEFAULT_ISLAND_DISTANCE_KM = 200;
 const ROUTE_MARGIN_DEGREES = 0.2;
 
 /** Put a box on the world copy nearest the anchor, including across ±180°. */
