@@ -260,12 +260,21 @@ export class GoogleDrivePersistingService extends PersistingService {
     try {
       const folderId = await this.getOrCreateFolder();
       const q = encodeURIComponent(`'${folderId}' in parents and name contains '.triplo.json' and trashed=false`);
-      const res = await this.request(`files?q=${q}&spaces=drive&fields=files(id, name)`);
+      const files: { id: string; name: string }[] = [];
+      let pageToken: string | undefined;
+      do {
+        // Drive can return short or empty pages before the end of the listing.
+        // Only the absence of nextPageToken means every trip has been listed.
+        const nextPage = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+        const res = await this.request(`files?q=${q}&spaces=drive&pageSize=1000&fields=nextPageToken,files(id,name)${nextPage}`);
+        files.push(...(res.files || []));
+        pageToken = res.nextPageToken;
+      } while (pageToken);
 
-      if (!res.files || res.files.length === 0) return [];
+      if (files.length === 0) return [];
 
       const trips: any[] = [];
-      const filePromises = res.files.map(async (file: any) => {
+      const filePromises = files.map(async file => {
         try {
            const fileData = await this.request(`files/${file.id}?alt=media`);
            const tripObj = typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
