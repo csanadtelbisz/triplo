@@ -189,7 +189,7 @@ test('panel Back closes filtered Analytics while browser Back clears one filter 
   await page.getByRole('button', { name: /Country A/ }).click();
   await page.locator('.analytics-summary-row').filter({ hasText: 'car' }).click();
   await expect(page.getByTitle('Open segment info', { exact: true })).toBeVisible();
-  await page.goBack();
+  await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTitle('Open segment info', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Country A/ })).toHaveAttribute('aria-pressed', 'true');
   await page.goBack();

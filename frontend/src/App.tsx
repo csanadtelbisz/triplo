@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { FlightProfileTripsContext } from './climate/flightProfileTrips';
 import './styles/App.css';
@@ -259,11 +259,11 @@ export default function App() {
   const pendingPanelHistoryRef = useRef<{ id: string; panel: PanelHistoryState } | null>(null);
   const tempTripExitHistoryIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     tripsRef.current = trips;
   }, [trips]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     selectedTripRef.current = selectedTrip;
   }, [selectedTrip]);
 
@@ -331,7 +331,10 @@ export default function App() {
     JSON.stringify(a?.analyticsSelection) === JSON.stringify(b.analyticsSelection) &&
     a?.styleConfigId === b.styleConfigId;
 
-  useEffect(() => {
+  // History must match the committed panel before paint. A deferred effect from
+  // the old panel can otherwise run during popstate's flushSync and push an
+  // extra entry after the browser has already traversed Back or Forward.
+  useLayoutEffect(() => {
     const panelState = getPanelHistoryState();
     const updateMode = historyUpdateModeRef.current;
 
@@ -1279,13 +1282,7 @@ export default function App() {
         }
       } else if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (hotkeyRefs.current.selectedSegmentId) {
-          hotkeyRefs.current.handleGoBackSegment();
-        } else if (hotkeyRefs.current.selectedWaypointId) {
-          hotkeyRefs.current.handleGoBackWaypoint();
-        } else if (hotkeyRefs.current.selectedTrip) {
-          hotkeyRefs.current.handleGoBackTripEditor();
-        }
+        window.history.back();
       } else if (e.key === 'Escape') {
         if (hotkeyRefs.current.selectedSegmentId) {
           e.preventDefault();
