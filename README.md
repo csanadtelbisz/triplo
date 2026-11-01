@@ -158,10 +158,12 @@ When a selected routing service is unavailable, the routing manager falls back
 to straight lines. A displayed rail segment therefore does not imply that its
 geometry follows railway tracks.
 
-Waypoint additions and editor route changes update the editor immediately with
-a provisional straight line. Routing starts after the UI can paint; the returned
-geometry and statistics update later without adding an Undo step. Late responses
-cannot overwrite newer waypoint edits or a change that was undone.
+Waypoint additions and editor route changes update the waypoints immediately.
+The map retains the last completed route until routing finishes, with pulsing
+halos around the endpoints of changed legs (static rings for reduced motion).
+Geometry and statistics update later without adding an Undo step. Late responses
+cannot overwrite newer waypoint edits or a change that was undone. Failed requests
+stop the halos and keep the last completed route visible.
 
 Triplo includes an installable web app manifest. Its current service worker does
 not cache the application or map tiles for offline use; browser trip storage

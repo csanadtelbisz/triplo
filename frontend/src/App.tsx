@@ -12,6 +12,9 @@ import type { CountryPart, Segment, Trip } from '../../shared/types';
 import { TripAPI } from './api/client';
 // Imports removed or used
 import { optimizeSegmentRoute } from './routing/routeOptimizer';
+import { routingInputKey, routingWaypointIds } from './routing/pendingRoute';
+import type { PendingRouteViews } from './routing/pendingRoute';
+import { segmentKey } from './countries/types';
 import { computeTripCaches } from './utils/distance';
 import { slugify } from './utils/slugify';
 
@@ -49,10 +52,6 @@ import { serializeTrip } from './utils/serializeTrip';
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
-const routingInputKey = (segment: Segment) => JSON.stringify([
-  segment.source, segment.routingService, segment.routingProfile, segment.transportMode,
-  segment.waypoints.map(waypoint => [waypoint.id, waypoint.coordinates]),
-]);
 
 const getSharedTripTokenFromPath = () => {
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -253,11 +252,22 @@ export default function App() {
   const historyInitializedRef = useRef(false);
   const historyUpdateModeRef = useRef<'replace' | 'close' | null>(null);
   const pendingRoutesRef = useRef(new globalThis.Map<string, symbol>());
+  const [pendingRouteViews, setPendingRouteViews] = useState<PendingRouteViews>({});
+  const pendingRouteViewsRef = useRef<PendingRouteViews>({});
   const currentPanelHistoryRef = useRef<PanelHistoryState | null>(null);
   const panelHistoryEntriesRef = useRef<{ id: string; panel: PanelHistoryState }[]>([]);
   const panelHistoryIndexRef = useRef(0);
   const pendingPanelHistoryRef = useRef<{ id: string; panel: PanelHistoryState } | null>(null);
   const tempTripExitHistoryIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const live = new Set([...trips, ...(selectedTrip ? [selectedTrip] : [])].flatMap(trip => trip.segments.map(segment => segmentKey(trip.id, segment.id))));
+    const views = pendingRouteViewsRef.current;
+    const entries = Object.entries(views).filter(([key]) => live.has(key));
+    if (entries.length === Object.keys(views).length) return;
+    pendingRouteViewsRef.current = Object.fromEntries(entries);
+    setPendingRouteViews(pendingRouteViewsRef.current);
+  }, [trips, selectedTrip]);
 
   useLayoutEffect(() => {
     tripsRef.current = trips;
@@ -733,17 +743,19 @@ export default function App() {
     }
   };
 
-  const updateTripAndRoute = (newTrip: Trip) => {
+  const updateTripAndRoute = (newTrip: Trip, replaceLastHistory = false) => {
     const current = tripsRef.current.find(trip => trip.id === newTrip.id) || selectedTripRef.current;
     const requests: { segment: Segment; previous?: Segment; key: string; token: symbol }[] = [];
+    const pendingSegmentIds = new Set<string>();
+    let views = pendingRouteViewsRef.current;
     const segments = newTrip.segments.map(segment => {
       const previous = current?.segments.find(old => old.id === segment.id);
       if (segment.source !== 'router' || segment.routingService === 'gpx' || segment.routingProfile === 'Imported GPX'
         || (previous && routingInputKey(previous) === routingInputKey(segment))) return segment;
-      // Use a small provisional line, avoiding distance/snapping work against the
-      // old full route before the editor can display the new waypoint order.
+      // Keep completed geometry and cached distances while waypoints change.
+      // Re-snapping distances to the edited waypoints waits for the routing result.
       const coordinates = segment.waypoints.filter(waypoint => waypoint.coordinates?.length === 2).map(waypoint => waypoint.coordinates);
-      const pending: Segment = { ...segment, geometry: coordinates.length >= 2 ? { type: 'LineString', coordinates } : undefined };
+      const pending: Segment = { ...segment, geometry: undefined };
       delete pending.countryParts;
       delete pending.countryDistances;
       delete pending.distanceStats;
@@ -751,17 +763,42 @@ export default function App() {
       delete pending.climateImpact;
       // Flight geometry is already generated from waypoints by getEffectiveGeometry.
       // A second routing result would only restart country calculation needlessly.
-      if (segment.transportMode === 'flight') return pending;
-      const key = JSON.stringify([newTrip.id, segment.id]);
+      const key = segmentKey(newTrip.id, segment.id);
+      if (segment.transportMode === 'flight' || coordinates.length < 2) {
+        if (coordinates.length >= 2) pending.geometry = { type: 'LineString', coordinates };
+        if (views[key]) { const next = { ...views }; delete next[key]; views = next; }
+        pendingRoutesRef.current.delete(key);
+        return pending;
+      }
+      const existing = views[key];
+      const retained = existing && previous && existing.inputKey === routingInputKey(previous) ? existing : undefined;
+      const original = retained ? retained.original : previous;
+      pending.geometry = original ? getSegmentGeometry(original) : undefined;
+      pending.distanceStats = previous?.distanceStats || { totalDistance: 0, hasElevation: false, elevationUp: 0, elevationDown: 0 };
+      pending.waypointDistances = previous?.waypointDistances || [];
+      pendingSegmentIds.add(pending.id);
+      views = { ...views, [key]: {
+        inputKey: routingInputKey(pending), original,
+        geometry: retained?.geometry || (original ? getEffectiveGeometry(original) : { type: 'MultiLineString', coordinates: [] }),
+        countryPieces: retained?.countryPieces || countries.data?.results[key]?.pieces,
+        waypointIds: routingWaypointIds(pending, original), pending: true,
+      } };
       const token = Symbol();
       pendingRoutesRef.current.set(key, token);
-      requests.push({ segment: pending, previous, key, token });
+      requests.push({ segment: pending, previous: original, key, token });
       return pending;
     });
-    updateTripState(newTrip.id, { ...newTrip, segments });
+    if (views !== pendingRouteViewsRef.current) {
+      pendingRouteViewsRef.current = views;
+      setPendingRouteViews(views);
+    }
+    const affected = segments.filter(segment => !pendingSegmentIds.has(segment.id)
+      && current?.segments.find(previous => previous.id === segment.id) !== segment).map(segment => segment.id);
+    updateTripState(newTrip.id, { ...newTrip, segments }, replaceLastHistory, affected);
     // Give the new editor and highlight a frame before routing/post-processing.
     if (requests.length) requestAnimationFrame(() => setTimeout(() => {
       for (const request of requests) {
+        let completed = false;
         void optimizeSegmentRoute(request.segment, request.previous).then(geometry => {
           if (!geometry) return;
           const latest = tripsRef.current.find(trip => trip.id === newTrip.id)
@@ -793,8 +830,17 @@ export default function App() {
             };
             return { ...previous, [newTrip.id]: { ...history, past: history.past.map(resolve), future: history.future.map(resolve) } };
           });
+          completed = true;
         }).catch(error => console.error('Failed to update route', error)).finally(() => {
-          if (pendingRoutesRef.current.get(request.key) === request.token) pendingRoutesRef.current.delete(request.key);
+          if (pendingRoutesRef.current.get(request.key) !== request.token) return;
+          pendingRoutesRef.current.delete(request.key);
+          const view = pendingRouteViewsRef.current[request.key];
+          if (!view) return;
+          const next = { ...pendingRouteViewsRef.current };
+          if (completed) delete next[request.key];
+          else next[request.key] = { ...view, pending: false };
+          pendingRouteViewsRef.current = next;
+          setPendingRouteViews(next);
         });
       }
     }, 0));
@@ -1789,6 +1835,7 @@ export default function App() {
       </div>
       {showSetupWizard && <SetupWizard onComplete={handleSetupWizardComplete} onStartBackgroundSync={loadTrips} />}
       <Map isReadOnly={isReadOnly}
+        pendingRouteViews={pendingRouteViews}
         ref={mapComponentRef}
         trips={trips}
         selectedTrip={selectedTrip}
@@ -1799,7 +1846,7 @@ export default function App() {
         waitingWaypointId={waitingWaypointId}
         waitingWaypointIdRef={waitingWaypointIdRef}
         setWaitingWaypointId={setWaitingWaypointId}
-        updateTripState={updateTripState}
+        updateTripState={(_tripId, trip, replaceHistory) => updateTripAndRoute(trip, replaceHistory)}
         handleCoordinateChange={handleCoordinateChange}
         setSelectedWaypointId={setSelectedWaypointId}
         setHighlightedWaypointId={handleSetHighlightedWaypointId}

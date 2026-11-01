@@ -5,7 +5,8 @@ import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBou
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '../styles/Map.css';
 // Removed unused route import
-import { optimizeSegmentRoute } from '../routing/routeOptimizer';
+import { routingInputKey } from '../routing/pendingRoute';
+import type { PendingRouteViews } from '../routing/pendingRoute';
 import { getModeColor } from '../utils/builtInModesPreferences';
 import { MAP_STYLES, POI_LAYERS, MARKER_HIDE_THRESHOLD, getMapStyleUrl } from '../config/mapStyles';
 import { getApiKey } from '../utils/apiKeyPreferences';
@@ -36,6 +37,8 @@ import type { AnalyticsSelection } from '../countries/analytics';
 import { segmentKey, UNASSIGNED } from '../countries/types';
 import type { CountryData } from '../countries/types';
 
+const EMPTY_PENDING_ROUTE_VIEWS: PendingRouteViews = {};
+
 export interface MapRef {
     zoomToTrip: (trip: Trip, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
     zoomToSegment: (segment: Segment, targetSidebarState?: 'open' | 'collapsed' | 'current', targetView?: 'trip' | 'poi' | 'manager') => void;
@@ -47,6 +50,7 @@ export interface MapRef {
 }
 
 export interface MapProps {
+    pendingRouteViews?: PendingRouteViews;
     isReadOnly?: boolean;
     trips: Trip[];
     selectedTrip: Trip | null;
@@ -74,6 +78,7 @@ export interface MapProps {
 
 export const Map = forwardRef<MapRef, MapProps>(({
     isReadOnly = false,
+    pendingRouteViews = EMPTY_PENDING_ROUTE_VIEWS,
     trips,
     selectedTrip,
     waitingWaypointId,
@@ -133,6 +138,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const layerSelectorRef = useRef<HTMLDivElement>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [routingHaloActive, setRoutingHaloActive] = useState(false);
   const [activeMapStyle, setActiveMapStyle] = useState<string>(() => {
     return localStorage.getItem('activeMapStyle') || 'openfreemap';
   });
@@ -148,6 +154,10 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, lngLat: [number, number] } | null>(null);
   const croppedGeometry = (tripId: string, seg: Segment): GeoJSON.MultiLineString => {
     const country = analyticsSelection?.country;
+    const view = pendingRouteViews[segmentKey(tripId, seg.id)];
+    if (view && view.inputKey === routingInputKey(seg)) {
+      return country ? { type: 'MultiLineString', coordinates: view.countryPieces?.filter(piece => piece.country === country).map(piece => piece.coordinates) || [] } : view.geometry;
+    }
     if (!country) return getEffectiveGeometry(seg);
     return { type: 'MultiLineString', coordinates: countryData?.results[segmentKey(tripId, seg.id)]?.pieces.filter(p => p.country === country).map(p => p.coordinates) || [] };
   };
@@ -823,12 +833,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   return w;
                 });
 
-                if (seg.source === 'router') {
-                    const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
-                    if (validCoords.length >= 2) {
-                       seg.geometry = await optimizeSegmentRoute(seg, currentTrip.segments[i]) as any;
-                    }
-                }
                 newSegments[i] = seg;
                 changed = true;
               }
@@ -925,6 +929,17 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
         if (mapRef.current.getSource('route-source')) {
           const source = mapRef.current.getSource('route-source') as GeoJSONSource;
+          if (!mapRef.current.getSource('routing-pending-source')) {
+            mapRef.current.addSource('routing-pending-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          }
+          if (!mapRef.current.getLayer('routing-pending-layer')) {
+            mapRef.current.addLayer({ id: 'routing-pending-layer', type: 'circle', source: 'routing-pending-source',
+              paint: { 'circle-radius': 10, 'circle-color': ['get', 'color'], 'circle-opacity': 0.15,
+                'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.7,
+                'circle-radius-transition': { duration: 0 }, 'circle-opacity-transition': { duration: 0 },
+                'circle-stroke-opacity-transition': { duration: 0 } },
+            }, 'route-layer');
+          }
 
         // Cleanup old markers
         markersRef.current.forEach(m => m.marker.remove());
@@ -962,6 +977,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const visibleTrips = targetTrips.filter(trip => (!analyticsSelection?.trip || trip.id === analyticsSelection.trip) && tripIntersects(trip, analyticsSelection?.range || null));
       
       const features: GeoJSON.Feature[] = [];
+      const routingPoints: GeoJSON.Feature<GeoJSON.Point>[] = [];
 
       visibleTrips.forEach(trip => {
         trip.segments.forEach(seg => {
@@ -1002,6 +1018,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       // Add markers
       visibleTrips.forEach(trip => {
         if (analyticsSelection?.trip) return;
+        const routingWaypointIds = new Set(trip.segments.flatMap(segment => {
+          const view = pendingRouteViews[segmentKey(trip.id, segment.id)];
+          return view?.pending && view.inputKey === routingInputKey(segment) ? view.waypointIds : [];
+        }));
         // const selectedSegment = trip.segments.find(s => s.id === selectedSegmentId);
         const selectedSegmentIndex = trip.segments.findIndex(s => s.id === effectiveSelectedSegmentId);
         trip.segments.forEach((seg, segIndex) => {
@@ -1038,6 +1058,10 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             // Native default: hide all markers when no trip is selected (unselected state), 
             // EXCEPT if style explicitly says hidden: false OR if the style editor is open (to preview styles).
             if (isUnselectedState && !isStyleConfigEditorOpen && userWpStyle?.hidden !== false) return;
+            if (routingWaypointIds.has(wp.id)) routingPoints.push({ type: 'Feature',
+              properties: { tripId: trip.id, waypointId: wp.id, color: currSegColor },
+              geometry: { type: 'Point', coordinates: wp.coordinates },
+            });
 
             let pref = 3;
             if (wpIndex === 0 && segIndex === 0) pref = 0;
@@ -1221,12 +1245,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                       return w;
                     });
                     
-                    if (seg.source === 'router') {
-                        const validCoords = seg.waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map(w => w.coordinates as [number, number]);
-                        if (validCoords.length >= 2) {
-                           seg.geometry = await optimizeSegmentRoute(seg, currentTrip.segments[i]) as any;
-                        }
-                    }
                     newSegments[i] = seg;
                     changed = true;
                   }
@@ -1260,6 +1278,9 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         });
       });
 
+      (mapRef.current.getSource('routing-pending-source') as GeoJSONSource).setData({ type: 'FeatureCollection', features: routingPoints });
+      setRoutingHaloActive(routingPoints.length > 0);
+
       // Trigger an initial declutter
       if (mapRef.current) {
         mapRef.current.fire('move');
@@ -1267,7 +1288,28 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderInputs, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, activeCountryData, emittingSegments]);
+  }, [renderInputs, pendingRouteViews, mapLoaded, mapStyleLoadedTime, setSelectedSegmentId, setSelectedWaypointId, setHighlightedWaypointId, showHiddenSegments, selectedSegmentId, isReadOnly, activeStyleConfigIdState, evaluatedStyles, isStyleConfigEditorOpen, testContextOverrides, analyticsSelection, activeCountryData, emittingSegments]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !routingHaloActive) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let start = performance.now();
+    const animate = (time: number) => {
+      if (map.getLayer('routing-pending-layer')) {
+        const phase = reducedMotion.matches ? 0 : ((time - start) % 1300) / 1300;
+        map.setPaintProperty('routing-pending-layer', 'circle-radius', reducedMotion.matches ? 11 : 7 + phase * 16);
+        map.setPaintProperty('routing-pending-layer', 'circle-opacity', 0.15 * (1 - phase));
+        map.setPaintProperty('routing-pending-layer', 'circle-stroke-opacity', 0.7 * (1 - phase));
+      }
+      if (!reducedMotion.matches) frame = requestAnimationFrame(animate);
+    };
+    const restart = () => { cancelAnimationFrame(frame); start = performance.now(); animate(start); };
+    reducedMotion.addEventListener('change', restart);
+    restart();
+    return () => { cancelAnimationFrame(frame); reducedMotion.removeEventListener('change', restart); };
+  }, [mapLoaded, mapStyleLoadedTime, routingHaloActive]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
@@ -1615,13 +1657,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 
                 hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
                 
-                const validCoords = newSegments[newSegments.length - 1].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-                if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                    optimizeSegmentRoute(newSegments[newSegments.length - 1], lastSegment).then((geom: any) => {
-                        newSegments[newSegments.length - 1] = { ...newSegments[newSegments.length - 1], geometry: geom };
-                        hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
-                    });
-                }
               }
               setContextMenu(null);
             }}
@@ -1649,7 +1684,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
               }
 
               if (targetSegmentIndex !== null) {
-                const selectedSegment = selectedTrip.segments[targetSegmentIndex];
                 const newSegments = [...selectedTrip.segments];
                 const wpRef = newSegments[targetSegmentIndex];
                 const newWaypoints = [...wpRef.waypoints];
@@ -1662,13 +1696,6 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                 
                 hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: newSegments });
                 
-                const validCoords = newSegments[targetSegmentIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-                if (validCoords.length >= 2 && selectedSegment.source === 'router') {
-                    optimizeSegmentRoute(newSegments[targetSegmentIndex], selectedSegment).then((geom: any) => {
-                        newSegments[targetSegmentIndex] = { ...newSegments[targetSegmentIndex], geometry: geom };
-                        hotkeyRefs.current.updateTripState(selectedTrip.id, { ...selectedTrip, segments: [...newSegments] });
-                    });
-                }
               }
 
               setContextMenu(null);

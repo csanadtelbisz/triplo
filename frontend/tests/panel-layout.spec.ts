@@ -82,7 +82,7 @@ for (const width of [390, 1100]) test(`adding a waypoint again restores the ${wi
 
 const routedTrip: Trip = { ...trip, segments: [{ ...trip.segments[0], source: 'router', routingService: 'GraphHopper Router',
   routingProfile: 'foot', waypoints: waypoints.slice(0, 3),
-  geometry: { type: 'LineString', coordinates: waypoints.slice(0, 3).map(point => point.coordinates) },
+  geometry: { type: 'LineString', coordinates: [waypoints[0].coordinates, [19.0003, 47.001], waypoints[1].coordinates, [19.0015, 47.0008], waypoints[2].coordinates] },
 }] };
 
 test('Search Back closes Search when it is opened over POI details', async ({ page }) => {
@@ -109,16 +109,18 @@ test('Search Back closes Search when it is opened over POI details', async ({ pa
 
 async function routingApp(page: Page) {
   await page.addInitScript(() => localStorage.setItem('apiKeyPreferences', JSON.stringify({ graphHopperApiKey: 'test-key' })));
-  const pending: { release: () => void; finished: Promise<void> }[] = [];
+  const pending: { release: () => void; finished: Promise<void>; fail: boolean }[] = [];
   await page.route('https://graphhopper.com/api/1/route**', async route => {
     let release!: () => void;
     let finished!: () => void;
     const wait = new Promise<void>(resolve => { release = resolve; });
     const complete = new Promise<void>(resolve => { finished = resolve; });
     const elevation = 100 + pending.length;
-    pending.push({ release, finished: complete });
+    const request = { release, finished: complete, fail: false };
+    pending.push(request);
     await wait;
-    await route.fulfill({ json: { paths: [{ points: { type: 'LineString', coordinates: route.request().postDataJSON().points.map((point: number[]) => [...point, elevation]) } }] } });
+    if (request.fail) await route.abort('failed');
+    else await route.fulfill({ json: { paths: [{ points: { type: 'LineString', coordinates: route.request().postDataJSON().points.map((point: number[]) => [...point, elevation]) } }] } });
     finished();
   });
   await openApp(page, routedTrip);
@@ -138,19 +140,42 @@ async function routeElevations(page: Page) {
   });
 }
 
+async function routeGeometries(page: Page) {
+  return page.evaluate(() => {
+    const map = (window as unknown as { testMap?: import('maplibre-gl').Map }).testMap;
+    const source = map?.getSource('route-source') as import('maplibre-gl').GeoJSONSource | undefined;
+    return (source?.serialize().data as GeoJSON.FeatureCollection | undefined)?.features.map(feature => feature.geometry) || [];
+  });
+}
+
+async function routingHalos(page: Page) {
+  return page.evaluate(() => {
+    const map = (window as unknown as { testMap?: import('maplibre-gl').Map }).testMap;
+    const source = map?.getSource('routing-pending-source') as import('maplibre-gl').GeoJSONSource | undefined;
+    return (source?.serialize().data as GeoJSON.FeatureCollection | undefined)?.features || [];
+  });
+}
+
 for (const width of [390, 1100]) test(`adding a routed waypoint returns to the ${width <= 768 ? 'mobile' : 'desktop'} editor before routing finishes`, async ({ page }) => {
   await page.setViewportSize({ width, height: 850 });
   const pending = await routingApp(page);
   try {
+    await expect.poll(() => routeGeometries(page)).toHaveLength(1);
+    const original = await routeGeometries(page);
     await addFirstWaypointAgain(page);
     await expect(page.getByRole('heading', { name: 'Waypoint Info', exact: true })).toHaveCount(0);
     await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
     await expect(page.locator('.waypoint-title-input').last()).toBeInViewport();
     await expect.poll(() => pending.length).toBe(1);
+    expect(await routeGeometries(page)).toEqual(original);
+    const addedId = await page.locator('.waypoint-title-input').last().getAttribute('data-wpid');
+    await expect.poll(async () => (await routingHalos(page)).map(feature => feature.properties?.waypointId).sort())
+      .toEqual(['point-2', addedId].sort());
     await page.locator('.waypoint-title-input').last().fill('Renamed while routing');
     await page.locator('.waypoint-title-input').last().blur();
     pending[0].release();
     await expect.poll(() => routeElevations(page)).toContain(100);
+    await expect.poll(() => routingHalos(page)).toHaveLength(0);
     await expect(page.locator('.waypoint-title-input').last()).toHaveValue('Renamed while routing');
     expect(pending).toHaveLength(1);
   } finally { for (const request of pending) request.release(); }
@@ -171,16 +196,102 @@ test('segment mode changes appear and the panel can close while routing is pendi
   } finally { for (const request of pending) request.release(); }
 });
 
+for (const action of ['Add to trip', 'Add before last']) test(`map ${action} preserves the route until planning completes`, async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 850 });
+  const pending = await routingApp(page);
+  try {
+    await expect.poll(() => routeGeometries(page)).toHaveLength(1);
+    const original = await routeGeometries(page);
+    await page.locator('.maplibregl-canvas').click({ button: 'right', position: { x: 750, y: 300 } });
+    await page.getByText(action, { exact: true }).click();
+    await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
+    await expect.poll(() => pending.length).toBe(1);
+    expect(await routeGeometries(page)).toEqual(original);
+    await expect.poll(() => routingHalos(page)).toHaveLength(action === 'Add to trip' ? 2 : 3);
+    pending[0].release();
+    await expect.poll(() => routeElevations(page)).toContain(100);
+    await expect.poll(() => routingHalos(page)).toHaveLength(0);
+  } finally { for (const request of pending) request.release(); }
+});
+
+test('adding a POI updates waypoints and halos without changing the existing route', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await page.route('https://nominatim.openstreetmap.org/search**', route => route.fulfill({ json: [{
+    place_id: 2, osm_type: 'node', osm_id: 2, name: 'New place', display_name: 'New place, Test city', lat: '47.002', lon: '19.005', class: 'tourism', type: 'attraction',
+  }] }));
+  await page.route('https://nominatim.openstreetmap.org/reverse**', route => route.fulfill({ json: { name: 'New place' } }));
+  const pending = await routingApp(page);
+  try {
+    await expect.poll(() => routeGeometries(page)).toHaveLength(1);
+    const original = await routeGeometries(page);
+    await page.getByTitle('Search POI or Coordinates', { exact: true }).click();
+    await page.getByPlaceholder('Search name, address or coordinates...').fill('New place');
+    await page.locator('.search-result-card').click();
+    await page.getByRole('button', { name: /Add New place to Trip/ }).click();
+    await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
+    await expect.poll(() => pending.length).toBe(1);
+    expect(await routeGeometries(page)).toEqual(original);
+    await expect.poll(() => routingHalos(page)).toHaveLength(2);
+    pending[0].release();
+    await expect.poll(() => routeElevations(page)).toContain(100);
+    await expect.poll(() => routingHalos(page)).toHaveLength(0);
+  } finally { for (const request of pending) request.release(); }
+});
+
+test('a failed route leaves the known geometry intact and removes its pending halos', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 850 });
+  const pending = await routingApp(page);
+  try {
+    await expect.poll(() => routeGeometries(page)).toHaveLength(1);
+    const original = await routeGeometries(page);
+    await addFirstWaypointAgain(page);
+    await expect.poll(() => routingHalos(page)).toHaveLength(2);
+    await expect.poll(() => pending.length).toBe(1);
+    pending[0].fail = true;
+    pending[0].release();
+    await expect.poll(() => routingHalos(page)).toHaveLength(0);
+    expect(await routeGeometries(page)).toEqual(original);
+    await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
+    await addFirstWaypointAgain(page);
+    await expect.poll(() => pending.length).toBe(2);
+    expect(await routeGeometries(page)).toEqual(original);
+    pending[1].release();
+    await expect.poll(() => routeElevations(page)).toContain(101);
+  } finally { for (const request of pending) request.release(); }
+});
+
+test('pending halos animate and respect reduced motion', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 850 });
+  const pending = await routingApp(page);
+  const radius = () => page.evaluate(() => (window as unknown as { testMap: import('maplibre-gl').Map }).testMap.getPaintProperty('routing-pending-layer', 'circle-radius'));
+  try {
+    await addFirstWaypointAgain(page);
+    await expect.poll(() => routingHalos(page)).toHaveLength(2);
+    await expect.poll(() => pending.length).toBe(1);
+    const initial = await radius();
+    await expect.poll(radius).not.toBe(initial);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect.poll(radius).toBe(11);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(await radius()).toBe(11);
+    pending[0].release();
+    await expect.poll(() => routingHalos(page)).toHaveLength(0);
+  } finally { for (const request of pending) request.release(); }
+});
+
 test('late routing cannot overwrite a newer edit and route completion adds no undo step', async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 850 });
   const pending = await routingApp(page);
   try {
+    await expect.poll(() => routeGeometries(page)).toHaveLength(1);
+    const original = await routeGeometries(page);
     await addFirstWaypointAgain(page);
     await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
     await expect.poll(() => pending.length).toBe(1);
     await addFirstWaypointAgain(page);
     await expect(page.locator('.waypoint-title-input')).toHaveCount(5);
     await expect.poll(() => pending.length).toBe(2);
+    expect(await routeGeometries(page)).toEqual(original);
     pending[1].release();
     await expect.poll(() => routeElevations(page)).toContain(101);
     pending[0].release();
