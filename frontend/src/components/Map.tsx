@@ -29,6 +29,7 @@ import { attachMobileDistanceMeasurement } from '../utils/mobileDistanceMeasurem
 import { getEffectiveGeometry } from '../utils/effectiveGeometry';
 import { useMapRenderInputs } from '../utils/useMapRenderInputs';
 import { matchesAnalyticsSegment, tripIntersects } from '../countries/analytics';
+import { countryFocusBounds } from '../countries/focusBounds';
 import { segmentClimate } from '../climate/profiles';
 import { useClimateSettings } from '../climate/useClimateSettings';
 import type { AnalyticsSelection } from '../countries/analytics';
@@ -1281,8 +1282,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     const coordinates = trips.filter(t => tripIntersects(t, analyticsSelection.range)).flatMap(t => t.segments.filter(s => analyticsVisible(t, s)).flatMap(s => croppedGeometry(t.id, s).coordinates.flat()));
     if (!coordinates.length) return;
     const landParts = entry?.landParts || (entry ? [entry.landBounds] : []);
-    const score = (b: number[]) => coordinates.filter(c => c[0] >= b[0] - 0.2 && c[0] <= b[2] + 0.2 && c[1] >= b[1] - 0.2 && c[1] <= b[3] + 0.2).length;
-    const focus = [...landParts].sort((a, b) => score(b) - score(a))[0];
+    const focus = countryFocusBounds(landParts, coordinates);
     const bounds = focus && country !== UNASSIGNED && focus[2] - focus[0] < 180
       ? new LngLatBounds([focus[0], focus[1]], [focus[2], focus[3]])
       : coordinates.reduce((bounds, c) => bounds.extend([c[0], c[1]]), new LngLatBounds());

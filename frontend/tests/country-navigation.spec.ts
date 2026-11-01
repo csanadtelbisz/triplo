@@ -86,6 +86,31 @@ test.beforeEach(async ({ page, context }) => {
   await page.getByTitle('Analytics', { exact: true }).click();
 });
 
+test('country focus fits nearby islands along with the mainland', async ({ page, context }) => {
+  await context.route('**/countries/index.json', route => route.fulfill({ json: {
+    version: 'focus-fixture-1', attribution: 'Test boundaries',
+    countries: countries.map(country => ({ ...country.entry,
+      landParts: country.entry.code === 'AA' ? [country.entry.landBounds, [-3, -3, -2.5, -2.5]] : [country.entry.landBounds],
+    })),
+  } }));
+  await page.goto('/tests/country-app.html');
+  await page.getByTitle('Analytics', { exact: true }).click();
+  await groupAnalyticsBy(page, 'countries');
+  await expect(page.getByRole('button', { name: /Country A/ })).toBeVisible();
+  await page.evaluate(() => {
+    const state = window as unknown as { testMap: import('maplibre-gl').Map; countryFocusFit: number[][] };
+    const map = state.testMap;
+    const cameraForBounds = map.cameraForBounds.bind(map);
+    map.cameraForBounds = (bounds, options) => {
+      state.countryFocusFit = (bounds as import('maplibre-gl').LngLatBounds).toArray();
+      return cameraForBounds(bounds, options);
+    };
+  });
+  await page.getByRole('button', { name: /Country A/ }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { countryFocusFit: number[][] }).countryFocusFit))
+    .toEqual([[-3, -3], [0, 2]]);
+});
+
 test('country → mode → details supports Back/Forward and crops disconnected pieces', async ({ page }) => {
   await groupAnalyticsBy(page, 'countries');
   await page.getByRole('button', { name: /Country A/ }).click();
