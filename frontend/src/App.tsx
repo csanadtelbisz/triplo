@@ -735,9 +735,8 @@ export default function App() {
         || (previous && routingInputKey(previous) === routingInputKey(segment))) return segment;
       // Use a small provisional line, avoiding distance/snapping work against the
       // old full route before the editor can display the new waypoint order.
-      const pending = { ...segment, geometry: { type: 'LineString' as const,
-        coordinates: segment.waypoints.filter(waypoint => waypoint.coordinates?.length === 2).map(waypoint => waypoint.coordinates),
-      } };
+      const coordinates = segment.waypoints.filter(waypoint => waypoint.coordinates?.length === 2).map(waypoint => waypoint.coordinates);
+      const pending: Segment = { ...segment, geometry: coordinates.length >= 2 ? { type: 'LineString', coordinates } : undefined };
       delete pending.countryParts;
       delete pending.countryDistances;
       delete pending.distanceStats;
