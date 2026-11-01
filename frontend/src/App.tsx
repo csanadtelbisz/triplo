@@ -307,6 +307,8 @@ export default function App() {
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
+    if (isSearchOpen && !isAnalyticsOpen) return { panel: 'search', tripId: selectedTrip?.id,
+      segmentId: selectedSegmentId || undefined, waypointId: selectedWaypointId || undefined, poi: selectedPOI || undefined };
     if (selectedPOI) return { panel: 'poi', poi: selectedPOI, tripId: selectedTrip?.id, ...(isAnalyticsOpen ? { analyticsSelection, analyticsSegmentInfo: analyticsSegmentInfo || undefined } : {}) };
     if (isAnalyticsOpen && analyticsSegmentInfo) return { panel: 'analytics-segment', analyticsSegmentInfo, analyticsModeFilter, analyticsSelection };
     if (isAnalyticsOpen) return { panel: 'analytics', analyticsModeFilter, analyticsSelection };
@@ -381,6 +383,8 @@ export default function App() {
       else setIsPreferencesOpen(false);
     } else if (isStatusOpen) {
       setIsStatusOpen(false);
+    } else if (isSearchOpen && !isAnalyticsOpen) {
+      setIsSearchOpen(false);
     } else if (selectedPOI) {
       setSelectedPOI(null);
     } else if (isAnalyticsOpen) {
@@ -436,9 +440,9 @@ export default function App() {
         || (selectedTripRef.current?.id === panelState.tripId ? selectedTripRef.current : null) : null;
       flushSync(() => {
         setSelectedTrip(trip);
-        setSelectedSegmentId(panelState.panel === 'segment' ? panelState.segmentId || null : null);
-        setSelectedWaypointId(panelState.panel === 'waypoint' ? panelState.waypointId || null : null);
-        setSelectedPOI(panelState.panel === 'poi' ? panelState.poi || null : null);
+        setSelectedSegmentId(panelState.panel === 'segment' || panelState.panel === 'search' ? panelState.segmentId || null : null);
+        setSelectedWaypointId(panelState.panel === 'waypoint' || panelState.panel === 'search' ? panelState.waypointId || null : null);
+        setSelectedPOI(panelState.panel === 'poi' || panelState.panel === 'search' ? panelState.poi || null : null);
         setIsSearchOpen(panelState.panel === 'search');
         setIsStatusOpen(panelState.panel === 'status');
         setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
@@ -742,6 +746,9 @@ export default function App() {
       delete pending.distanceStats;
       delete pending.waypointDistances;
       delete pending.climateImpact;
+      // Flight geometry is already generated from waypoints by getEffectiveGeometry.
+      // A second routing result would only restart country calculation needlessly.
+      if (segment.transportMode === 'flight') return pending;
       const key = JSON.stringify([newTrip.id, segment.id]);
       const token = Symbol();
       pendingRoutesRef.current.set(key, token);

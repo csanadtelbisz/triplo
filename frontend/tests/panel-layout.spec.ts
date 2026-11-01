@@ -85,6 +85,28 @@ const routedTrip: Trip = { ...trip, segments: [{ ...trip.segments[0], source: 'r
   geometry: { type: 'LineString', coordinates: waypoints.slice(0, 3).map(point => point.coordinates) },
 }] };
 
+test('Search Back closes Search when it is opened over POI details', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await page.route('https://nominatim.openstreetmap.org/search**', route => route.fulfill({ json: [{
+    place_id: 1, osm_type: 'node', osm_id: 1, name: 'Test place', display_name: 'Test place, Test city', lat: '47', lon: '19', class: 'tourism', type: 'attraction',
+  }] }));
+  await page.route('https://nominatim.openstreetmap.org/reverse**', route => route.fulfill({ json: { name: 'Test place' } }));
+  await openApp(page);
+  await page.getByTitle('Search POI or Coordinates', { exact: true }).click();
+  await page.getByPlaceholder('Search name, address or coordinates...').fill('Test place');
+  await page.locator('.search-result-card').click();
+  await expect(page.getByTitle('Close POI', { exact: true })).toBeVisible();
+  await page.getByTitle('Search POI or Coordinates', { exact: true }).click();
+  await expect.poll(() => page.evaluate(() => history.state?.triploPanel?.panel)).toBe('search');
+  await page.goBack();
+  await expect(page.getByTitle('Close POI', { exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByTitle('Close Search', { exact: true })).toBeVisible();
+  await page.getByTitle('Close Search', { exact: true }).click();
+  await expect(page.getByTitle('Close POI', { exact: true })).toBeVisible();
+  await expect(page.getByTitle('Close Search', { exact: true })).toHaveCount(0);
+});
+
 async function routingApp(page: Page) {
   await page.addInitScript(() => localStorage.setItem('apiKeyPreferences', JSON.stringify({ graphHopperApiKey: 'test-key' })));
   const pending: { release: () => void; finished: Promise<void> }[] = [];
