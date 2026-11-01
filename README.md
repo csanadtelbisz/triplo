@@ -32,8 +32,10 @@ Date filters use trip overlap; they do not infer the date of a border crossing.
 
 The full yearly chart remains visible as context. Browser Back/Forward restores
 country, mode, date, and segment-detail selections. Clearing a country or mode
-returns to its parent level; Back from an unselected list returns to the trip
-manager. View toggles and date changes replace the current entry. Calculations
+returns to its parent level; browser Back from an unselected list returns to the
+trip manager. The panel back arrow closes the current panel directly, including
+filtered Analytics, while browser Back steps through individual filter states.
+View toggles and date changes replace the current entry. Calculations
 run in a worker. Shared-trip references remain metadata-only. Country files
 load on demand and failures show a retry action instead of being counted as
 Unassigned. Disconnected route pieces retain their segment identity. Country
@@ -155,6 +157,11 @@ synced as plain text to connected storage, so use trusted, private storage.
 When a selected routing service is unavailable, the routing manager falls back
 to straight lines. A displayed rail segment therefore does not imply that its
 geometry follows railway tracks.
+
+Waypoint additions and editor route changes update the editor immediately with
+a provisional straight line. Routing starts after the UI can paint; the returned
+geometry and statistics update later without adding an Undo step. Late responses
+cannot overwrite newer waypoint edits or a change that was undone.
 
 Triplo includes an installable web app manifest. Its current service worker does
 not cache the application or map tiles for offline use; browser trip storage

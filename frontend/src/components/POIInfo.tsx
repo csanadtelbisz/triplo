@@ -3,7 +3,6 @@ import type { Trip, Segment } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/POIInfo.css';
 // Removed unused route import
-import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { getPOIEmoji, resolvePOIName } from '../utils/poiUtils';
 import { getLanguagePreferences, getLanguageName } from '../utils/languagePreferences';
 
@@ -132,20 +131,6 @@ export const POIInfo = ({ isReadOnly, poi, trip, onGoBack, onUpdateTrip, onAdded
     // Fast optimistic update
     onUpdateTrip({ ...trip, segments: newSegments });
     
-    const validCoords = updatedSegment.waypoints
-      .filter((w: any) => w.coordinates && w.coordinates.length === 2)
-      .map((w: any) => w.coordinates as [number, number]);
-      
-    if (validCoords.length >= 2 && lastSegment.source === 'router') {
-      try {
-        const geom = await optimizeSegmentRoute(updatedSegment, lastSegment) as any;
-        newSegments[newSegments.length - 1] = { ...updatedSegment, geometry: geom };
-        onUpdateTrip({ ...trip, segments: [...newSegments] });
-      } catch (err) {
-        console.error('Failed to update route after adding POI');
-      }
-    }
-
       onAddedToTrip(newWaypoint.id);
     };
 

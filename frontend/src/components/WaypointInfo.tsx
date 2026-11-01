@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import type { Trip } from '../../../shared/types';
 import { MaterialIcon } from './MaterialIcon';
 import { getPOIEmoji, SUGGESTED_WAYPOINT_ICONS } from '../utils/poiUtils';
-import { optimizeSegmentRoute } from '../routing/routeOptimizer';
 import { IconPickerDialog } from './IconPickerDialog';
 
 interface WaypointInfoProps {
@@ -63,7 +62,7 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
             <button 
               className="iconButton" 
               title="Add point again as last waypoint" 
-              onClick={async () => {
+              onClick={() => {
                 if (wp) {
                   const newWaypoint = {
                     ...wp,
@@ -79,18 +78,6 @@ export function WaypointInfo({ isReadOnly, waypointId, trip, onGoBack, onUpdateT
                     };
                     onUpdateTrip({ ...trip, segments: newSegments });
 
-                    const validCoords = newSegments[lastSegIndex].waypoints.filter(w => w.coordinates && (w.coordinates as any).length === 2).map((w: any) => w.coordinates as [number, number]);
-                    if (validCoords.length >= 2 && lastSegment.source === 'router') {
-                      try {
-                        const geom = await optimizeSegmentRoute(newSegments[lastSegIndex], lastSegment) as any;
-                        if (geom) {
-                          newSegments[lastSegIndex] = { ...newSegments[lastSegIndex], geometry: geom };
-                          onUpdateTrip({ ...trip, segments: [...newSegments] });
-                        }
-                      } catch (error) {
-                        console.error('Failed to update route after adding waypoint', error);
-                      }
-                    }
                     if (setHighlightedWaypointId) {
                       setHighlightedWaypointId(newWaypoint.id);
                     }
