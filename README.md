@@ -251,6 +251,10 @@ that comment. Links also appear on the deployment and in the job summary.
 GitHub Pages hosts one site per repository, so each deployment includes the
 default-branch production build and all open same-repository PR previews.
 Closing a PR removes its preview on the next successful deployment.
+For merged PRs, the push deployment handles cleanup; closing an unmerged PR
+triggers a cleanup deployment. Pages publications share a concurrency group and
+allow an active run to finish, so preview updates do not interrupt an active
+production deployment. Superseded PR validation runs may still be cancelled.
 
 For Drive support on production, configure the repository Actions secrets
 `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_DRIVE_API_KEY`. These values are omitted

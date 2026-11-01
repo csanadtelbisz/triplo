@@ -39,7 +39,10 @@ jobs:
     if: >-
       always() && !cancelled() &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (needs.validate.result == 'success' || github.event.action == 'closed')
+      (needs.validate.result == 'success' ||
+        (github.event.action == 'closed' && !github.event.pull_request.merged))
+    # A merge's push deployment also removes the closed preview. Publishing here
+    # as well used to cancel that production run through the shared Pages group.
     uses: ./.github/workflows/deploy.yml
     with:
       preview: true

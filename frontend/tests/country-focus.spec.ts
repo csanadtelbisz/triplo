@@ -8,11 +8,15 @@ const parts = (code: string) => index.countries.find(country => country.code ===
 const encloses = (bounds: Bounds, coordinate: number[]) => coordinate[0] >= bounds[0] && coordinate[0] <= bounds[2]
   && coordinate[1] >= bounds[1] && coordinate[1] <= bounds[3];
 
-test('Denmark includes Copenhagen and Bornholm even for mainland-only trips', () => {
+test('Denmark includes Copenhagen by default and Bornholm only when visited', () => {
   const bounds = countryFocusBounds(parts('DK'), [[9.5, 56.2]])!;
   expect(encloses(bounds, [12.57, 55.68])).toBe(true);
-  expect(encloses(bounds, [14.92, 55.1])).toBe(true);
+  expect(encloses(bounds, [14.92, 55.1])).toBe(false);
   expect(countryFocusBounds(parts('DK'), [[12.57, 55.68]])).toEqual(bounds);
+  const withVisit = countryFocusBounds(parts('DK'), [[9.5, 56.2], [14.92, 55.1]])!;
+  expect(encloses(withVisit, [9.5, 56.2])).toBe(true);
+  expect(encloses(withVisit, [12.57, 55.68])).toBe(true);
+  expect(encloses(withVisit, [14.92, 55.1])).toBe(true);
 });
 
 test('Italy includes Sicily and Sardinia even when route points favor Sicily', () => {
@@ -26,7 +30,7 @@ for (const { code, mainland, island } of [
   { code: 'ES', mainland: [-3.7, 40.4], island: [-16.3, 28.46] },
   { code: 'US', mainland: [-74, 40.7], island: [-157.85, 21.3] },
 ]) {
-  test(`${code} excludes distant islands until visible trip points lift the 500 km cap`, () => {
+  test(`${code} excludes distant islands until visible trip points lift the 200 km cap`, () => {
     const landParts = parts(code);
     const snapshot = JSON.stringify(landParts);
     expect(encloses(countryFocusBounds(landParts, [mainland])!, island)).toBe(false);
@@ -40,6 +44,12 @@ for (const { code, mainland, island } of [
   });
 }
 
+test('the 200 km cap excludes unvisited land between 200 and 500 km away', () => {
+  const landParts: Bounds[] = [[0, 0, 10, 1], [11, 0, 11.5, 0.5], [13, 0, 13.5, 0.5]];
+  expect(countryFocusBounds(landParts, [[5, 0.5]])).toEqual([0, 0, 11.5, 1]);
+  expect(countryFocusBounds(landParts, [[5, 0.5], [13.25, 0.25]])).toEqual([0, 0, 13.5, 1]);
+});
+
 test('a remote visit lifts the cap for the group without exceeding the original diameter', () => {
   const mainland: Bounds = [0, 0, 10, 1];
   const visitedIsland: Bounds = [16, 0, 17, 1];
@@ -51,7 +61,7 @@ test('a remote visit lifts the cap for the group without exceeding the original 
   expect(countryFocusBounds(landParts, [[22.5, 0.5]])).toEqual(tooFar);
 });
 
-test('small landmasses use their diameter even when it is below 500 km; groups do not chain', () => {
+test('small landmasses use their diameter even when it is below 200 km; groups do not chain', () => {
   const landParts: Bounds[] = [[0, 0, 1, 1], [2, 0, 2.2, 0.2], [3, 0, 3.1, 0.1]];
   expect(countryFocusBounds(landParts, [[0.5, 0.5], [3.05, 0.05]])).toEqual([0, 0, 2.2, 1]);
 });
