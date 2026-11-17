@@ -1,0 +1,100 @@
+name: Android
+
+# Pull requests build a debug APK as a check. Pushes to the default branch
+# publish a signed APK as a GitHub release, which the app's updater looks for.
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - android/**
+      - frontend/**
+      - shared/**
+      - climate/**
+      - .github/workflows/android.yml
+  pull_request:
+    paths:
+      - android/**
+      - frontend/**
+      - shared/**
+      - climate/**
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize publishing so a lower version code is never released after a higher one.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PUBLISH: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle.kts
+            android/gradle/wrapper/gradle-wrapper.properties
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # The runner image ships the Android SDK. Make sure licenses are accepted so
+      # Gradle can download any missing platform or build tools.
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Prepare release signing key
+        if: env.PUBLISH == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 is not set."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VITE_GOOGLE_DRIVE_API_KEY: ${{ env.PUBLISH == 'true' && secrets.VITE_GOOGLE_DRIVE_API_KEY || '' }}
+        run: |
+          chmod +x gradlew
+          task=assembleDebug
+          if [ "$PUBLISH" = "true" ]; then task=assembleRelease; fi
+          ./gradlew --no-daemon "$task" \
+            -PappVersionCode="$VERSION_CODE" -PappVersionName="$VERSION_NAME"
+
+      - name: Publish release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk="triplo-$VERSION_NAME.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          gh release create "android-v$VERSION_CODE" "$apk" "$apk.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Triplo Android $VERSION_NAME" \
+            --target "$GITHUB_SHA" \
+            --generate-notes

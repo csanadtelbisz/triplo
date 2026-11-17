@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { flushSync } from 'react-dom';
 import { FlightProfileTripsContext } from './climate/flightProfileTrips';
 import './styles/App.css';
@@ -49,6 +49,9 @@ import { attachCountryParts, compactCountryData, sameCountryInputs, sameCountryT
 import { getClimateSettings, withClimateCache } from './climate/profiles';
 import { withoutClimateResults } from './climate/cache';
 import { serializeTrip } from './utils/serializeTrip';
+
+// Android wrapper only. The check must stay inline so web builds do not emit the chunk.
+const RouteImagesHost = import.meta.env.VITE_TRIPLO_NATIVE === 'android' ? lazy(() => import('./native/RouteImagesHost')) : null;
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -1834,6 +1837,11 @@ export default function App() {
         )}
       </div>
       {showSetupWizard && <SetupWizard onComplete={handleSetupWizardComplete} onStartBackgroundSync={loadTrips} />}
+      {RouteImagesHost && (
+        <Suspense fallback={null}>
+          <RouteImagesHost trip={selectedTrip} />
+        </Suspense>
+      )}
       <Map isReadOnly={isReadOnly}
         pendingRouteViews={pendingRouteViews}
         ref={mapComponentRef}

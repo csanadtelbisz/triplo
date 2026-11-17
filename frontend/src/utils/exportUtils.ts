@@ -1,6 +1,7 @@
 import { getSegmentGeometry } from './segmentGeometry';
 import type { Trip, Segment, Waypoint } from '../../../shared/types';
 import { getModeColor } from './builtInModesPreferences';
+import { IS_NATIVE, callNative } from '../native/native';
 
 export function exportGPX(segment: Segment, trip?: Trip, includeAppMetadata: boolean = true): string {
   let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -209,6 +210,10 @@ function escapeXml(unsafe: string): string {
 }
 
 export function downloadFile(content: string, filename: string, mimeType: string) {
+  if (IS_NATIVE) {
+    callNative('saveFile', { content, filename, mimeType }).catch(error => console.error('Saving file failed', error));
+    return;
+  }
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
