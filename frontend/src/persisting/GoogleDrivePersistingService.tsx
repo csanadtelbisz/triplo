@@ -6,6 +6,7 @@ import type { ConnectionInstruction } from './PersistingService';
 import gdriveIcon from '../assets/icons/google_drive.png';
 import { decodeSharePayload, encodeSharePayload } from '../utils/shareLinkEncoding';
 import { serializeTrip } from '../utils/serializeTrip';
+import { IS_NATIVE, callNative } from '../native/native';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -26,7 +27,7 @@ export class GoogleDrivePersistingService extends PersistingService {
 
   private loadScripts() {
     // Load GIS early to enable future button clicks
-    if (document.getElementById('gis-client-script')) return;
+    if (IS_NATIVE || document.getElementById('gis-client-script')) return;
 
     const script = document.createElement('script');
     script.id = 'gis-client-script';
@@ -39,7 +40,26 @@ export class GoogleDrivePersistingService extends PersistingService {
     document.body.appendChild(script);
   }
 
+  // Google blocks its sign-in page inside a WebView, so the Android wrapper
+  // authorizes natively and returns a short-lived access token.
+  private async refreshNativeToken(): Promise<string> {
+    const { accessToken, expiresInSeconds } = await callNative<{ accessToken: string; expiresInSeconds: number }>('googleAuthorize');
+    localStorage.setItem('gdrive_access_token', accessToken);
+    localStorage.setItem('gdrive_token_expires_at', (Date.now() + expiresInSeconds * 1000).toString());
+    return accessToken;
+  }
+
   private initTokenClient(callback: () => void) {
+    if (IS_NATIVE) {
+      this.refreshNativeToken()
+        .then(() => {
+          callback();
+          window.dispatchEvent(new Event('storage'));
+        })
+        .catch(error => console.error('Native Google authorization failed', error));
+      return;
+    }
+
     if (!this.gisInited || !google) {
       console.error('Google Identity Services not loaded yet. Please try again in a moment.');
       return;
@@ -76,6 +96,9 @@ export class GoogleDrivePersistingService extends PersistingService {
     const expiresAt = localStorage.getItem('gdrive_token_expires_at');
     if (!token || !expiresAt) return null;
 
+    // Native tokens are renewed silently by the wrapper when they expire.
+    if (IS_NATIVE) return token;
+
     if (Date.now() > parseInt(expiresAt, 10)) {
       // Token expired
       localStorage.removeItem('gdrive_access_token');
@@ -86,17 +109,22 @@ export class GoogleDrivePersistingService extends PersistingService {
   }
 
   private async request(path: string, options: RequestInit = {}): Promise<any> {
-    const token = this.getAccessToken();
+    let token = this.getAccessToken();
     if (!token) throw new Error("No Google Drive access token");
+    if (IS_NATIVE && Date.now() > parseInt(localStorage.getItem('gdrive_token_expires_at') || '0', 10)) {
+      token = await this.refreshNativeToken();
+    }
 
     const url = path.startsWith('http') ? path : `https://www.googleapis.com/drive/v3/${path}`;
-    const res = await fetch(url, {
+    const send = (accessToken: string) => fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${accessToken}`,
         ...(options.headers || {})
       }
     });
+    let res = await send(token);
+    if (IS_NATIVE && res.status === 401) res = await send(await this.refreshNativeToken());
 
     if (!res.ok) {
        throw new Error(`Drive API Error: ${res.status} - ${res.statusText}`);
@@ -468,7 +496,16 @@ export class GoogleDrivePersistingService extends PersistingService {
     localStorage.removeItem('gdrive_token_expires_at');
     this.tokenClient = null;
 
-    if (token && google?.accounts?.oauth2?.revoke) {
+    if (IS_NATIVE) {
+      if (token) {
+        await fetch('https://oauth2.googleapis.com/revoke', {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${encodeURIComponent(token)}`,
+        }).catch(() => undefined);
+      }
+    } else if (token && google?.accounts?.oauth2?.revoke) {
       await new Promise<void>(resolve => {
         google.accounts.oauth2.revoke(token, () => resolve());
       });

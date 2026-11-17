@@ -235,6 +235,7 @@ npm run lint
 | [frontend/src/styles/](frontend/src/styles/) | Application styles, including mobile layouts |
 | [frontend/public/](frontend/public/) | Manifest, service worker, icons, and Pages route fallback |
 | [frontend/tests/](frontend/tests/) | Playwright browser tests and fixtures |
+| [android/](android/) | Android WebView wrapper that bundles the web app ([details](android/README.md)) |
 | [shared/types.ts](shared/types.ts) | Trip, segment, and waypoint data types |
 | [.github/workflows/](.github/workflows/) | Validation and GitHub Pages deployments |
 

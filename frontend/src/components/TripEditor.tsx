@@ -21,6 +21,7 @@ import { ThemedServiceIcon } from './ThemedServiceIcon';
 import { tripCountrySummary } from '../countries/summary';
 import { resetClimateForModeChange } from '../utils/segmentMode';
 import type { CountryData } from '../countries/types';
+import { getPublicBaseUrl } from '../native/native';
 
 interface TripEditorProps {
   countryData?: CountryData;
@@ -150,7 +151,7 @@ export function TripEditor({
     setIsSaving(false);
   };
 
-  const shareUrl = shareLink ? `${window.location.origin}${import.meta.env.BASE_URL}share/${shareLink}` : '';
+  const shareUrl = shareLink ? `${getPublicBaseUrl()}share/${shareLink}` : '';
 
   const persistOwnedTrip = async (nextTrip: Trip) => {
     await onPersistOwnedTrip?.(nextTrip);
