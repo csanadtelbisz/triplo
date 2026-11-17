@@ -1,6 +1,7 @@
 // Only the Android wrapper build defines VITE_TRIPLO_NATIVE=android. In every
 // other build this constant folds to false and native-only code is removed.
-export const IS_NATIVE = import.meta.env.VITE_TRIPLO_NATIVE === 'android';
+// The optional chain keeps this module loadable in Node, where the Playwright tests import it and import.meta.env is missing.
+export const IS_NATIVE = import.meta.env?.VITE_TRIPLO_NATIVE === 'android';
 
 export const NATIVE_PUBLIC_APP_URL = 'https://csanadtelbisz.github.io/triplo/';
 
@@ -13,7 +14,26 @@ type NativeChannel = {
 declare global {
   interface Window {
     TriploNative?: NativeChannel;
+    __triploHandleBack?: () => boolean;
   }
+}
+
+// The wrapper asks the page first when the system Back button is pressed.
+const backHandlers: Array<() => void> = [];
+if (IS_NATIVE) {
+  window.__triploHandleBack = () => {
+    const handler = backHandlers.at(-1);
+    handler?.();
+    return !!handler;
+  };
+}
+
+export function registerNativeBackHandler(handler: () => void): () => void {
+  backHandlers.push(handler);
+  return () => {
+    const index = backHandlers.lastIndexOf(handler);
+    if (index >= 0) backHandlers.splice(index, 1);
+  };
 }
 
 type Pending = { resolve: (value: any) => void; reject: (error: Error) => void };

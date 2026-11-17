@@ -1,0 +1,295 @@
+/* No blue tap flash or focus ring after a touch. */
+.route-image-marker,
+.route-image-strip,
+.route-image-strip *,
+.route-image-viewer,
+.route-image-viewer * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.route-image-strip button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Thumbnail pins on the map */
+.route-image-marker {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.route-image-marker-body {
+  position: relative;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  background: #ccc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  transform-origin: bottom center;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.route-image-marker-body::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: calc(50% - 6px);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #fff;
+  transition: border-color 0.15s ease;
+}
+
+.route-image-marker-body img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.route-image-marker.active .route-image-marker-body {
+  border-color: #007bff;
+  transform: scale(1.2);
+}
+
+.route-image-marker.active .route-image-marker-body::after {
+  border-top-color: #007bff;
+}
+
+/* An image over its low-resolution placeholder */
+.route-image-layers {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.route-image-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.route-image-layer-sharp {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.route-image-layer-sharp.loaded {
+  opacity: 1;
+}
+
+/* Bottom panel */
+.route-image-strip {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 10001;
+  width: min(100%, 640px);
+  transform: translate(-50%, var(--route-image-offset, 0px));
+  transition: transform 0.2s ease;
+  touch-action: pan-x;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-radius: 16px 16px 0 0;
+  background: #111;
+  color: #fff;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.route-image-strip.dragging {
+  transition: none;
+}
+
+.route-image-strip-scroller {
+  display: flex;
+  height: var(--route-image-height);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  /* The nearest scrolling ancestor decides which touches the browser keeps for itself. */
+  touch-action: pan-x;
+  border-radius: 16px 16px 0 0;
+  transition: height 0.25s ease;
+}
+
+.route-image-strip.fullscreen .route-image-strip-scroller {
+  transition: none;
+}
+
+.route-image-strip-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.route-image-slide {
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* The full-screen viewer draws the selected image while it is open. */
+.route-image-strip.fullscreen .route-image-slide.active .route-image-layers {
+  visibility: hidden;
+}
+
+/* Shared by the bottom panel and the viewer so the text sits in the same place in both. */
+.route-image-caption {
+  box-sizing: border-box;
+  padding: 6px 12px 10px;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: #fff;
+  opacity: 0.85;
+}
+
+.route-image-strip.fullscreen .route-image-strip-caption {
+  visibility: hidden;
+}
+
+.route-image-strip-button {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.route-image-strip-close {
+  top: 8px;
+  right: 8px;
+}
+
+.route-image-strip-nav {
+  top: calc(var(--route-image-height) / 2 - 18px);
+}
+
+.route-image-strip-prev {
+  left: 8px;
+}
+
+.route-image-strip-next {
+  right: 8px;
+}
+
+@media (pointer: coarse) {
+  .route-image-strip-nav {
+    display: none;
+  }
+}
+
+/* Full-screen viewer */
+.route-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  color: #fff;
+}
+
+.route-image-viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+.route-image-viewer-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.route-image-viewer-track {
+  position: absolute;
+  inset: 0;
+}
+
+.route-image-viewer-slide {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.route-image-viewer-content {
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.route-image-viewer-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.route-image-viewer-close {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+}
+
+.route-image-viewer-caption {
+  position: absolute;
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: 50%;
+  width: min(100%, 640px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Short-lived message */
+.route-images-notice {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 10002;
+  max-width: min(90vw, 420px);
+  padding: 10px 14px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: rgba(30, 30, 30, 0.92);
+  color: #fff;
+  font-size: 0.9rem;
+  pointer-events: none;
+  animation: route-images-notice-fade 0.3s ease 4.5s forwards;
+}
+
+@keyframes route-images-notice-fade {
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-image-marker-body,
+  .route-image-marker-body::after,
+  .route-image-strip,
+  .route-image-strip-scroller,
+  .route-image-layer-sharp {
+    transition: none;
+  }
+}

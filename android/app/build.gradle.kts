@@ -54,6 +54,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("androidx.webkit:webkit:1.15.0")
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation("com.google.android.gms:play-services-auth:22.0.0")
 }
 

@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
             .setDomain(APP_HOST)
+            .addPathHandler("/native/", GalleryHandler(applicationContext))
             .addPathHandler("/", WebAssetHandler(this))
             .build()
     }
@@ -61,11 +62,15 @@ class MainActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                // The page may own Back first, for example to close the full-screen image.
+                webView.evaluateJavascript("window.__triploHandleBack ? window.__triploHandleBack() : false") { handled ->
+                    if (handled == "true") return@evaluateJavascript
+                    if (webView.canGoBack()) {
+                        webView.goBack()
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                    }
                 }
             }
         })
@@ -94,10 +99,12 @@ class MainActivity : ComponentActivity() {
         }
         val googleAuth = GoogleAuth(this)
         val fileSaver = FileSaver(this)
+        val galleryPermission = GalleryPermission(this)
         val bridge = NativeBridge(
             mapOf(
                 "googleAuthorize" to NativeBridge.Handler { _, responder -> googleAuth.authorize(responder) },
                 "saveFile" to NativeBridge.Handler { args, responder -> fileSaver.save(args, responder) },
+                "galleryPermission" to NativeBridge.Handler { _, responder -> galleryPermission.request(responder) },
             )
         )
         WebViewCompat.addWebMessageListener(webView, "TriploNative", setOf(APP_ORIGIN)) { _, message: WebMessageCompat, _, _, reply ->

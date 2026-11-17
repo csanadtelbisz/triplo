@@ -120,6 +120,30 @@ body.dark-mode .context-menu {
   border-radius: 3px;
 }
 
+.menu-toggle-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 0.85rem;
+}
+
+body.dark-mode .style-selector-dropdown .menu-toggle-option {
+  border-color: #424951;
+}
+
+.menu-toggle-option.active .triplo-icon,
+.menu-toggle-option.active .material-symbols-rounded {
+  color: #007bff;
+}
+
+.menu-toggle-option.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 body.dark-mode .layer-option.selected {
   background-color: #3a424c !important;
   color: #f1f3f5;

@@ -1,5 +1,5 @@
 import { getSegmentGeometry } from '../utils/segmentGeometry';
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
 import type { Segment, Trip } from '../../../shared/types';
 import { Map as MapLibreMap, NavigationControl, GeoJSONSource, Marker, LngLatBounds } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -36,6 +36,14 @@ import { useClimateSettings } from '../climate/useClimateSettings';
 import type { AnalyticsSelection } from '../countries/analytics';
 import { segmentKey, UNASSIGNED } from '../countries/types';
 import type { CountryData } from '../countries/types';
+
+import { IS_NATIVE } from '../native/native';
+import { routeImages, useRouteImages } from '../native/routeImagesStore';
+import { getExtraMarkers, setDeclutterHandler } from '../native/markerRegistry';
+import { tripPeriod } from '../native/tripPeriod';
+
+// Android wrapper only. The check must stay inline so web builds do not emit the chunk.
+const RouteImageMarkers = import.meta.env.VITE_TRIPLO_NATIVE === 'android' ? lazy(() => import('../native/RouteImageMarkers')) : null;
 
 const EMPTY_PENDING_ROUTE_VIEWS: PendingRouteViews = {};
 
@@ -147,6 +155,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [showHiddenSegments, setShowHiddenSegments] = useState<boolean>(() => {
     return localStorage.getItem('showHiddenSegments') === 'true';
   });
+  const showRouteImages = useRouteImages().enabled;
+  const canShowRouteImages = !!selectedTrip && !!tripPeriod(selectedTrip);
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string | undefined, mode: string } | null>(null);
   const hoverTooltipRef = useRef<HTMLDivElement>(null);
@@ -647,6 +657,8 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             return;
           }
           if (!hotkeyRefs.current.selectedTrip) return;
+          // A long press on an image pin opens the image, not the map menu.
+          if ((e.originalEvent.target as Element | null)?.closest?.('.route-image-marker')) return;
           
           touchStartPt = e.point;
           
@@ -845,6 +857,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
             hotkeyRefs.current.setSelectedPOI(poiData);
           } else {
             hotkeyRefs.current.setSelectedPOI(null);
+            routeImages.close();
             hotkeyRefs.current.onDragStart?.();
             if (hotkeyRefs.current.onEmptyClick) {
               hotkeyRefs.current.onEmptyClick();
@@ -1346,36 +1359,33 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       const map = mapRef.current;
       if (!map) return;
       
-      const markers = markersRef.current;
-      const sorted = [...markers].sort((a, b) => a.pref - b.pref);
-      const visiblePositions: { x: number, y: number }[] = [];
+      // Waypoints and the Android image pins share one overlap check; lower ranks win.
+      const candidates = [
+        ...markersRef.current.map(m => ({ marker: m.marker, rank: m.pref, radius: MARKER_HIDE_THRESHOLD / 2, isImage: false })),
+        ...getExtraMarkers().map(m => ({ marker: m.marker, rank: m.rank, radius: m.radius, isImage: true })),
+      ].sort((a, b) => a.rank - b.rank);
+      const visiblePositions: { x: number, y: number, radius: number }[] = [];
       
-      for (const m of sorted) {
+      for (const m of candidates) {
         const pos = map.project(m.marker.getLngLat());
-        
-        let tooClose = false;
-        for (const v of visiblePositions) {
-          const dx = pos.x - v.x;
-          const dy = pos.y - v.y;
-          if (Math.sqrt(dx * dx + dy * dy) < MARKER_HIDE_THRESHOLD) {
-            tooClose = true;
-            break;
-          }
-        }
+        const tooClose = visiblePositions.some(v => Math.hypot(pos.x - v.x, pos.y - v.y) < m.radius + v.radius);
+        const element = m.marker.getElement();
         
         if (tooClose) {
-          m.marker.getElement().style.display = 'none';
+          element.style.display = 'none';
         } else {
           // If we had 'flex' set before, use it
-          m.marker.getElement().style.display = m.marker.getElement().classList.contains('pin-marker') ? 'block' : 'flex';
-          visiblePositions.push(pos);
+          element.style.display = m.isImage ? '' : element.classList.contains('pin-marker') ? 'block' : 'flex';
+          visiblePositions.push({ x: pos.x, y: pos.y, radius: m.radius });
         }
       }
     };
     
     mapRef.current.on('move', updateVisibility);
+    setDeclutterHandler(updateVisibility);
     
     return () => {
+      setDeclutterHandler(null);
       if (mapRef.current) {
         mapRef.current.off('move', updateVisibility);
       }
@@ -1476,6 +1486,12 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
         </div>
       )}
 
+      {RouteImageMarkers && mapLoaded && (
+        <Suspense fallback={null}>
+          <RouteImageMarkers map={mapRef.current} />
+        </Suspense>
+      )}
+
 {/* Top Left Controls */}
         <div className="top-left-controls">
           <div ref={styleConfigMenuRef} style={{ position: 'relative' }}>
@@ -1497,6 +1513,16 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                   <Icon name={showHiddenSegments ? 'visibility' : 'visibility_off'} size={18} style={{ color: showHiddenSegments ? '#007bff' : 'inherit' }} />
                   <span style={{ fontSize: '0.85rem' }}>{showHiddenSegments ? "Hide invisible segments" : "Show invisible segments"}</span>
                 </div>
+                {IS_NATIVE && selectedTrip && (
+                  <div
+                    className={`layer-option menu-toggle-option${showRouteImages ? ' active' : ''}${canShowRouteImages ? '' : ' disabled'}`}
+                    title={canShowRouteImages ? undefined : 'Set the start and end date of the trip to show its images'}
+                    onClick={(e) => { e.stopPropagation(); if (canShowRouteImages) routeImages.setEnabled(!showRouteImages); }}
+                  >
+                    <Icon name={showRouteImages ? 'photo_library' : 'image'} size={18} />
+                    <span>{showRouteImages ? "Hide images along route" : "Show images along route"}</span>
+                  </div>
+                )}
                 <div style={{ fontSize: '0.75rem', color: '#666', padding: '4px 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Style Config</div>
                 {styleConfigs.map((config) => (
                   <div

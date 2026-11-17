@@ -33,6 +33,21 @@ and `npm run build` in `frontend/`. Pass `-PskipWeb` to reuse the last web build
 | --- | --- |
 | `googleAuthorize` | Google Drive access token (scope `drive.file`) through Play services |
 | `saveFile` | Saves a text export (GPX) through the system file picker |
+| `galleryPermission` | Asks for photo access and the permission that keeps GPS in EXIF |
+
+The page also reads photos from `/native/` (`GalleryHandler`): `query/<from>/<to>`
+lists geotagged photos taken in the period, `thumb/<id>/<size>` and `full/<id>`
+serve images. The Back button is offered to the page first
+(`registerNativeBackHandler`).
+
+## Images along the route
+
+With a trip selected, the map's style menu has **Show images along route**
+(native build only, needs a trip start and end date). The page asks for the
+photos in the trip period, keeps those within 500 m of a visible segment (100 km
+for flights, see `frontend/src/native/routeFilter.ts`), pins thumbnails on the
+map, and shows them oldest first in a bottom panel. Tap a pin to select it, tap
+the panel image or long-press a pin for the full-screen zoomable view.
 
 Opening `https://csanadtelbisz.github.io/triplo/share/<token>` launches the app
 at its own `/share/<token>` route.
