@@ -54,7 +54,10 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK. Make sure licenses are accepted so
+      # Gradle can download any missing platform or build tools.
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Prepare release signing key
         if: env.PUBLISH == 'true'
