@@ -8,6 +8,8 @@ import { registerNativeBackHandler } from './native';
 import { routeImages } from './routeImagesStore';
 
 const SETTLE_DELAY_MS = 80;
+// Share of a slide the panel must move before the neighbour counts as selected.
+const SWIPE_START_FRACTION = 0.04;
 const GESTURE_LOCK_PX = 10;
 const OPEN_DISTANCE_PX = 40;
 const CLOSE_DISTANCE_PX = 60;
@@ -20,10 +22,12 @@ const MAX_PANEL_WIDTH = 640;
 type PanelStyle = CSSProperties & { '--route-image-height': string; '--route-image-offset': string };
 
 /** Bottom panel: a swipeable row of the route's images, oldest first. */
-export function ImageStrip({ images, activeId, fullscreen }: { images: GalleryImage[]; activeId: number; fullscreen: boolean }) {
+export function ImageStrip({ images, activeId, activeSource, fullscreen }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<number | undefined>(undefined);
+  const scrollStart = useRef<number | null>(null);
+  const latest = useRef({ images, activeId });
   const gesture = useRef<{ x: number; y: number; time: number; axis: 'x' | 'y' | null } | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [offset, setOffset] = useState(0);
@@ -37,13 +41,18 @@ export function ImageStrip({ images, activeId, fullscreen }: { images: GalleryIm
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  useEffect(() => {
+    latest.current = { images, activeId };
+  });
+
+  // Selections made by swiping this panel must not scroll it again.
   useLayoutEffect(() => {
     const element = scroller.current;
-    if (!element || index < 0) return;
+    if (!element || index < 0 || activeSource === 'strip') return;
     if (Math.round(element.scrollLeft / element.clientWidth) !== index) {
       element.scrollTo({ left: index * element.clientWidth, behavior: 'instant' });
     }
-  }, [index, images.length]);
+  }, [index, images.length, activeSource]);
 
   useEffect(() => registerNativeBackHandler(() => routeImages.close()), []);
   useEffect(() => () => window.clearTimeout(settleTimer.current), []);
@@ -53,13 +62,24 @@ export function ImageStrip({ images, activeId, fullscreen }: { images: GalleryIm
   const panelWidth = Math.min(viewport.width, MAX_PANEL_WIDTH);
   const imageHeight = Math.min(panelWidth / (aspect !== null && aspect >= 1 ? aspect : DEFAULT_ASPECT), viewport.height * MAX_HEIGHT_RATIO);
 
+  // The neighbour becomes the selected image as soon as the swipe starts, so the map moves
+  // right away. When the scrolling stops, the image that is actually in view is selected.
   const handleScroll = () => {
+    const element = scroller.current;
+    if (!element) return;
+    const { images: all, activeId: selectedId } = latest.current;
+    const position = element.scrollLeft / element.clientWidth;
+    if (scrollStart.current === null) scrollStart.current = all.findIndex(image => image.id === selectedId);
+    const delta = position - scrollStart.current;
+    const target = Math.abs(delta) > SWIPE_START_FRACTION ? scrollStart.current + Math.sign(delta) : scrollStart.current;
+    const heading = all[Math.max(0, Math.min(all.length - 1, target))];
+    if (heading && heading.id !== selectedId) routeImages.select(heading.id, 'strip');
+
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
-      const element = scroller.current;
-      if (!element) return;
-      const visible = images[Math.round(element.scrollLeft / element.clientWidth)];
-      if (visible && visible.id !== activeId) routeImages.select(visible.id, 'strip');
+      scrollStart.current = null;
+      const visible = latest.current.images[Math.round(element.scrollLeft / element.clientWidth)];
+      if (visible && visible.id !== latest.current.activeId) routeImages.select(visible.id, 'strip');
     }, SETTLE_DELAY_MS);
   };
 

@@ -11,7 +11,7 @@ import './RouteImages.css';
 
 /** Loads the selected trip's images and shows the bottom panel and full-screen viewer. */
 export default function RouteImagesHost({ trip }: { trip: Trip | null }) {
-  const { enabled, images, activeId, fullscreen } = useRouteImages();
+  const { enabled, images, activeId, activeSource, fullscreen } = useRouteImages();
   const [loaded, setLoaded] = useState<{ key: string; images: GalleryImage[] } | null>(null);
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
 
@@ -60,7 +60,7 @@ export default function RouteImagesHost({ trip }: { trip: Trip | null }) {
       {!error && emptyNotice && <div className="route-images-notice" key={`empty:${key}`} role="status">No geotagged photos found along this route.</div>}
       {enabled && activeId !== null && (
         <>
-          <ImageStrip images={images} activeId={activeId} fullscreen={fullscreen} />
+          <ImageStrip images={images} activeId={activeId} activeSource={activeSource} fullscreen={fullscreen} />
           {fullscreen && <ImageViewer images={images} activeId={activeId} />}
         </>
       )}
