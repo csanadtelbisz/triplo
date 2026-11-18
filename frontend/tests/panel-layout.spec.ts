@@ -202,8 +202,12 @@ for (const action of ['Add to trip', 'Add before last']) test(`map ${action} pre
   try {
     await expect.poll(() => routeGeometries(page)).toHaveLength(1);
     const original = await routeGeometries(page);
-    await page.locator('.maplibregl-canvas').click({ button: 'right', position: { x: 750, y: 300 } });
-    await page.getByText(action, { exact: true }).click();
+    // Opening the trip animates the map, and any map movement closes the menu. On a slow
+    // machine the movement can start after the menu opened, so open it again until it works.
+    await expect(async () => {
+      await page.locator('.maplibregl-canvas').click({ button: 'right', position: { x: 750, y: 300 } });
+      await page.getByText(action, { exact: true }).click({ timeout: 2000 });
+    }).toPass();
     await expect(page.locator('.waypoint-title-input')).toHaveCount(4);
     await expect.poll(() => pending.length).toBe(1);
     expect(await routeGeometries(page)).toEqual(original);
