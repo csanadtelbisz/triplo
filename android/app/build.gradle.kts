@@ -1,4 +1,30 @@
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.process.ExecOperations
+import javax.inject.Inject
+
+// Builds the web app with the native flag and the root base path into <assetsDirectory>/web.
+// Declaring the assets directory as an output lets every task that reads the assets, such as
+// lint, depend on this one.
+abstract class BuildWebTask @Inject constructor(private val execOperations: ExecOperations) : DefaultTask() {
+    @get:Internal
+    abstract val webDirectory: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val assetsDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val npmCommand: Property<String>
+
+    @TaskAction
+    fun build() {
+        val output = assetsDirectory.get().asFile.resolve("web")
+        execOperations.exec {
+            workingDir = webDirectory.get().asFile
+            environment("VITE_TRIPLO_NATIVE", "android")
+            commandLine(npmCommand.get(), "run", "build", "--", "--base=/", "--outDir=${output.absolutePath}", "--emptyOutDir")
+        }
+    }
+}
 
 plugins {
     id("com.android.application")
@@ -42,14 +68,6 @@ android {
     }
 }
 
-androidComponents {
-    onVariants { variant ->
-        variant.sources.assets?.addStaticSourceDirectory(
-            layout.buildDirectory.dir("generated/web-assets").get().asFile.absolutePath
-        )
-    }
-}
-
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-ktx:1.11.0")
@@ -58,11 +76,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:22.0.0")
 }
 
-// Builds the unchanged web app with the native flag and the root base path,
-// then places it in the APK assets under "web/". Pass -PskipWeb to reuse the
-// previous output.
+// Builds the unchanged web app with the native flag and the root base path, then places it in
+// the APK assets under "web/". Pass -PskipWeb to reuse the previous output.
 val webDir = rootDir.resolve("../frontend")
-val webAssets = layout.buildDirectory.dir("generated/web-assets/web")
 val npm = if (Os.isFamily(Os.FAMILY_WINDOWS)) "npm.cmd" else "npm"
 
 val installWebDependencies = tasks.register<Exec>("installWebDependencies") {
@@ -71,11 +87,11 @@ val installWebDependencies = tasks.register<Exec>("installWebDependencies") {
     onlyIf { !project.hasProperty("skipWeb") && !webDir.resolve("node_modules").exists() }
 }
 
-val buildWeb = tasks.register<Exec>("buildWeb") {
+val buildWeb = tasks.register<BuildWebTask>("buildWeb") {
     dependsOn(installWebDependencies)
-    workingDir = webDir
-    environment("VITE_TRIPLO_NATIVE", "android")
-    commandLine(npm, "run", "build", "--", "--base=/", "--outDir=${webAssets.get().asFile.absolutePath}", "--emptyOutDir")
+    webDirectory.set(webDir)
+    assetsDirectory.set(layout.buildDirectory.dir("generated/web-assets"))
+    npmCommand.set(npm)
     inputs.dir(webDir.resolve("src"))
     inputs.dir(webDir.resolve("public"))
     inputs.dir(rootDir.resolve("../shared"))
@@ -83,11 +99,11 @@ val buildWeb = tasks.register<Exec>("buildWeb") {
     inputs.file(webDir.resolve("index.html"))
     inputs.file(webDir.resolve("package-lock.json"))
     inputs.file(webDir.resolve("vite.config.ts"))
-    inputs.property("nativeFlag", "android")
-    outputs.dir(webAssets)
     onlyIf { !project.hasProperty("skipWeb") }
 }
 
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-    dependsOn(buildWeb)
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(buildWeb, BuildWebTask::assetsDirectory)
+    }
 }

@@ -1,6 +1,6 @@
 name: Android
 
-# Pull requests build a debug APK as a check. Pushes to the default branch
+# Pull requests build an unsigned release APK as a check. Pushes to the default branch
 # publish a signed APK as a GitHub release, which the app's updater looks for.
 on:
   push:
@@ -80,9 +80,9 @@ jobs:
           VITE_GOOGLE_DRIVE_API_KEY: ${{ env.PUBLISH == 'true' && secrets.VITE_GOOGLE_DRIVE_API_KEY || '' }}
         run: |
           chmod +x gradlew
-          task=assembleDebug
-          if [ "$PUBLISH" = "true" ]; then task=assembleRelease; fi
-          ./gradlew --no-daemon "$task" \
+          # Pull requests have no signing key, so they produce an unsigned APK. Building the
+          # release variant there still runs its lint checks, which a debug build skips.
+          ./gradlew --no-daemon assembleRelease \
             -PappVersionCode="$VERSION_CODE" -PappVersionName="$VERSION_NAME"
 
       - name: Publish release
