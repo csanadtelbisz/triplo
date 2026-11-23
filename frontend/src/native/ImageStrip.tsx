@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { ReactNode } from 'react';
 import { Icon } from '../components/Icon';
-import { imageAspect, imageCaption, panelImageUrl, thumbnailUrl } from './gallery';
+import { fullImageUrl, imageAspect, imageCaption, panelImageUrl, thumbnailUrl } from './gallery';
 import type { GalleryImage } from './gallery';
 import { LayeredImage } from './LayeredImage';
 import { registerNativeBackHandler } from './native';
@@ -22,7 +23,7 @@ const MAX_PANEL_WIDTH = 640;
 type PanelStyle = CSSProperties & { '--route-image-height': string; '--route-image-offset': string };
 
 /** Bottom panel: a swipeable row of the route's images, oldest first. */
-export function ImageStrip({ images, activeId, activeSource, fullscreen }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean }) {
+export function ImageStrip({ images, activeId, activeSource, fullscreen, hideCloseButton = false, onDismiss, onSwipeChange, timeline }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean; hideCloseButton?: boolean; onDismiss?: () => void; onSwipeChange?: (image: GalleryImage) => void; timeline?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<number | undefined>(undefined);
@@ -73,13 +74,16 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
     const delta = position - scrollStart.current;
     const target = Math.abs(delta) > SWIPE_START_FRACTION ? scrollStart.current + Math.sign(delta) : scrollStart.current;
     const heading = all[Math.max(0, Math.min(all.length - 1, target))];
-    if (heading && heading.id !== selectedId) routeImages.select(heading.id, 'strip');
+    if (!onSwipeChange && heading && heading.id !== selectedId) routeImages.select(heading.id, 'strip');
 
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
       scrollStart.current = null;
       const visible = latest.current.images[Math.round(element.scrollLeft / element.clientWidth)];
-      if (visible && visible.id !== latest.current.activeId) routeImages.select(visible.id, 'strip');
+      if (visible && visible.id !== latest.current.activeId) {
+        if (onSwipeChange) onSwipeChange(visible);
+        else routeImages.select(visible.id, 'strip');
+      }
     }, SETTLE_DELAY_MS);
   };
 
@@ -119,7 +123,7 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
       routeImages.openFullscreen();
     } else if (event.type !== 'pointercancel' && (dy > CLOSE_DISTANCE_PX || (dy > GESTURE_LOCK_PX && speed > FLING_SPEED))) {
       setOffset(root.current?.getBoundingClientRect().height ?? viewport.height);
-      window.setTimeout(() => routeImages.close(), CLOSE_ANIMATION_MS);
+      window.setTimeout(() => onDismiss ? onDismiss() : routeImages.close(), CLOSE_ANIMATION_MS);
     } else {
       setOffset(0);
     }
@@ -138,9 +142,9 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
     >
-      <button className="route-image-strip-button route-image-strip-close" onClick={() => routeImages.close()} title="Close">
+      {!hideCloseButton && <button className="route-image-strip-button route-image-strip-close" onClick={() => routeImages.close()} title="Close">
         <Icon name="close" size={20} />
-      </button>
+      </button>}
       {index > 0 && (
         <button className="route-image-strip-button route-image-strip-nav route-image-strip-prev" onClick={() => step(-1)} title="Previous image">
           <Icon name="chevron_left" size={24} />
@@ -159,10 +163,11 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
             onClick={() => routeImages.openFullscreen(image.id)}
           >
             {/* The neighbours load their sharp version ahead of time for smooth swiping. */}
-            <LayeredImage placeholder={thumbnailUrl(image.id, 640)} src={Math.abs(position - index) <= 1 ? panelImageUrl(image.id) : null} />
+            <LayeredImage placeholder={thumbnailUrl(image.id, 640)} placeholderFallback={fullImageUrl(image.id)} src={Math.abs(position - index) <= 1 ? panelImageUrl(image.id) : null} />
           </button>
         ))}
       </div>
+      {timeline}
       <div className="route-image-caption route-image-strip-caption">{imageCaption(active)} · {index + 1} / {images.length}</div>
     </div>
   );

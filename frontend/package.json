@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@turf/turf": "^7.3.4",
+    "@uswriting/exiftool": "^1.0.9",
     "lucide-react": "^0.577.0",
     "maplibre-gl": "^5.20.1",
     "react": "^19.2.4",

@@ -1,0 +1,57 @@
+.trip-gallery-panel { display:flex; flex-direction:column; min-height:0; height:100%; background:inherit; color:inherit; }
+.trip-gallery-panel .toolbar { flex-shrink:0; }
+.trip-gallery-scroll-container { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.trip-gallery-filter-control { position:relative; }
+.trip-gallery-filter-menu { top:calc(100% + 4px); right:0; z-index:10010; }
+.trip-gallery-filter-menu { display:flex; flex-direction:column; gap:3px; }
+.trip-gallery-filter-menu .trip-sort-menu-option { justify-content:space-between; gap:16px; }
+.trip-gallery-grid { display:grid; align-content:start; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:min-content; gap:3px; padding:3px; }
+.trip-gallery-image { position:relative; display:block; width:100%; min-width:0; min-height:0; height:auto; aspect-ratio:1 / 1; align-self:start; padding:0; border:0; background:#ddd; overflow:hidden; }
+.trip-gallery-image img { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; }
+.trip-gallery-image.active { z-index:1; outline:2px solid #007bff; outline-offset:-2px; }
+.trip-gallery-image.gps-unsaved::after { content:''; position:absolute; z-index:2; inset:0; padding:4px; pointer-events:none; background:repeating-linear-gradient(45deg,#e58a32 0 4px,#74ae45 4px 8px); -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); -webkit-mask-composite:xor; mask-composite:exclude; }
+/* Drawn over the photo: an inset shadow on the tile itself would be hidden behind the image. */
+.trip-gallery-image.map-selection-pulse::after { content:''; position:absolute; inset:0; pointer-events:none; animation:trip-gallery-map-pulse .6s ease-out 2; }
+@keyframes trip-gallery-map-pulse { 0% { box-shadow:inset 0 0 0 0 #168bff; background:#168bff00; } 40% { box-shadow:inset 0 0 0 6px #168bff; background:#168bff55; } 100% { box-shadow:inset 0 0 0 0 #168bff; background:#168bff00; } }
+.trip-gallery-no-gps { position:absolute; top:3px; right:3px; display:grid; place-items:center; color:#666; background:#ffffffd9; border-radius:50%; width:24px; height:24px; }
+.trip-gallery-reset { position:absolute; z-index:3; top:4px; right:4px; display:grid; place-items:center; width:24px; height:24px; color:#fff; background:#20252ad9; border-radius:50%; }
+.trip-gallery-message { padding:16px; }
+.trip-gallery-summary { flex:0 0 auto; margin:0; padding:10px 12px 6px; font-size:.9em; opacity:.75; }
+.trip-gallery-save { color:#0878d1; border:0; background:transparent; font:inherit; font-weight:600; }
+.trip-gallery-error { color:#b42318; padding:8px 12px; margin:0; }
+.trip-gallery-save-progress { display:flex; flex-direction:column; gap:12px; min-width:min(320px,75vw); }
+.trip-gallery-save-photo { display:flex; align-items:center; gap:12px; min-width:0; }
+.trip-gallery-save-photo > img { flex:0 0 56px; width:56px; height:56px; border-radius:4px; object-fit:cover; }
+.trip-gallery-save-photo > div { display:flex; flex-direction:column; min-width:0; gap:4px; }
+.trip-gallery-save-photo strong { overflow-wrap:anywhere; }
+.trip-gallery-save-photo span,.trip-gallery-progress-caption { opacity:.75; font-size:.9em; }
+.trip-gallery-progress-track { height:8px; overflow:hidden; border-radius:8px; background:#d7dce1; }
+.trip-gallery-progress-track > div { height:100%; background:#007bff; transition:width .2s ease; }
+.trip-gallery-progress-caption { text-align:right; }
+.trip-gallery-add-bar { position:fixed; z-index:10003; left:50%; transform:translateX(-50%); display:flex; align-items:center; justify-content:space-between; gap:36px; padding:6px 14px; border-radius:24px; background:#fff; color:#222; box-shadow:0 2px 10px #0004; }
+.trip-gallery-add-bar button { border:0; background:transparent; display:grid; place-items:center; color:#168345; }
+.trip-gallery-add-bar button:first-child { color:#c74444; }
+.trip-gallery-add-bar span { white-space:nowrap; }
+.trip-gallery-edit-marker { position:fixed; z-index:10002; left:50%; top:50%; /* moved to the middle of the uncovered map by the panel */ transform:translate(-50%,-100%); pointer-events:none; }
+.trip-gallery-edit-marker .route-image-marker-body { margin-bottom:8px; }
+.trip-gallery-panel.adding-gps { display:contents; }
+.trip-gallery-panel.adding-gps > .toolbar,
+.trip-gallery-panel.adding-gps > .trip-gallery-scroll-container,
+.trip-gallery-panel.adding-gps > .trip-gallery-error { display:none; }
+.sidebar:has(.trip-gallery-panel.adding-gps) { background:transparent !important; border-color:transparent !important; box-shadow:none !important; pointer-events:none; }
+.sidebar:has(.trip-gallery-panel.adding-gps) > .mobile-drag-handle { display:none; }
+body.dark-mode .trip-gallery-add-bar { background:#252a30; color:#e6e8eb; }
+body.dark-mode .trip-gallery-no-gps { background:#252a30e8; color:#c8cdd3; }
+.trip-gallery-location-feedback { position:fixed; z-index:10004; top:calc(16px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); padding:9px 14px; border-radius:20px; background:#20252aeb; color:#fff; box-shadow:0 2px 10px #0004; white-space:nowrap; pointer-events:none; }
+.trip-route-timeline { position:relative; flex:0 0 58px; height:58px; overflow:hidden; background:#111; color:#fff; }
+.trip-route-timeline-scroll { position:absolute; inset:0; overflow:hidden; overscroll-behavior:contain; touch-action:none; user-select:none; -webkit-user-select:none; }
+.trip-route-timeline-content { position:relative; height:100%; }
+.trip-route-timeline-track { position:absolute; top:9px; height:47px; }
+.trip-route-timeline-track > span:not(.trip-route-timeline-photo-marker) { position:absolute; top:0; height:4px; }
+.trip-route-timeline-cursor { position:absolute; z-index:2; left:50%; top:2px; width:0; height:0; transform:translateX(-50%); border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid #fff; pointer-events:none; }
+.trip-route-timeline-photo-marker { position:absolute; top:13px; display:block; width:40px; height:40px; transform:translateX(-50%); border-radius:4px; background:#f3f5f7; box-shadow:0 1px 3px #0008; padding:0; border:0; cursor:pointer; }
+.trip-route-timeline-photo-marker.next { z-index:1; }
+.trip-route-timeline-photo-marker.previous { z-index:2; }
+.trip-route-timeline-photo-marker img { display:block; width:40px; height:40px; border-radius:4px; object-fit:cover; }
+.trip-route-timeline-photo-marker::before { content:''; position:absolute; top:-5px; left:17px; border-left:3px solid transparent; border-right:3px solid transparent; border-bottom:5px solid #f3f5f7; }
+body.dark-mode .trip-route-timeline { background:#111; }

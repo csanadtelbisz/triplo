@@ -260,6 +260,18 @@ body.dark-mode .timeline-plus .triplo-icon {
   align-items: center;
   gap: 8px;
 }
+.trip-summary-gallery-button {
+  padding: 4px 6px;
+}
+.trip-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.trip-summary-actions .climate-settings-button {
+  margin-left: 0;
+}
 .trip-summary-total {
   margin-bottom: 12px;
   font-size: 0.9rem;

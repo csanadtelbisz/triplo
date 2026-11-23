@@ -4,14 +4,14 @@ import { queryGallery, requestGalleryAccess, sortImagesByTime } from './gallery'
 import type { GalleryImage } from './gallery';
 import { ImageStrip } from './ImageStrip';
 import { ImageViewer } from './ImageViewer';
-import { filterImagesNearTrip } from './routeFilter';
+import { hasGps } from './gallery';
 import { routeImages, useRouteImages } from './routeImagesStore';
 import { tripPeriod } from './tripPeriod';
 import './RouteImages.css';
 
 /** Loads the selected trip's images and shows the bottom panel and full-screen viewer. */
-export default function RouteImagesHost({ trip }: { trip: Trip | null }) {
-  const { enabled, images, activeId, activeSource, fullscreen } = useRouteImages();
+export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip | null; hidden?: boolean }) {
+  const { enabled, images, activeId, activeSource, fullscreen, galleryMode, viewerSourceSelector } = useRouteImages();
   const [loaded, setLoaded] = useState<{ key: string; images: GalleryImage[] } | null>(null);
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
 
@@ -45,7 +45,7 @@ export default function RouteImagesHost({ trip }: { trip: Trip | null }) {
 
   const candidates = loaded?.key === key ? loaded.images : null;
   const nearTrip = useMemo(
-    () => (trip && candidates ? sortImagesByTime(filterImagesNearTrip(candidates, trip)) : []),
+    () => (trip && candidates ? sortImagesByTime(candidates.filter(hasGps)) : []),
     [trip, candidates],
   );
 
@@ -53,15 +53,20 @@ export default function RouteImagesHost({ trip }: { trip: Trip | null }) {
     routeImages.setImages(key ? nearTrip : []);
   }, [key, nearTrip]);
 
+  // Another panel took over the sidebar: its image panel and viewer go away with it.
+  useEffect(() => {
+    if (hidden) routeImages.close();
+  }, [hidden]);
+
   const emptyNotice = candidates && nearTrip.length === 0;
   return (
     <>
       {error && <div className="route-images-notice" key={`error:${error.id}`} role="status">{error.text}</div>}
       {!error && emptyNotice && <div className="route-images-notice" key={`empty:${key}`} role="status">No geotagged photos found along this route.</div>}
-      {enabled && activeId !== null && (
+      {enabled && !hidden && activeId !== null && (
         <>
-          <ImageStrip images={images} activeId={activeId} activeSource={activeSource} fullscreen={fullscreen} />
-          {fullscreen && <ImageViewer images={images} activeId={activeId} />}
+          {!galleryMode && <ImageStrip images={images} activeId={activeId} activeSource={activeSource} fullscreen={fullscreen} />}
+          {fullscreen && <ImageViewer images={images} activeId={activeId} sourceSelector={viewerSourceSelector || undefined} />}
         </>
       )}
     </>

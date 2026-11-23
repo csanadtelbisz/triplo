@@ -42,7 +42,12 @@ const flipTransform = (from: Box, to: Box) =>
 // Where the selected image sits in the bottom panel, and which of its corners the panel rounds off.
 type PanelImage = { rect: DOMRect; radius: number };
 
-function panelImage(): PanelImage | null {
+function panelImage(sourceSelector?: string): PanelImage | null {
+  if (sourceSelector) {
+    const source = document.querySelector(sourceSelector);
+    if (!source) return null;
+    return { rect: source.getBoundingClientRect(), radius: parseFloat(getComputedStyle(source).borderTopLeftRadius) || 0 };
+  }
   const layers = document.querySelector('.route-image-slide.active .route-image-layers');
   const scroller = document.querySelector('.route-image-strip-scroller');
   if (!layers || !scroller) return null;
@@ -51,14 +56,14 @@ function panelImage(): PanelImage | null {
 
 // Keyframes for the image drawn in the bottom panel and in full screen. The clip hugs the image
 // and carries the panel's rounded corners, so they grow and shrink with the movement.
-function morph(panel: PanelImage, stage: DOMRect, aspect: number | null) {
+function morph(panel: PanelImage, stage: DOMRect, aspect: number | null, fromGallery: boolean) {
   const small = containBox(panel.rect, aspect);
   const large = containBox(stage, aspect);
-  const scroller = document.querySelector('.route-image-strip-scroller')!.getBoundingClientRect();
+  const scroller = document.querySelector('.route-image-strip-scroller')?.getBoundingClientRect();
   const touches = (edge: number, panelEdge: number) => Math.abs(edge - panelEdge) < 1.5;
-  const top = touches(small.cy - small.h / 2, scroller.top);
-  const topLeft = top && touches(small.cx - small.w / 2, scroller.left);
-  const topRight = top && touches(small.cx + small.w / 2, scroller.right);
+  const top = !fromGallery && !!scroller && touches(small.cy - small.h / 2, scroller.top);
+  const topLeft = top && !!scroller && touches(small.cx - small.w / 2, scroller.left);
+  const topRight = top && !!scroller && touches(small.cx + small.w / 2, scroller.right);
   const radius = panel.radius * (large.w / small.w);
   const inset = (left: number, right: number) => {
     const edges = `${large.cy - large.h / 2 - stage.top}px ${stage.right - (large.cx + large.w / 2)}px ${stage.bottom - (large.cy + large.h / 2)}px ${large.cx - large.w / 2 - stage.left}px`;
@@ -78,7 +83,7 @@ function imageAspectOf(image: GalleryImage, element: Element | null): number | n
 }
 
 /** Full-screen images: swipe sideways for the next one, down to return to the panel, pinch to zoom. */
-export function ImageViewer({ images, activeId }: { images: GalleryImage[]; activeId: number }) {
+export function ImageViewer({ images, activeId, sourceSelector }: { images: GalleryImage[]; activeId: number; sourceSelector?: string }) {
   const index = images.findIndex(image => image.id === activeId);
   const active = images[index];
   const stage = useRef<HTMLDivElement>(null);
@@ -108,11 +113,11 @@ export function ImageViewer({ images, activeId }: { images: GalleryImage[]; acti
 
   // Grow from the image in the bottom panel.
   useLayoutEffect(() => {
-    const panel = panelImage();
+    const panel = panelImage(sourceSelector);
     const element = content.current, area = stage.current;
     if (!panel || !element || !area) return;
     const aspect = imageAspectOf(images[index], element);
-    const frames = morph(panel, area.getBoundingClientRect(), aspect);
+    const frames = morph(panel, area.getBoundingClientRect(), aspect, !!sourceSelector);
     element.animate([frames.panel, frames.screen], FLIP_TIMING);
     backdrop.current?.animate([{ opacity: 0 }, { opacity: 1 }], FLIP_TIMING);
     chrome.current?.animate([{ opacity: 0 }, { opacity: 1 }], FLIP_TIMING);
@@ -124,13 +129,13 @@ export function ImageViewer({ images, activeId }: { images: GalleryImage[]; acti
   const collapse = () => {
     if (leaving.current) return;
     leaving.current = true;
-    const element = content.current, area = stage.current, panel = panelImage();
+    const element = content.current, area = stage.current, panel = panelImage(sourceSelector);
     if (!element || !area || !panel || !latest.current.images[latest.current.index]) {
       routeImages.collapseFullscreen();
       return;
     }
     const aspect = imageAspectOf(latest.current.images[latest.current.index], element);
-    const frames = morph(panel, area.getBoundingClientRect(), aspect);
+    const frames = morph(panel, area.getBoundingClientRect(), aspect, !!sourceSelector);
     const animation = element.animate(
       [{ transform: getComputedStyle(element).transform, clipPath: frames.screen.clipPath }, frames.panel],
       { ...FLIP_TIMING, fill: 'forwards' },
@@ -334,7 +339,7 @@ export function ImageViewer({ images, activeId }: { images: GalleryImage[]; acti
                   ref={current ? content : undefined}
                   style={current ? { transform: contentTransform(view, drag.y) } : undefined}
                 >
-                  <LayeredImage placeholder={panelImageUrl(image.id)} src={current ? fullImageUrl(image.id) : null} />
+                  <LayeredImage placeholder={panelImageUrl(image.id)} placeholderFallback={fullImageUrl(image.id)} src={current ? fullImageUrl(image.id) : null} />
                 </div>
               </div>
             );

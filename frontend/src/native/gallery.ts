@@ -1,4 +1,5 @@
-import { callNative } from './native';
+import { callNative, requestPhotoWrite, sendPhotoBytes } from './native';
+import { writeGps } from './exiftool';
 
 export type GalleryImage = {
   id: number;
@@ -7,20 +8,25 @@ export type GalleryImage = {
   /** Pixel size as displayed, 0 when unknown. */
   width: number;
   height: number;
-  lat: number;
-  lon: number;
+  lat: number | null;
+  lon: number | null;
   /** EXIF capture time as the camera clock showed it: "YYYY:MM:DD HH:MM:SS". */
   label: string | null;
   /** EXIF UTC offset of that clock, such as "+02:00". Missing on older cameras. */
   offset: string | null;
+  screenshot: boolean;
+  name?: string;
 };
 
 // Large enough to look sharp full width, much smaller than the original.
 const PANEL_IMAGE_SIZE = 2048;
 
-export const thumbnailUrl = (id: number, size = 256) => `/native/thumb/${id}/${size}`;
+const imageRevisions = new Map<number, number>();
+const revisionQuery = (id: number) => imageRevisions.get(id) ? `?v=${imageRevisions.get(id)}` : '';
+export const thumbnailUrl = (id: number, size = 256) => `/native/thumb/${id}/${size}${revisionQuery(id)}`;
 export const panelImageUrl = (id: number) => thumbnailUrl(id, PANEL_IMAGE_SIZE);
-export const fullImageUrl = (id: number) => `/native/full/${id}`;
+export const fullImageUrl = (id: number) => `/native/full/${id}${revisionQuery(id)}`;
+export const originalImageUrl = (id: number) => `/native/original/${id}`;
 
 export async function requestGalleryAccess(): Promise<boolean> {
   const { granted } = await callNative<{ granted: boolean }>('galleryPermission');
@@ -32,9 +38,53 @@ export async function queryGallery(from: number, to: number): Promise<GalleryIma
   const response = await fetch(`/native/query/${from}/${to}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Gallery query failed (${response.status})`);
   const images = (await response.json()) as GalleryImage[];
-  // Some cameras write 0,0 when they have no fix.
-  return images.filter(image => image.lat !== 0 || image.lon !== 0);
+  return images.map(image => image.lat === 0 && image.lon === 0 ? { ...image, lat: null, lon: null } : image);
 }
+
+export const hasGps = (image: GalleryImage): image is GalleryImage & { lat: number; lon: number } =>
+  image.lat !== null && image.lon !== null;
+
+export type GpsEditProgress = { id: number | null; current: number; total: number; phase: string };
+export type GpsEditFailure = { id: number; name?: string; error: string };
+export type GpsEditResult = { savedIds: number[]; failures: GpsEditFailure[] };
+
+export async function persistGpsEdits(
+  edits: Record<number, [number, number]>,
+  onProgress?: (progress: GpsEditProgress) => void,
+  names: Record<number, string> = {},
+): Promise<GpsEditResult> {
+  const entries = Object.entries(edits).map(([rawId, position]) => [Number(rawId), position] as const);
+  const ids = entries.map(([id]) => id);
+  const savedIds: number[] = [];
+  const failures: GpsEditFailure[] = [];
+
+  onProgress?.({ id: ids[0] ?? null, current: 0, total: ids.length, phase: 'permission' });
+  await requestPhotoWrite(ids);
+
+  for (let index = 0; index < entries.length; index++) {
+    const [id, [lat, lon]] = entries[index];
+    try {
+      onProgress?.({ id, current: index, total: entries.length, phase: 'editing' });
+      const response = await fetch(originalImageUrl(id), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Could not read original photo (${response.status})`);
+      const blob = await response.blob();
+      const file = new File([blob], names[id] || `photo-${id}${extensionFor(blob.type)}`, { type: blob.type });
+      const bytes = await writeGps(file, { lat, lon });
+      onProgress?.({ id, current: index, total: entries.length, phase: 'writing' });
+      await sendPhotoBytes(id, bytes);
+      imageRevisions.set(id, (imageRevisions.get(id) || 0) + 1);
+      savedIds.push(id);
+    } catch (error) {
+      failures.push({ id, name: names[id], error: error instanceof Error ? error.message : String(error) });
+      console.error(`Could not save GPS metadata for photo ${names[id] || id}`, error);
+    }
+    onProgress?.({ id, current: index + 1, total: entries.length, phase: 'complete' });
+  }
+
+  return { savedIds, failures };
+}
+
+const extensionFor = (type: string) => ({ 'image/heic': '.heic', 'image/heif': '.heif', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[type] || '.img');
 
 export const imageAspect = (image: GalleryImage): number | null =>
   image.width > 0 && image.height > 0 ? image.width / image.height : null;

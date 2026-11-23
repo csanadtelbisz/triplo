@@ -52,6 +52,7 @@ import { serializeTrip } from './utils/serializeTrip';
 
 // Android wrapper only. The check must stay inline so web builds do not emit the chunk.
 const RouteImagesHost = import.meta.env.VITE_TRIPLO_NATIVE === 'android' ? lazy(() => import('./native/RouteImagesHost')) : null;
+const TripGalleryPanel = import.meta.env.VITE_TRIPLO_NATIVE === 'android' ? lazy(() => import('./native/TripGalleryPanel').then(module => ({ default: module.TripGalleryPanel }))) : null;
 
 const TRIP_CACHE_KEY = 'triplo_cached_trips_v2';
 type PreferenceVersion = { source: string; preferences: any };
@@ -85,7 +86,7 @@ function stripMeta(trip: Trip, includeCaches = true): string {
 }
 
 type PanelHistoryState = {
-  panel: 'manager' | 'editor' | 'segment' | 'waypoint' | 'poi' | 'search' | 'status' | 'analytics' | 'analytics-segment' | 'preferences' | 'style-config';
+  panel: 'manager' | 'editor' | 'gallery' | 'segment' | 'waypoint' | 'poi' | 'search' | 'status' | 'analytics' | 'analytics-segment' | 'preferences' | 'style-config';
   tripId?: string;
   segmentId?: string;
   waypointId?: string;
@@ -217,6 +218,7 @@ export default function App() {
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(null);
   const [selectedPOI, setSelectedPOI] = useState<any | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isTripGalleryOpen, setTripGalleryOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [analyticsTimeSliderVisible, setAnalyticsTimeSliderVisible] = useState(false);
@@ -234,6 +236,22 @@ export default function App() {
     const startMinimized = startMinimizedPref === null ? true : startMinimizedPref === 'true';
     return window.innerWidth <= 768 && (!!getSharedTripTokenFromPath() || startMinimized);
   });
+  // Picking a pin shows the image panel over the map, or the whole gallery panel while it is open.
+  // The image panel takes the place of any panel that had taken over the sidebar (POI, waypoint, search...).
+  const handleRouteImageSelect = useCallback((galleryMode: boolean) => {
+    if (!galleryMode) {
+      setSelectedPOI(null);
+      setSelectedWaypointId(null);
+      setSelectedSegmentId(null);
+      setIsSearchOpen(false);
+      setIsStatusOpen(false);
+      setIsAnalyticsOpen(false);
+      setIsPreferencesOpen(false);
+      setEditingStyleConfigId(null);
+      setAnalyticsSegmentInfo(null);
+    }
+    if (window.innerWidth <= 768) setMobileSidebarCollapsed(!galleryMode);
+  }, []);
   const [isPcSidebarCollapsed, setPcSidebarCollapsed] = useState(false);
   const touchStartRef = useRef<{ y: number, isContentEdge: boolean } | null>(null);
   const [highlightedWaypointId, setHighlightedWaypointId] = useState<string | null>(null);
@@ -317,6 +335,7 @@ export default function App() {
   const countries = useCountryData(countryTrips, !isLoadingTrips && countryTrips.length > 0, applyCountryParts);
 
   const getPanelHistoryState = useCallback((): PanelHistoryState => {
+    if (isTripGalleryOpen && selectedTrip) return { panel: 'gallery', tripId: selectedTrip.id };
     if (isPreferencesOpen && editingStyleConfigId) return { panel: 'style-config', styleConfigId: editingStyleConfigId };
     if (isPreferencesOpen) return { panel: 'preferences' };
     if (isStatusOpen) return { panel: 'status' };
@@ -330,7 +349,7 @@ export default function App() {
     if (selectedWaypointId && selectedTrip) return { panel: 'waypoint', tripId: selectedTrip.id, waypointId: selectedWaypointId };
     if (selectedTrip) return { panel: 'editor', tripId: selectedTrip.id };
     return { panel: 'manager' };
-  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter, analyticsSelection]);
+  }, [selectedTrip, selectedSegmentId, selectedWaypointId, selectedPOI, isSearchOpen, isTripGalleryOpen, isStatusOpen, isAnalyticsOpen, isPreferencesOpen, analyticsSegmentInfo, editingStyleConfigId, analyticsModeFilter, analyticsSelection]);
 
   const isSamePanelHistoryState = (a: PanelHistoryState | null, b: PanelHistoryState) =>
     a?.panel === b.panel &&
@@ -394,7 +413,9 @@ export default function App() {
 
   const goBackPanel = () => {
     closePanelHistoryOnNextRender();
-    if (isPreferencesOpen) {
+    if (isTripGalleryOpen) {
+      setTripGalleryOpen(false);
+    } else if (isPreferencesOpen) {
       if (editingStyleConfigId) setEditingStyleConfigId(null);
       else setIsPreferencesOpen(false);
     } else if (isStatusOpen) {
@@ -460,6 +481,7 @@ export default function App() {
         setSelectedWaypointId(panelState.panel === 'waypoint' || panelState.panel === 'search' ? panelState.waypointId || null : null);
         setSelectedPOI(panelState.panel === 'poi' || panelState.panel === 'search' ? panelState.poi || null : null);
         setIsSearchOpen(panelState.panel === 'search');
+        setTripGalleryOpen(panelState.panel === 'gallery');
         setIsStatusOpen(panelState.panel === 'status');
         setIsPreferencesOpen(panelState.panel === 'preferences' || panelState.panel === 'style-config');
         setEditingStyleConfigId(panelState.panel === 'style-config' ? panelState.styleConfigId || null : null);
@@ -1522,6 +1544,11 @@ export default function App() {
   };
 
   const isMobileViewport = window.innerWidth <= 768;
+  // Panels that take over the sidebar replace the image panels, so those must not stay in front of them.
+  const otherPanelOpen = isSearchOpen || !!selectedPOI || isStatusOpen || isAnalyticsOpen || isPreferencesOpen || !!selectedSegmentId || !!selectedWaypointId || !!analyticsSegmentInfo;
+  useEffect(() => {
+    if (otherPanelOpen) setTripGalleryOpen(false);
+  }, [otherPanelOpen]);
   const isSidebarCollapsed = isMobileViewport ? isMobileSidebarCollapsed : isPcSidebarCollapsed;
   const isMobileSearchOpen = isSearchOpen;
   const isMobilePoiSmaller = !!selectedPOI;
@@ -1621,7 +1648,17 @@ export default function App() {
       <div className="layout">
       <div {...sidebarProps}>
         <div className="mobile-drag-handle"></div>
-        {isPreferencesOpen ? (
+        {isTripGalleryOpen && selectedTrip && TripGalleryPanel ? (
+          <Suspense fallback={<div className="trip-editor"><div className="toolbar"><h2>Trip Gallery</h2></div><div className="content">Loading gallery…</div></div>}>
+            <TripGalleryPanel trip={selectedTrip} onGoBack={goBackPanel} onFocus={image => {
+              if (image.lat !== null && image.lon !== null) mapComponentRef.current?.flyTo(image.lon, image.lat, 'current');
+            }} onEditLocation={(image, defaultPosition) => {
+              if (window.innerWidth <= 768) setMobileSidebarCollapsed(false);
+              const position = image && image.lat !== null && image.lon !== null ? { lon: image.lon, lat: image.lat } : defaultPosition ? { lon: defaultPosition[0], lat: defaultPosition[1] } : undefined;
+              mapComponentRef.current?.focusPhoto(position);
+            }} onTimelineSelect={position => mapComponentRef.current?.focusPhoto({ lon: position[0], lat: position[1] })} getMapCenter={() => mapComponentRef.current?.getCenter() || null} />
+          </Suspense>
+        ) : isPreferencesOpen ? (
           <PreferencesPanel
             onGoBack={goBackPanel}
             onSetHome={() => mapComponentRef.current?.setHome?.()}
@@ -1833,16 +1870,26 @@ export default function App() {
               waitingWaypointIdRef.current = wpId;
             }}
             onRequestSetup={promptSetupWizard}
+            onOpenGallery={() => {
+              setTripGalleryOpen(true);
+              setSelectedSegmentId(null);
+              setSelectedWaypointId(null);
+              setIsSearchOpen(false);
+              setIsAnalyticsOpen(false);
+              setIsPreferencesOpen(false);
+              setIsStatusOpen(false);
+            }}
           />
         )}
       </div>
       {showSetupWizard && <SetupWizard onComplete={handleSetupWizardComplete} onStartBackgroundSync={loadTrips} />}
       {RouteImagesHost && (
         <Suspense fallback={null}>
-          <RouteImagesHost trip={selectedTrip} />
+          <RouteImagesHost trip={selectedTrip} hidden={otherPanelOpen} />
         </Suspense>
       )}
       <Map isReadOnly={isReadOnly}
+        onRouteImageSelect={handleRouteImageSelect}
         pendingRouteViews={pendingRouteViews}
         ref={mapComponentRef}
         trips={trips}

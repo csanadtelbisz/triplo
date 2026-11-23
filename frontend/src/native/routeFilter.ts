@@ -2,6 +2,7 @@ import { lineString, point, pointToLineDistance } from '@turf/turf';
 import type { Trip } from '../../../shared/types';
 import { getEffectiveGeometry } from '../utils/effectiveGeometry';
 import type { GalleryImage } from './gallery';
+import { hasGps } from './gallery';
 
 export const IMAGE_MAX_DISTANCE_M = 500;
 // Flights are stored as a great circle, not the flown path.
@@ -38,6 +39,7 @@ function buildChunks(trip: Trip): Chunk[] {
 }
 
 function isNear(image: GalleryImage, chunk: Chunk): boolean {
+  if (!hasGps(image)) return false;
   const latitudePadding = chunk.limit / METERS_PER_DEGREE;
   if (image.lat < chunk.south - latitudePadding || image.lat > chunk.north + latitudePadding) return false;
   const widestLatitude = Math.min(89, Math.max(Math.abs(chunk.south), Math.abs(chunk.north), Math.abs(image.lat)));
