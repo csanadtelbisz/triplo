@@ -13,7 +13,7 @@ test.describe('ExifTool metadata round trip', () => {
 
   for (const fixture of fixtures) {
     test(`${fixture}: read, write GPS, and read it back`, async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/tests/persisting-services.html');
       const result = await page.evaluate(async ({ fixtureName, coordinates }) => {
         const { readGps, writeGps, editedPhotoFile } = await import('/src/native/exiftool/index.ts');
         const response = await fetch(`/tests/fixtures/exiftool/${encodeURIComponent(fixtureName)}`);
