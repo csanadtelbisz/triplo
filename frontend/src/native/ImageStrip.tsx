@@ -42,7 +42,7 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = { images, activeId };
   });
 
@@ -50,10 +50,18 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element || index < 0 || activeSource === 'strip') return;
-    if (Math.round(element.scrollLeft / element.clientWidth) !== index) {
-      element.scrollTo({ left: index * element.clientWidth, behavior: 'instant' });
-    }
-  }, [index, images.length, activeSource]);
+    window.clearTimeout(settleTimer.current);
+    scrollStart.current = null;
+    const align = () => {
+      if (!element.clientWidth) return;
+      const target = index * element.clientWidth;
+      if (Math.abs(element.scrollLeft - target) > 1) element.scrollLeft = target;
+    };
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [activeId, index, images, activeSource]);
 
   useEffect(() => registerNativeBackHandler(() => routeImages.close()), []);
   useEffect(() => () => window.clearTimeout(settleTimer.current), []);
