@@ -160,7 +160,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [showHiddenSegments, setShowHiddenSegments] = useState<boolean>(() => {
     return localStorage.getItem('showHiddenSegments') === 'true';
   });
-  const showRouteImages = useRouteImages().enabled;
+  const { enabled: showRouteImages, loading: routeImagesLoading } = useRouteImages();
   const canShowRouteImages = !!selectedTrip && !!tripPeriod(selectedTrip);
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string | undefined, mode: string } | null>(null);
@@ -1543,7 +1543,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                     title={canShowRouteImages ? undefined : 'Set the start and end date of the trip to show its images'}
                     onClick={(e) => { e.stopPropagation(); if (canShowRouteImages) routeImages.setEnabled(!showRouteImages); }}
                   >
-                    <Icon name={showRouteImages ? 'photo_library' : 'image'} size={18} />
+                    <Icon name={routeImagesLoading ? 'sync' : showRouteImages ? 'photo_library' : 'image'} size={18} className={routeImagesLoading ? 'spinning' : undefined} />
                     <span>{showRouteImages ? "Hide images along route" : "Show images along route"}</span>
                   </div>
                 )}

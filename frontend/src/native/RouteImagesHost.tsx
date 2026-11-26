@@ -21,8 +21,12 @@ export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip |
   const key = enabled && period ? `${period.from}:${period.to}` : '';
 
   useEffect(() => {
-    if (!period || !key) return;
+    if (!period || !key) {
+      routeImages.setLoading(false);
+      return;
+    }
     let cancelled = false;
+    routeImages.setLoading(true);
     const fail = (text: string) => setError(previous => ({ id: (previous?.id ?? 0) + 1, text }));
     (async () => {
       setError(null);
@@ -38,6 +42,8 @@ export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip |
       } catch (reason) {
         console.error('Loading gallery images failed', reason);
         if (!cancelled) fail('Could not read the photo library.');
+      } finally {
+        if (!cancelled) routeImages.setLoading(false);
       }
     })();
     return () => { cancelled = true; };

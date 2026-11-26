@@ -20,6 +20,7 @@ export type GalleryImage = {
 
 // Large enough to look sharp full width, much smaller than the original.
 const PANEL_IMAGE_SIZE = 2048;
+const GALLERY_QUERY_BATCH_DAYS = 4;
 
 const imageRevisions = new Map<number, number>();
 const revisionQuery = (id: number) => imageRevisions.get(id) ? `?v=${imageRevisions.get(id)}` : '';
@@ -35,9 +36,16 @@ export async function requestGalleryAccess(): Promise<boolean> {
 
 /** Geotagged photos taken between the two instants. */
 export async function queryGallery(from: number, to: number): Promise<GalleryImage[]> {
-  const response = await fetch(`/native/query/${from}/${to}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Gallery query failed (${response.status})`);
-  const images = (await response.json()) as GalleryImage[];
+  const images: GalleryImage[] = [];
+  for (let batchFrom = from; batchFrom <= to;) {
+    const batchEnd = new Date(batchFrom);
+    batchEnd.setDate(batchEnd.getDate() + GALLERY_QUERY_BATCH_DAYS);
+    const batchTo = Math.min(to, batchEnd.getTime() - 1);
+    const response = await fetch(`/native/query/${batchFrom}/${batchTo}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Gallery query failed (${response.status})`);
+    images.push(...((await response.json()) as GalleryImage[]));
+    batchFrom = batchTo + 1;
+  }
   return images.map(image => image.lat === 0 && image.lon === 0 ? { ...image, lat: null, lon: null } : image);
 }
 

@@ -5,6 +5,7 @@ type SelectionSource = 'map' | 'gallery' | 'strip' | 'viewer' | null;
 
 export type RouteImagesState = {
   enabled: boolean;
+  loading: boolean;
   images: GalleryImage[];
   activeId: number | null;
   selectionRevision: number;
@@ -23,6 +24,7 @@ const ENABLED_KEY = 'showRouteImages';
 
 let state: RouteImagesState = {
   enabled: localStorage.getItem(ENABLED_KEY) === 'true',
+  loading: false,
   images: [],
   activeId: null,
   selectionRevision: 0,
@@ -48,6 +50,9 @@ export const routeImages = {
   setEnabled(enabled: boolean) {
     localStorage.setItem(ENABLED_KEY, String(enabled));
     update({ enabled, ...(enabled ? {} : { images: [], ...CLOSED }) });
+  },
+  setLoading(loading: boolean) {
+    if (state.loading !== loading) update({ loading });
   },
   setImages(images: GalleryImage[]) {
     if (images.length === state.images.length && images.every((image, index) => image.id === state.images[index].id
