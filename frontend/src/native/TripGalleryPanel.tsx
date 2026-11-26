@@ -111,13 +111,22 @@ export function TripGalleryPanel({ trip, onGoBack, onFocus, onEditLocation, onTi
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setImages([]);
+    originalImages.current = [];
+    setLoadError('');
     void (async () => {
       try {
         if (!period || !(await requestGalleryAccess())) throw new Error('Photo library access is required.');
-        const found = await queryGallery(period.from, period.to);
+        const accumulated: GalleryImage[] = [];
+        const found = await queryGallery(period.from, period.to, batch => {
+          if (cancelled) return;
+          accumulated.push(...batch);
+          originalImages.current = [...accumulated];
+          setImages([...accumulated]);
+        });
         if (!cancelled) { originalImages.current = found; setImages(found); }
       } catch (error) {
-        if (!cancelled) setImages([]);
         if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Could not access the photo library.');
         console.error('Trip gallery could not load', error);
       } finally { if (!cancelled) setLoading(false); }
@@ -353,8 +362,8 @@ export function TripGalleryPanel({ trip, onGoBack, onFocus, onEditLocation, onTi
     {error && <p className="trip-gallery-error" role="alert">{error}</p>}
     {loadError && <p className="trip-gallery-error" role="alert">{loadError}</p>}
     <div className="trip-gallery-scroll-container">
-      {!loading && <p className="trip-gallery-summary">{visibleImages.length} photos ({geotaggedCount} geotagged)</p>}
-      {loading ? <p className="trip-gallery-message">Loading photos…</p> : visibleImages.length === 0
+      <p className="trip-gallery-summary">{loading ? 'Loading photos…' : `${visibleImages.length} photos (${geotaggedCount} geotagged)`}</p>
+      {loading && visibleImages.length === 0 ? <p className="trip-gallery-message">Loading photos…</p> : visibleImages.length === 0
         ? <p className="trip-gallery-message">No photos match these filters.</p>
         : <div className="trip-gallery-grid">{visibleImages.map(image => <button key={image.id} data-image-id={image.id} className={`trip-gallery-image${activeId === image.id && locationEditId === null ? ' active' : ''}${changes[image.id] ? ' gps-unsaved' : ''}`} onPointerDown={() => {
           pressTimer.current = window.setTimeout(() => { routeImages.setImages(visibleImages); openViewer(image.id); }, 500);

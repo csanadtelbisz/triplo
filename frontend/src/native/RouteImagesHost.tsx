@@ -11,7 +11,7 @@ import './RouteImages.css';
 
 /** Loads the selected trip's images and shows the bottom panel and full-screen viewer. */
 export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip | null; hidden?: boolean }) {
-  const { enabled, images, activeId, activeSource, fullscreen, galleryMode, viewerSourceSelector } = useRouteImages();
+  const { enabled, loading: imagesLoading, images, activeId, activeSource, fullscreen, galleryMode, viewerSourceSelector } = useRouteImages();
   const [loaded, setLoaded] = useState<{ key: string; images: GalleryImage[] } | null>(null);
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
 
@@ -37,7 +37,12 @@ export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip |
           fail('Allow access to photos and their location to show images along the route.');
           return;
         }
-        const found = await queryGallery(period.from, period.to);
+        const accumulated: GalleryImage[] = [];
+        const found = await queryGallery(period.from, period.to, batch => {
+          if (cancelled) return;
+          accumulated.push(...batch);
+          setLoaded({ key, images: [...accumulated] });
+        });
         if (!cancelled) setLoaded({ key, images: found });
       } catch (reason) {
         console.error('Loading gallery images failed', reason);
@@ -64,7 +69,7 @@ export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip |
     if (hidden) routeImages.close();
   }, [hidden]);
 
-  const emptyNotice = candidates && nearTrip.length === 0;
+  const emptyNotice = candidates && nearTrip.length === 0 && !imagesLoading;
   return (
     <>
       {error && <div className="route-images-notice" key={`error:${error.id}`} role="status">{error.text}</div>}

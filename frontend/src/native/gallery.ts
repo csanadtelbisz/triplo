@@ -35,7 +35,7 @@ export async function requestGalleryAccess(): Promise<boolean> {
 }
 
 /** Geotagged photos taken between the two instants. */
-export async function queryGallery(from: number, to: number): Promise<GalleryImage[]> {
+export async function queryGallery(from: number, to: number, onBatch?: (images: GalleryImage[]) => void): Promise<GalleryImage[]> {
   const images: GalleryImage[] = [];
   for (let batchFrom = from; batchFrom <= to;) {
     const batchEnd = new Date(batchFrom);
@@ -43,10 +43,12 @@ export async function queryGallery(from: number, to: number): Promise<GalleryIma
     const batchTo = Math.min(to, batchEnd.getTime() - 1);
     const response = await fetch(`/native/query/${batchFrom}/${batchTo}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Gallery query failed (${response.status})`);
-    images.push(...((await response.json()) as GalleryImage[]));
+    const batchImages = ((await response.json()) as GalleryImage[]).map(image => image.lat === 0 && image.lon === 0 ? { ...image, lat: null, lon: null } : image);
+    images.push(...batchImages);
+    onBatch?.(batchImages);
     batchFrom = batchTo + 1;
   }
-  return images.map(image => image.lat === 0 && image.lon === 0 ? { ...image, lat: null, lon: null } : image);
+  return images;
 }
 
 export const hasGps = (image: GalleryImage): image is GalleryImage & { lat: number; lon: number } =>
