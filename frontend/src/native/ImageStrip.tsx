@@ -22,12 +22,33 @@ const MAX_PANEL_WIDTH = 640;
 
 type PanelStyle = CSSProperties & { '--route-image-height': string; '--route-image-offset': string };
 
+function measureSlideTargets(element: HTMLElement): number[] {
+  if (!element.clientWidth) return [];
+  const viewport = element.getBoundingClientRect();
+  const center = viewport.left + element.clientLeft + element.clientWidth / 2;
+  return Array.from(element.children, child => {
+    const slide = child.getBoundingClientRect();
+    return element.scrollLeft + slide.left + slide.width / 2 - center;
+  });
+}
+
+function slidePositionAt(scrollLeft: number, targets: number[]): number {
+  if (targets.length < 2) return 0;
+  if (scrollLeft <= targets[0]) return 0;
+  for (let index = 0; index < targets.length - 1; index++) {
+    const start = targets[index], end = targets[index + 1];
+    if (scrollLeft <= end) return index + (scrollLeft - start) / (end - start);
+  }
+  return targets.length - 1;
+}
+
 /** Bottom panel: a swipeable row of the route's images, oldest first. */
 export function ImageStrip({ images, activeId, activeSource, fullscreen, hideCloseButton = false, onDismiss, onSwipeChange, timeline }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean; hideCloseButton?: boolean; onDismiss?: () => void; onSwipeChange?: (image: GalleryImage) => void; timeline?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<number | undefined>(undefined);
   const scrollStart = useRef<number | null>(null);
+  const slideTargets = useRef<number[]>([]);
   const latest = useRef({ images, activeId });
   const gesture = useRef<{ x: number; y: number; time: number; axis: 'x' | 'y' | null } | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -49,16 +70,21 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
   // Selections made by swiping this panel must not scroll it again.
   useLayoutEffect(() => {
     const element = scroller.current;
-    if (!element || index < 0 || activeSource === 'strip') return;
-    window.clearTimeout(settleTimer.current);
-    scrollStart.current = null;
-    const align = () => {
-      if (!element.clientWidth) return;
-      const target = index * element.clientWidth;
-      if (Math.abs(element.scrollLeft - target) > 1) element.scrollLeft = target;
+    if (!element) return;
+    if (activeSource !== 'strip') {
+      window.clearTimeout(settleTimer.current);
+      scrollStart.current = null;
+    }
+    const measureAndAlign = () => {
+      const targets = measureSlideTargets(element);
+      if (!targets.length) return;
+      slideTargets.current = targets;
+      if (activeSource !== 'strip' && index >= 0 && Math.abs(element.scrollLeft - targets[index]) > 1) {
+        element.scrollLeft = targets[index];
+      }
     };
-    align();
-    const observer = new ResizeObserver(align);
+    measureAndAlign();
+    const observer = new ResizeObserver(measureAndAlign);
     observer.observe(element);
     return () => observer.disconnect();
   }, [activeId, index, images, activeSource]);
@@ -77,7 +103,7 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
     const element = scroller.current;
     if (!element) return;
     const { images: all, activeId: selectedId } = latest.current;
-    const position = element.scrollLeft / element.clientWidth;
+    const position = slidePositionAt(element.scrollLeft, slideTargets.current);
     if (scrollStart.current === null) scrollStart.current = all.findIndex(image => image.id === selectedId);
     const delta = position - scrollStart.current;
     const target = Math.abs(delta) > SWIPE_START_FRACTION ? scrollStart.current + Math.sign(delta) : scrollStart.current;
@@ -87,7 +113,7 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
       scrollStart.current = null;
-      const visible = latest.current.images[Math.round(element.scrollLeft / element.clientWidth)];
+      const visible = latest.current.images[Math.round(slidePositionAt(element.scrollLeft, slideTargets.current))];
       if (visible && visible.id !== latest.current.activeId) {
         if (onSwipeChange) onSwipeChange(visible);
         else routeImages.select(visible.id, 'strip');
@@ -97,7 +123,8 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen, hideClo
 
   const step = (direction: number) => {
     const element = scroller.current;
-    if (element) element.scrollTo({ left: (index + direction) * element.clientWidth, behavior: 'smooth' });
+    const target = slideTargets.current[index + direction];
+    if (element && target !== undefined) element.scrollTo({ left: target, behavior: 'smooth' });
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
