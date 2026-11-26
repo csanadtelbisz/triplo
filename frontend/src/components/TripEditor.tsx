@@ -971,6 +971,9 @@ export function TripEditor({
            {!isSharedTrip && !(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
              <button className="iconButton" title="Share Trip" onClick={() => setIsShareDialogOpen(true)}><MaterialIcon name="share" size={20} /></button>
            )}
+           {IS_NATIVE && onOpenGallery && !isSidebarCollapsed && (
+             <button className="iconButton" title="Trip Gallery" aria-label="Open trip gallery" onClick={onOpenGallery}><MaterialIcon name="photo_library" size={20} /></button>
+           )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
            {!isSharedTrip && (isReadOnly ? (
              <button
@@ -1507,7 +1510,6 @@ export function TripEditor({
            <h3 className="trip-summary-title">
              <MaterialIcon name="finance" size={18} /> Trip Summary
               <span className="trip-summary-actions">
-                {IS_NATIVE && <button className="iconButton trip-summary-gallery-button" aria-label="Open trip gallery" title="Trip Gallery" onClick={onOpenGallery}><MaterialIcon name="photo_library" size={18} /></button>}
                 <button className="iconButton climate-settings-button" aria-label="Trip climate profile defaults" title="Trip climate profile defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
               </span>
            </h3>

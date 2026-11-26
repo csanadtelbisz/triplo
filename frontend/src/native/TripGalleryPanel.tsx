@@ -144,24 +144,27 @@ export function TripGalleryPanel({ trip, onGoBack, onFocus, onEditLocation, onTi
   useEffect(() => {
     if (activeSource !== 'map' || activeId === null) return;
     const tile = document.querySelector<HTMLElement>(`.trip-gallery-image[data-image-id="${activeId}"]`);
-    const grid = tile?.parentElement;
-    if (!tile || !grid) return;
+    const scrollContainer = tile?.closest<HTMLElement>('.trip-gallery-scroll-container');
+    if (!tile || !scrollContainer) return;
     let cancelled = false;
     const remove = () => tile.classList.remove('map-selection-pulse');
     void (async () => {
-      // Let the sheet finish opening, then scroll the grid itself. scrollIntoView would also scroll the
-      // sheet and the page around the grid, which left every panel shifted.
+      // Let the sheet finish opening before scrolling only the gallery's own container.
       await nextFrames(2);
       await Promise.allSettled((tile.closest('.sidebar')?.getAnimations() ?? []).map(animation => animation.finished));
       if (cancelled) return;
-      const top = tile.getBoundingClientRect().top - grid.getBoundingClientRect().top;
-      const hidden = top < 0 ? top - GRID_GAP_PX : top + tile.offsetHeight > grid.clientHeight ? top + tile.offsetHeight - grid.clientHeight + GRID_GAP_PX : 0;
+      const tileRect = tile.getBoundingClientRect();
+      const viewportTop = scrollContainer.getBoundingClientRect().top + scrollContainer.clientTop;
+      const viewportBottom = viewportTop + scrollContainer.clientHeight;
+      const hidden = tileRect.top < viewportTop
+        ? tileRect.top - viewportTop - GRID_GAP_PX
+        : tileRect.bottom > viewportBottom ? tileRect.bottom - viewportBottom + GRID_GAP_PX : 0;
       if (hidden) {
-        grid.scrollBy({ top: hidden, behavior: 'smooth' });
+        scrollContainer.scrollBy({ top: hidden, behavior: 'smooth' });
         await new Promise<void>(resolve => {
-          const done = () => { grid.removeEventListener('scrollend', done); window.clearTimeout(fallback); resolve(); };
+          const done = () => { scrollContainer.removeEventListener('scrollend', done); window.clearTimeout(fallback); resolve(); };
           const fallback = window.setTimeout(done, SCROLL_FALLBACK_MS);
-          grid.addEventListener('scrollend', done);
+          scrollContainer.addEventListener('scrollend', done);
         });
         if (cancelled) return;
       }
