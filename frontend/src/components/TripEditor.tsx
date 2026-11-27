@@ -22,6 +22,7 @@ import { tripCountrySummary } from '../countries/summary';
 import { resetClimateForModeChange } from '../utils/segmentMode';
 import type { CountryData } from '../countries/types';
 import { getPublicBaseUrl } from '../native/native';
+import { IS_NATIVE } from '../native/native';
 
 interface TripEditorProps {
   countryData?: CountryData;
@@ -52,6 +53,7 @@ interface TripEditorProps {
   onPersistOwnedTrip?: (trip: Trip) => Promise<void> | void;
   onSaveSharedTripReference?: (trip: Trip) => Promise<void> | void;
   onRequestSetup?: (onSuccess: () => void | Promise<void>) => void;
+  onOpenGallery?: () => void;
 }
 
 const tripEditorScrollPositions: Record<string, number> = {};
@@ -61,7 +63,7 @@ export function TripEditor({
   onZoomToTrip, onZoomToSegment, onJumpToWaypoint, highlightedWaypointId, onClearHighlight,
   onUndo, onRedo, canUndo, canRedo, onSave, canSave, onUpdateTrip,
   onWaitingForCoords, allTrips, isSidebarCollapsed, isSharedTripView = false, onSelectTrip, availablePersistingServices = [], onPersistOwnedTrip, onSaveSharedTripReference,
-  onRequestSetup, countryData
+  onRequestSetup, countryData, onOpenGallery
 }: TripEditorProps) {
   const climateSettings = useClimateSettings();
   const climateSummary = useMemo(() => tripClimate(trip, climateSettings, countryData), [trip, climateSettings, countryData]);
@@ -969,6 +971,9 @@ export function TripEditor({
            {!isSharedTrip && !(isReadOnly && isSidebarCollapsed && window.innerWidth <= 768) && (
              <button className="iconButton" title="Share Trip" onClick={() => setIsShareDialogOpen(true)}><MaterialIcon name="share" size={20} /></button>
            )}
+           {IS_NATIVE && onOpenGallery && !isSidebarCollapsed && (
+             <button className="iconButton" title="Trip Gallery" aria-label="Open trip gallery" onClick={onOpenGallery}><MaterialIcon name="photo_library" size={20} /></button>
+           )}
            <button className="iconButton" title="Zoom to Trip" onClick={onZoomToTrip}><MaterialIcon name="my_location" size={20} /></button>
            {!isSharedTrip && (isReadOnly ? (
              <button
@@ -1504,7 +1509,9 @@ export function TripEditor({
          <div className="trip-summary">
            <h3 className="trip-summary-title">
              <MaterialIcon name="finance" size={18} /> Trip Summary
-             <button className="iconButton climate-settings-button" aria-label="Trip climate profile defaults" title="Trip climate profile defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
+              <span className="trip-summary-actions">
+                <button className="iconButton climate-settings-button" aria-label="Trip climate profile defaults" title="Trip climate profile defaults" disabled={isReadOnly} onClick={() => setClimateSettingsOpen(true)}><MaterialIcon name="settings" size={18} /></button>
+              </span>
            </h3>
            <div className="trip-summary-total">
              <strong>Total Distance:</strong> {tripSummary.totalDistance.toFixed(1)} km

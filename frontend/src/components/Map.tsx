@@ -40,6 +40,7 @@ import type { CountryData } from '../countries/types';
 import { IS_NATIVE } from '../native/native';
 import { routeImages, useRouteImages } from '../native/routeImagesStore';
 import { getExtraMarkers, setDeclutterHandler } from '../native/markerRegistry';
+import { visibleMapArea } from '../native/visibleArea';
 import { tripPeriod } from '../native/tripPeriod';
 
 // Android wrapper only. The check must stay inline so web builds do not emit the chunk.
@@ -55,6 +56,8 @@ export interface MapRef {
     setHome: () => void;
     zoomToHome: () => void;
     setHoveredCoordinate: (coord: { lon: number; lat: number; ele?: number } | null) => void;
+    getCenter: () => [number, number] | null;
+    focusPhoto: (position?: { lon: number; lat: number }) => void;
 }
 
 export interface MapProps {
@@ -82,6 +85,7 @@ export interface MapProps {
     analyticsSelection?: AnalyticsSelection | null;
     countryData?: CountryData;
     onAnalyticsSegmentClick?: (tripId: string, segmentId: string) => void;
+    onRouteImageSelect?: (galleryMode: boolean) => void;
 }
 
 export const Map = forwardRef<MapRef, MapProps>(({
@@ -108,7 +112,8 @@ export const Map = forwardRef<MapRef, MapProps>(({
     styleContextSelectedSegment = null,
     analyticsSelection = null,
     countryData,
-    onAnalyticsSegmentClick
+    onAnalyticsSegmentClick,
+    onRouteImageSelect,
 }, ref) => {
   const climateSettings = useClimateSettings();
   // With no analytics filter, retain the normal map view and its style rules.
@@ -155,7 +160,7 @@ export const Map = forwardRef<MapRef, MapProps>(({
   const [showHiddenSegments, setShowHiddenSegments] = useState<boolean>(() => {
     return localStorage.getItem('showHiddenSegments') === 'true';
   });
-  const showRouteImages = useRouteImages().enabled;
+  const { enabled: showRouteImages, loading: routeImagesLoading } = useRouteImages();
   const canShowRouteImages = !!selectedTrip && !!tripPeriod(selectedTrip);
   const [mapStyleLoadedTime, setMapStyleLoadedTime] = useState(Date.now());
   const [hoverInfo, setHoverInfo] = useState<{ x: number, y: number, name: string | undefined, mode: string } | null>(null);
@@ -543,7 +548,26 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
     flyTo,
     setHome,
     zoomToHome,
-    setHoveredCoordinate
+    setHoveredCoordinate,
+    // The point in the middle of the part of the map that no panel covers.
+    getCenter: () => {
+      const map = mapRef.current;
+      if (!map) return null;
+      const area = visibleMapArea(map.getContainer());
+      const point = map.unproject([area.centerX, area.centerY]);
+      return [point.lng, point.lat];
+    },
+    // Puts a photo's location in the middle of the uncovered map, or just clears the map padding.
+    focusPhoto: (position?: { lon: number; lat: number }) => {
+      const map = mapRef.current;
+      if (!map) return;
+      map.stop();
+      map.jumpTo({ ...(position ? { center: [position.lon, position.lat] as [number, number] } : {}), padding: { top: 0, right: 0, bottom: 0, left: 0 } });
+      if (!position) return;
+      const area = visibleMapArea(map.getContainer());
+      const container = map.getContainer();
+      map.jumpTo({ center: map.unproject([container.clientWidth - area.centerX, container.clientHeight - area.centerY]) });
+    }
   }));
 
   useEffect(() => {
@@ -1361,14 +1385,14 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
       
       // Waypoints and the Android image pins share one overlap check; lower ranks win.
       const candidates = [
-        ...markersRef.current.map(m => ({ marker: m.marker, rank: m.pref, radius: MARKER_HIDE_THRESHOLD / 2, isImage: false })),
-        ...getExtraMarkers().map(m => ({ marker: m.marker, rank: m.rank, radius: m.radius, isImage: true })),
+        ...markersRef.current.map(m => ({ marker: m.marker, rank: m.pref, radius: MARKER_HIDE_THRESHOLD / 2, isImage: false, forceVisible: false })),
+        ...getExtraMarkers().map(m => ({ marker: m.marker, rank: m.rank, radius: m.radius, isImage: true, forceVisible: m.forceVisible })),
       ].sort((a, b) => a.rank - b.rank);
       const visiblePositions: { x: number, y: number, radius: number }[] = [];
       
       for (const m of candidates) {
         const pos = map.project(m.marker.getLngLat());
-        const tooClose = visiblePositions.some(v => Math.hypot(pos.x - v.x, pos.y - v.y) < m.radius + v.radius);
+        const tooClose = !m.forceVisible && visiblePositions.some(v => Math.hypot(pos.x - v.x, pos.y - v.y) < m.radius + v.radius);
         const element = m.marker.getElement();
         
         if (tooClose) {
@@ -1488,7 +1512,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
 
       {RouteImageMarkers && mapLoaded && (
         <Suspense fallback={null}>
-          <RouteImageMarkers map={mapRef.current} />
+          <RouteImageMarkers map={mapRef.current} onSelect={onRouteImageSelect} />
         </Suspense>
       )}
 
@@ -1519,7 +1543,7 @@ const handleJumpToWaypoint = (waypointId: string, targetSidebarState: 'open' | '
                     title={canShowRouteImages ? undefined : 'Set the start and end date of the trip to show its images'}
                     onClick={(e) => { e.stopPropagation(); if (canShowRouteImages) routeImages.setEnabled(!showRouteImages); }}
                   >
-                    <Icon name={showRouteImages ? 'photo_library' : 'image'} size={18} />
+                    <Icon name={routeImagesLoading ? 'sync' : showRouteImages ? 'photo_library' : 'image'} size={18} className={routeImagesLoading ? 'spinning' : undefined} />
                     <span>{showRouteImages ? "Hide images along route" : "Show images along route"}</span>
                   </div>
                 )}

@@ -8,6 +8,7 @@ export type ExtraMarker = {
   rank: number;
   /** Half of the space the marker needs around it, in pixels. */
   radius: number;
+  forceVisible?: boolean;
 };
 
 let extraMarkers: ExtraMarker[] = [];
@@ -26,3 +27,12 @@ export function setDeclutterHandler(handler: (() => void) | null) {
 }
 
 export const requestDeclutter = () => declutter?.();
+
+export function setMarkerForceVisible(element: HTMLElement, forceVisible: boolean) {
+  const entry = extraMarkers.find(candidate => candidate.element === element);
+  if (!entry) return;
+  entry.forceVisible = forceVisible;
+  entry.rank = forceVisible ? Number.NEGATIVE_INFINITY : (element.classList.contains('active') ? -2 : -1);
+  element.style.zIndex = forceVisible ? '999999' : element.classList.contains('active') ? '2' : '';
+  requestDeclutter();
+}

@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { ReactNode } from 'react';
 import { Icon } from '../components/Icon';
-import { imageAspect, imageCaption, panelImageUrl, thumbnailUrl } from './gallery';
+import { fullImageUrl, imageAspect, imageCaption, panelImageUrl, thumbnailUrl } from './gallery';
 import type { GalleryImage } from './gallery';
 import { LayeredImage } from './LayeredImage';
 import { registerNativeBackHandler } from './native';
@@ -21,12 +22,33 @@ const MAX_PANEL_WIDTH = 640;
 
 type PanelStyle = CSSProperties & { '--route-image-height': string; '--route-image-offset': string };
 
+function measureSlideTargets(element: HTMLElement): number[] {
+  if (!element.clientWidth) return [];
+  const viewport = element.getBoundingClientRect();
+  const center = viewport.left + element.clientLeft + element.clientWidth / 2;
+  return Array.from(element.children, child => {
+    const slide = child.getBoundingClientRect();
+    return element.scrollLeft + slide.left + slide.width / 2 - center;
+  });
+}
+
+function slidePositionAt(scrollLeft: number, targets: number[]): number {
+  if (targets.length < 2) return 0;
+  if (scrollLeft <= targets[0]) return 0;
+  for (let index = 0; index < targets.length - 1; index++) {
+    const start = targets[index], end = targets[index + 1];
+    if (scrollLeft <= end) return index + (scrollLeft - start) / (end - start);
+  }
+  return targets.length - 1;
+}
+
 /** Bottom panel: a swipeable row of the route's images, oldest first. */
-export function ImageStrip({ images, activeId, activeSource, fullscreen }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean }) {
+export function ImageStrip({ images, activeId, activeSource, fullscreen, hideCloseButton = false, onDismiss, onSwipeChange, timeline }: { images: GalleryImage[]; activeId: number; activeSource: string | null; fullscreen: boolean; hideCloseButton?: boolean; onDismiss?: () => void; onSwipeChange?: (image: GalleryImage) => void; timeline?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<number | undefined>(undefined);
   const scrollStart = useRef<number | null>(null);
+  const slideTargets = useRef<number[]>([]);
   const latest = useRef({ images, activeId });
   const gesture = useRef<{ x: number; y: number; time: number; axis: 'x' | 'y' | null } | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
@@ -41,18 +63,31 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = { images, activeId };
   });
 
   // Selections made by swiping this panel must not scroll it again.
   useLayoutEffect(() => {
     const element = scroller.current;
-    if (!element || index < 0 || activeSource === 'strip') return;
-    if (Math.round(element.scrollLeft / element.clientWidth) !== index) {
-      element.scrollTo({ left: index * element.clientWidth, behavior: 'instant' });
+    if (!element) return;
+    if (activeSource !== 'strip') {
+      window.clearTimeout(settleTimer.current);
+      scrollStart.current = null;
     }
-  }, [index, images.length, activeSource]);
+    const measureAndAlign = () => {
+      const targets = measureSlideTargets(element);
+      if (!targets.length) return;
+      slideTargets.current = targets;
+      if (activeSource !== 'strip' && index >= 0 && Math.abs(element.scrollLeft - targets[index]) > 1) {
+        element.scrollLeft = targets[index];
+      }
+    };
+    measureAndAlign();
+    const observer = new ResizeObserver(measureAndAlign);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [activeId, index, images, activeSource]);
 
   useEffect(() => registerNativeBackHandler(() => routeImages.close()), []);
   useEffect(() => () => window.clearTimeout(settleTimer.current), []);
@@ -68,24 +103,28 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
     const element = scroller.current;
     if (!element) return;
     const { images: all, activeId: selectedId } = latest.current;
-    const position = element.scrollLeft / element.clientWidth;
+    const position = slidePositionAt(element.scrollLeft, slideTargets.current);
     if (scrollStart.current === null) scrollStart.current = all.findIndex(image => image.id === selectedId);
     const delta = position - scrollStart.current;
     const target = Math.abs(delta) > SWIPE_START_FRACTION ? scrollStart.current + Math.sign(delta) : scrollStart.current;
     const heading = all[Math.max(0, Math.min(all.length - 1, target))];
-    if (heading && heading.id !== selectedId) routeImages.select(heading.id, 'strip');
+    if (!onSwipeChange && heading && heading.id !== selectedId) routeImages.select(heading.id, 'strip');
 
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
       scrollStart.current = null;
-      const visible = latest.current.images[Math.round(element.scrollLeft / element.clientWidth)];
-      if (visible && visible.id !== latest.current.activeId) routeImages.select(visible.id, 'strip');
+      const visible = latest.current.images[Math.round(slidePositionAt(element.scrollLeft, slideTargets.current))];
+      if (visible && visible.id !== latest.current.activeId) {
+        if (onSwipeChange) onSwipeChange(visible);
+        else routeImages.select(visible.id, 'strip');
+      }
     }, SETTLE_DELAY_MS);
   };
 
   const step = (direction: number) => {
     const element = scroller.current;
-    if (element) element.scrollTo({ left: (index + direction) * element.clientWidth, behavior: 'smooth' });
+    const target = slideTargets.current[index + direction];
+    if (element && target !== undefined) element.scrollTo({ left: target, behavior: 'smooth' });
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -119,7 +158,7 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
       routeImages.openFullscreen();
     } else if (event.type !== 'pointercancel' && (dy > CLOSE_DISTANCE_PX || (dy > GESTURE_LOCK_PX && speed > FLING_SPEED))) {
       setOffset(root.current?.getBoundingClientRect().height ?? viewport.height);
-      window.setTimeout(() => routeImages.close(), CLOSE_ANIMATION_MS);
+      window.setTimeout(() => onDismiss ? onDismiss() : routeImages.close(), CLOSE_ANIMATION_MS);
     } else {
       setOffset(0);
     }
@@ -138,9 +177,9 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
     >
-      <button className="route-image-strip-button route-image-strip-close" onClick={() => routeImages.close()} title="Close">
+      {!hideCloseButton && <button className="route-image-strip-button route-image-strip-close" onClick={() => routeImages.close()} title="Close">
         <Icon name="close" size={20} />
-      </button>
+      </button>}
       {index > 0 && (
         <button className="route-image-strip-button route-image-strip-nav route-image-strip-prev" onClick={() => step(-1)} title="Previous image">
           <Icon name="chevron_left" size={24} />
@@ -159,10 +198,11 @@ export function ImageStrip({ images, activeId, activeSource, fullscreen }: { ima
             onClick={() => routeImages.openFullscreen(image.id)}
           >
             {/* The neighbours load their sharp version ahead of time for smooth swiping. */}
-            <LayeredImage placeholder={thumbnailUrl(image.id, 640)} src={Math.abs(position - index) <= 1 ? panelImageUrl(image.id) : null} />
+            <LayeredImage placeholder={thumbnailUrl(image.id, 640)} placeholderFallback={fullImageUrl(image.id)} src={Math.abs(position - index) <= 1 ? panelImageUrl(image.id) : null} />
           </button>
         ))}
       </div>
+      {timeline}
       <div className="route-image-caption route-image-strip-caption">{imageCaption(active)} · {index + 1} / {images.length}</div>
     </div>
   );

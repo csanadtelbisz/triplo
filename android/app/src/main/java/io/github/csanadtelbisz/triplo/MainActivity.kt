@@ -27,6 +27,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private val updater by lazy { AppUpdater(this) }
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private lateinit var photoWriter: PhotoWriter
+    private val galleryHandler by lazy { GalleryHandler(applicationContext) }
 
     private val fileChooser = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         fileChooserCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
@@ -36,7 +38,7 @@ class MainActivity : ComponentActivity() {
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
             .setDomain(APP_HOST)
-            .addPathHandler("/native/", GalleryHandler(applicationContext))
+            .addPathHandler("/native/", galleryHandler)
             .addPathHandler("/", WebAssetHandler(this))
             .build()
     }
@@ -100,15 +102,22 @@ class MainActivity : ComponentActivity() {
         val googleAuth = GoogleAuth(this)
         val fileSaver = FileSaver(this)
         val galleryPermission = GalleryPermission(this)
+        photoWriter = PhotoWriter(this, galleryHandler)
         val bridge = NativeBridge(
             mapOf(
                 "googleAuthorize" to NativeBridge.Handler { _, responder -> googleAuth.authorize(responder) },
                 "saveFile" to NativeBridge.Handler { args, responder -> fileSaver.save(args, responder) },
                 "galleryPermission" to NativeBridge.Handler { _, responder -> galleryPermission.request(responder) },
+                "requestPhotoWrite" to NativeBridge.Handler { args, responder -> photoWriter.requestWrite(args, responder) },
             )
         )
         WebViewCompat.addWebMessageListener(webView, "TriploNative", setOf(APP_ORIGIN)) { _, message: WebMessageCompat, _, _, reply ->
             message.data?.let { bridge.onMessage(it, reply) }
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_ARRAY_BUFFER)) {
+            WebViewCompat.addWebMessageListener(webView, "TriploPhotoWriter", setOf(APP_ORIGIN)) { _, message, _, _, reply ->
+                photoWriter.saveMessage(message, reply)
+            }
         }
     }
 

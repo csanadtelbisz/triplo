@@ -27,10 +27,12 @@ import java.util.concurrent.ConcurrentHashMap
  *   full/<id>              the photo
  */
 class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHandler {
-    private class Metadata(val lat: Double, val lon: Double, val label: String?, val offset: String?)
+    private class Metadata(val lat: Double?, val lon: Double?, val label: String?, val offset: String?)
 
     // MediaStore ids are stable, so GPS and EXIF time are read once per photo.
     private val metadataCache = ConcurrentHashMap<Long, Optional<Metadata>>()
+
+    fun invalidateMetadata(id: Long) { metadataCache.remove(id) }
 
     override fun handle(path: String): WebResourceResponse {
         val parts = path.split('/')
@@ -43,6 +45,7 @@ class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHand
                 )
                 "thumb" -> thumbnail(parts[1].toLong(), parts.getOrNull(2)?.toIntOrNull() ?: DEFAULT_THUMBNAIL_SIZE)
                 "full" -> full(parts[1].toLong())
+                "original" -> original(parts[1].toLong())
                 else -> status(404)
             }
         } catch (_: SecurityException) {
@@ -56,12 +59,15 @@ class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHand
 
     private fun query(fromMs: Long, toMs: Long): String {
         val result = JSONArray()
+        val pathColumn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Images.Media.RELATIVE_PATH else MediaStore.Images.Media.DATA
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DATE_TAKEN,
             MediaStore.Images.Media.WIDTH,
             MediaStore.Images.Media.HEIGHT,
             MediaStore.Images.Media.ORIENTATION,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            pathColumn,
         )
         val selection = "${MediaStore.Images.Media.DATE_TAKEN} >= ? AND ${MediaStore.Images.Media.DATE_TAKEN} <= ?"
         val cursor = context.contentResolver.query(
@@ -77,16 +83,19 @@ class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHand
                 val metadata = metadata(id) ?: continue
                 // MediaStore reports the stored pixel size, so swap it for sideways photos.
                 val sideways = it.getInt(4) % 180 != 0
+                val screenshot = "${it.getString(5).orEmpty()} ${it.getString(6).orEmpty()}".contains("screenshot", ignoreCase = true)
                 result.put(
                     JSONObject()
                         .put("id", id)
                         .put("taken", it.getLong(1))
                         .put("width", if (sideways) it.getInt(3) else it.getInt(2))
                         .put("height", if (sideways) it.getInt(2) else it.getInt(3))
-                        .put("lat", metadata.lat)
-                        .put("lon", metadata.lon)
+                        .put("lat", metadata.lat ?: JSONObject.NULL)
+                        .put("lon", metadata.lon ?: JSONObject.NULL)
                         .put("label", metadata.label ?: JSONObject.NULL)
                         .put("offset", metadata.offset ?: JSONObject.NULL)
+                        .put("screenshot", screenshot)
+                        .put("name", it.getString(5).orEmpty())
                 )
             }
         }
@@ -103,10 +112,10 @@ class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHand
         return try {
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 val exif = ExifInterface(stream)
-                val position = exif.latLong ?: return null
+                val position = exif.latLong
                 Metadata(
-                    position[0],
-                    position[1],
+                    position?.get(0),
+                    position?.get(1),
                     exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL) ?: exif.getAttribute(ExifInterface.TAG_DATETIME),
                     exif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL) ?: exif.getAttribute(ExifInterface.TAG_OFFSET_TIME),
                 )
@@ -138,6 +147,13 @@ class GalleryHandler(private val context: Context) : WebViewAssetLoader.PathHand
         }
         // Formats such as HEIC are not displayed by WebView, so convert them.
         return bytes("image/jpeg", jpeg(decodeSampled(uri, FULL_MAX_SIZE)))
+    }
+
+    private fun original(id: Long): WebResourceResponse {
+        var uri = imageUri(id)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) uri = MediaStore.setRequireOriginal(uri)
+        val stream = context.contentResolver.openInputStream(uri) ?: return status(404)
+        return WebResourceResponse(context.contentResolver.getType(uri) ?: "application/octet-stream", null, 200, "OK", mapOf("Cache-Control" to "no-store"), stream)
     }
 
     private fun decodeSampled(uri: Uri, maxSize: Int): Bitmap {
