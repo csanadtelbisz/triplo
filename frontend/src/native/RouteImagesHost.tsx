@@ -61,8 +61,9 @@ export default function RouteImagesHost({ trip, hidden = false }: { trip: Trip |
   );
 
   useEffect(() => {
+    if (galleryMode) return;
     routeImages.setImages(key ? nearTrip : []);
-  }, [key, nearTrip]);
+  }, [galleryMode, key, nearTrip]);
 
   // Another panel took over the sidebar: its image panel and viewer go away with it.
   useEffect(() => {

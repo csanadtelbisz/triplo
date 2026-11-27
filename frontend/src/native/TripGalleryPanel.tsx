@@ -147,7 +147,7 @@ export function TripGalleryPanel({ trip, onGoBack, onFocus, onEditLocation, onTi
   const openViewer = (id: number) => routeImages.openFullscreen(id, `.trip-gallery-image[data-image-id="${id}"] img`);
 
   useEffect(() => {
-    routeImages.setImages(visibleImages.filter(hasGps));
+    routeImages.setImages(visibleImages);
   }, [visibleImages]);
 
   useEffect(() => {

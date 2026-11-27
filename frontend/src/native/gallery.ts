@@ -20,7 +20,7 @@ export type GalleryImage = {
 
 // Large enough to look sharp full width, much smaller than the original.
 const PANEL_IMAGE_SIZE = 2048;
-const GALLERY_QUERY_BATCH_DAYS = 4;
+const GALLERY_QUERY_BATCH_DAYS = 2;
 
 const imageRevisions = new Map<number, number>();
 const revisionQuery = (id: number) => imageRevisions.get(id) ? `?v=${imageRevisions.get(id)}` : '';
@@ -34,7 +34,7 @@ export async function requestGalleryAccess(): Promise<boolean> {
   return granted;
 }
 
-/** Geotagged photos taken between the two instants. */
+/** Photos taken between the two instants, reported in each completed batch. */
 export async function queryGallery(from: number, to: number, onBatch?: (images: GalleryImage[]) => void): Promise<GalleryImage[]> {
   const images: GalleryImage[] = [];
   for (let batchFrom = from; batchFrom <= to;) {
